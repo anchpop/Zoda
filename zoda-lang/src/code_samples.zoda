@@ -1,0 +1,168 @@
+-- we won't allow pattern matching like haskell (in functions) cause that shit dumb lmao
+-- fib ~ Int -> Int
+
+-- setting a value
+
+myNum =: 3
+
+myNum ~ Int
+myNum =: 3
+
+myNum =: (3 ~ Int) -- inline type signatures must be wrapped in parentheses
+
+myNum ~ (Integral a) => a
+myNum =: 3
+
+myNum =: (3 ~ (Integral a) => a)
+
+
+-- function application
+myNum =: 1 + 2
+mynum =: 3 - 1
+
+mynum =: -1
+mynum =: 1.negate
+
+myNum =: 2.pow(4)
+
+
+-- defining a function "addone" that takes a parameter "a" - no signature. Zoda will use type inference to give `a` the trait  `Addable`
+a.addOne =: a + 1
+ 
+-- defining a function with a signature
+addone ~ Int -> Int
+a.addone =: a + 1
+
+add ~ Int -> Int -> Int
+a.add3(b) =: a + b
+
+add3 ~ Int -> Int -> Int -> Int
+a.add(b, c) =: a + b + c
+
+
+-- you can chain functions using `.`. this is useful for "pipelines"
+myValue = 3.f.g.h -- take 3, then apply f, then apply g, then apply h
+myValue = 3.add(4).subtract(1).times(4).negate.divide(2).absolute_value
+
+
+-- if you want to, you can curry a function by leaving a `_` in the place of an argument.
+i.under3 =: i.(3.divide(_))
+
+
+-- with the x.f(z) syntax, you probably want to make function names read nicely
+3.max(4)        -- bad
+3.lowerBound(4) -- good
+
+
+-- any time after a `:`, you should indent if you choose to make a newline
+myVal =:
+    4
+
+
+-- if expressions. uses indentation for alignment
+a.lowerBound(b) =: 
+    if a > b  
+        then: a
+        else: b
+
+-- these are expressions so you may use them however you like. uses indentation for nesting
+a.lowerBoundTimes(b, x) =: 
+    x * if a > b: 
+        then a
+        else b
+
+
+-- for any token that ends in a `:`, followed immediately by another bit of syntax that ends with a `:`, the first can and should be left off. the only exception is `=:`.
+myVal =: do:
+    -- blah blah
+myVal =: if 2==2 then:
+            True
+        else if 3==3 then:
+            True
+        else do:
+            pure False
+
+
+-- lists
+mylist =: [1,2,3,4]
+mylist =: 1 :: [2,3,4] -- [1,2,3,4]
+
+
+-- higher order functions
+x.addOne =: x + 1
+myList =: [1,2,3,4,5].map(addOne)
+myList =: [1,2,3,4,5].map(_.add(1))
+
+
+
+-- lambdas
+x.addOne =: x.(\x -> x + 1)
+-- is equivalent to...
+x.addOne =: x + 1
+
+-- the reason that currying these is not allowed is that the names of the arguments is often very helpful for documentation purposes
+
+
+-- do notation
+a.printValueCool =:
+    do
+        putString("=============")
+        print(a)
+        putString("=============")
+
+-- desugars to...
+a.printValueCool =:
+    do
+        putString("=============") >>= \_ ->
+        print(a)                 >>= \_ ->
+        putString("=============") >>= \_ ->
+
+-- where statements. valid for functions as well as values. 
+myVal =: 
+    i + j
+    where:
+        i =: 3
+        j =: 4
+
+
+-- test statements. valid for functions as well as values
+-- these are automatically run at compile time, and only rerun if the function or its dependencies change.
+a.addOne =: a + 1
+    test:
+        "can add one to two".test(
+            (2.addOne).shouldBe(3)
+        )
+
+-- the "test" section is just a single value - to contain `shouldBe`s in one test, use do notation.
+a.addOne =: a + 1
+    test:
+        "can add one to positive values".test(_) do:
+            (2.addOne).shouldBe(3)
+            (3.addOne).shouldBe(4)
+
+-- and to contain multiple tests, use do notation again
+a.addOne =: a + 1
+    test do:
+        "can add one to positive values".test(_) do:
+            (2.addOne).shouldBe(3)
+            (3.addOne).shouldBe(4)
+        "can add one to negative values".test(_) do:
+            (-2.addOne).shouldBe(-1)
+            (-3.addOne).shouldBe(-2)
+
+-- if you know you haven't implemented the functionality for a test yet, just make it pending
+a.incrementAbsoluteValue =: a + 1
+    test do:
+        "can increment to positive values".test(_) do:
+            (2.addOne).shouldBe(3)
+        "can increment to positive values".test(_) do:
+            (-2.addOne).shouldBe(-3).pending
+
+
+-- matchable
+a.luckyNumber7 =: match a:
+    7         -> putString("Lucky number 7!")
+    otherwise -> putString("sorry, you are a loser")
+
+
+
