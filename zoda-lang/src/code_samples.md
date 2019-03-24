@@ -419,8 +419,8 @@ For higher-order functions, `always-terminates` is not available but `always-ter
 
 # unwrap
 
-the Zoda compiler will do some tricks to attempt to deduce information about the 
-values passed to various functions and how that relates to their output.
+In practice, all Zoda functions return a value or become caught in an infinite loop (there are some rare exceptions). This is useful because it prevents the vast majority of uncontrolled runtime crashes. But it can be counterproductive to writing useful functions that are composable.
+
 For example:
 
     divided-by: Float -> Float -> Optional<Float>
@@ -430,14 +430,13 @@ For example:
 
 Now, we might want to write a `divided-by-3` function, and reuse `divided-by`. But we have an issue! `divided-by-3` will always work, but 
 if we just plug it into `divided-by`, our function will end up returning `Optional<Float>`, instead of `Float`
-To solve this, we add a new magical function - unwrap. 
+To solve this, we add the magical `.!` function to the end of it. 
 
-    x.divided-by-3 = (x.divided-by(3)).unwrap
+    x.divided-by-3 = x.divided-by(3).!
 
-unwrap converts a value from a `Optional<a>` (actualy, any value with the `Unwrappable` trait) to an `a` *if* the compiler can prove that it will 
+`.!` converts a value from a `Optional<a>` (actualy, any value with the `Unwrappable` trait) to an `a` *if* the compiler can prove that it will 
 always actually have a corresponding value. In this case, it can see the call to `divided-by` will only return `Nothing` if the `denominator`
 is `0`. Since we know at compile time the denominator is `3`, the `unwrap` function can automatically unwrap the `Just`. 
-
 
 
 # type-wrapper 
