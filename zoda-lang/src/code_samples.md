@@ -1,22 +1,22 @@
 # setting a value
 
-An `=` is always followed by a value, it's how you set a value. A `:` is always followed by a type, it's how you tell Zoda the type of a value.
+An `=` is always followed by a value, it's how you set a value. A ` ~ ` is always followed by a type, it's how you tell Zoda the type of a value.
 
 Here we're defining the same value multiple times, this is illegal but we're just doing it for demonstrative purposes.
 
     myNum = 3
 
-    myNum: Int
+    myNum ~ Int
     myNum = 3
 
-    myNum = (3: Int) -- inline type signatures must be wrapped in parentheses
+    myNum = (3 ~ Int) -- inline type signatures must be wrapped in parentheses
 
 Types can be ambiguous with "traits" - here we say "myNum" has the trait "Integral", but we're not any more specific.
 
-    myNum: (Integral a) => a
+    myNum ~ (Integral a) => a
     myNum = 3
 
-    myNum = (3: (Integral a) => a)
+    myNum = (3 ~(Integral a) => a)
 
 
 # Function application
@@ -45,13 +45,13 @@ Defining a function "add-one" that takes a parameter "a" - no signature. Zoda wi
      
 We can give a signature to a function. All functions are values, the only difference is that their signature contains `->` 
 
-    add-one: Int -> Int
+    add-one ~Int -> Int
     a.plus-one = a + 1
 
-    add: Int -> Int -> Int
+    add ~ Int -> Int -> Int
     a.plus3(b) = a + b
 
-    add3: Int -> Int -> Int -> Int
+    add3 ~ Int -> Int -> Int -> Int
     a.plus(b, c) = a + b + c
 
     add3: (Addable a) => a -> a -> a -> a
@@ -264,10 +264,10 @@ if you know you haven't implemented the functionality for a test yet, just make 
 
 You can do a full `match`, like so:
 
-    a.luckyNumber7 = match a with:
+    a.luckyNumber7 = match a:
         7 ->: putString("Lucky number 7!")
         _ ->: putString("sorry, you are a loser")
-    l.head = match l with:
+    l.head = match l:
         x.Cons(_) ->: x.Just
         _         ->: nothing 
 
@@ -275,14 +275,14 @@ All pattern matches must be exhaustive to perform an optimized build - optimized
 
 If you don't want to do a full pattern match, there is another primitive called `partial-match`. It returns a value with the `Errorable` trait where the error contains the value if it could not be matched and the result contains the result of the match if matching was sucessful. An example of `Errorable` is `Result`.
 
-    luckyNumber7: Int -> Result<Int, String>
-    a.luckyNumber7 = partial-match a with:
+    luckyNumber7 ~ Int -> Result<Int, String>
+    a.luckyNumber7 = partial-match a:
         7 ->: "Lucky number 7"
 
 
 `_` can also be used with `match`:
 
-    [Just 3, Nothing].filter(_) <| match _ with: 
+    [Just 3, Nothing].filter(_) <| match _: 
         Just _ -> True
         Nothing -> False                        
 
@@ -303,7 +303,7 @@ Comments with `--` are allowed inside short-docs and long-docs, and will not be 
                 2.plus(2).should-be(4)
                 3.plus(5).should-be(8)
 
-        short-doc: Adds `x` and `y`  
+        short-doc ~ Adds `x` and `y`  
         long-doc:
             Essentially just a wrapper for the `+` operator.
             It works on any values that have the an `Addable` instance, so it can be used anywhere you'd like to add two values together
@@ -368,7 +368,7 @@ for use with regular expression libraries, prefix the string with 'r'. This disa
 
 Zoda does not allow unrestricted recursion. The reason is that unrestricted recursion makes it easy to create a stack explosion:
 
-    x.fib = match x with: 
+    x.fib = match x: 
         0 ->: 1 
         1 ->: 1 
         x ->: (x - 1).fib + (x - 2).fib
@@ -378,7 +378,7 @@ we need a way to prevent this. There is a way to do recursion without running th
 its very simple for the compiler to unroll it into a loop which will not result in unbounded growth of the stack. 
 
     x.fib = internalFib x 0 1 
-        where counter.internalFib(y,z) = match counter with:
+        where counter.internalFib(y,z) = match counter:
             0       ->: z
             counter ->: (counter - 1).internalFib(z, y+z)
 
@@ -386,7 +386,7 @@ so, we can prevent unbounded growth of the stack by disallowing all recursion th
 "special". I think this would be easier to teach to people if we used a special keyword for tail calls. I'm thinking `self`.
 
     x.fib = internalFib x 0 1 
-        where counter.internalFib(y,z) = match counter with:
+        where counter.internalFib(y,z) = match counter:
             0       ->: z
             counter ->: (counter - 1).self(z, y+z)
 
@@ -396,7 +396,7 @@ The one exception to the "you can't do anything to the output of the `self` func
 This doesn't blow up the stack because the `Chainable` trait includes instructions on how to compute an intermediate value. `+`, `*` and `::>` are examples of Chainable.
 
     x.factorial = x * (x-1).self
-    l.filter(f) = match l with:
+    l.filter(f) = match l:
         []      ->: []
         x ::> xs ->: 
             if (f x) then: 
@@ -424,7 +424,7 @@ values passed to various functions and how that relates to their output.
 For example:
 
     divided-by: Float -> Float -> Optional<Float>
-    numerator.divided-by(denominator) = match denominator with:
+    numerator.divided-by(denominator) = match denominator:
         0 ->: Nothing
         denominator ->: (numerator / denominator).Just
 
@@ -482,7 +482,7 @@ of the collection. This just means that for any `Collection c => c`, there shoul
 
     has-trait Eq a => Collection (List<a>) a where
         collection.insert(element) = element.Cons(collection)
-        collection.member(element) = match collection with:
+        collection.member(element) = match collection:
             EmptyList  ->: False
             x.Cons(xs) ->:
                 if x == element then:
@@ -508,18 +508,18 @@ We can also write that a specific class does not have a certain trait
 
 Usage of tuples is typically discouraged but they can sometimes make code simpler. Tuples cannot have more than 64 values.
 
-    {* "Hello", 2 *}: {- String, Int *}
+    {* "Hello", 2 *} ~ {- String, Int *}
 
 These spaces are required
 
 These can sometimes be useful when you want to return a value from a function. 
 
-    one-greater-one-less: Addable a => a -> {* a, a *}
+    one-greater-one-less ~ Addable a => a -> {* a, a *}
     x.one-greater-one-less = {* x - 1, x + 1 *}
 
 You can retrieve a value from a tuple with pattern matching.
 
-    x.very-bad-double = match x.one-greater-one-less with:
+    x.very-bad-double = match x.one-greater-one-less:
         {* one-greater, one-less *} -> one-greater + one-less
 
 You can also use `.get1st`, `.get2nd`, etc.
@@ -529,7 +529,7 @@ You can also use `.get1st`, `.get2nd`, etc.
 
 You can write a function that inserts a value into a tuple with an `_`.
 
-    list-to-hello-tuple: List<a> -> List<{* a, String *}>
+    list-to-hello-tuple ~ List<a> -> List<{* a, String *}>
     l.list-to-hello-tuple = l.map({* _, "hello" *})
 
 
@@ -546,7 +546,7 @@ http://www.cs.ioc.ee/tfp-icfp-gpce05/tfp-proc/21num.pdf
 
 A record is like a type-safe dictionary, implemented internally using Rows. Duplicate keys are allowed.
 
-    author: { name: String, interests: List<String> }
+    author ~ { name ~ String, interests ~ List<String> }
     author =
         { name = "Phil"
         , interests = ["Functional Programming", "JavaScript"]
@@ -554,7 +554,7 @@ A record is like a type-safe dictionary, implemented internally using Rows. Dupl
 
 Records have no inherent order
 
-    author: { name: String, interests: List<String> }
+    author ~ { name ~ String, interests ~ List<String> }
     author =
         { interests = ["Functional Programming", "JavaScript"]
         , name = "Phil"
@@ -564,7 +564,7 @@ As a bit of syntax sugar, if you have a value who's name is the same as a record
 
     interests = ["Functional Programming", "JavaScript"]
     
-    author: { name: String, interests: List<String> }
+    author ~ { name ~ String, interests ~ List<String> }
     author =
         { interests
         , name = "Phil"
@@ -581,13 +581,13 @@ Records have 3 operations that work on them:
 
         fst = { i = 4, f = 3.5 }
         fst.i     -- 4
-                  -- i's signature is `{ i: a, ...r } -> a 
+                  -- i's signature is `{ i ~ a, ...r } -> a 
     
     3) Removing a value from a record using the magic `without-x` function 
 
         fst = { i = 4, f = 3.5 }
         fst.without-i     -- { f = 3.5 }
-                          -- without-i: { i: a, ...r } -> { ...r }
+                          -- without-i ~ { i ~ a, ...r } -> { ...r }
 
 There's also some convencience syntax sugar for updating values
 
@@ -606,21 +606,21 @@ To apply a function to a nested value, you can use `$=`
 
 You can write a function that takes a record, if you want.
 
-    getName: { name: String, ...l } -> String 
+    getName ~ { name ~ String, ...l } -> String 
     r.getName = r.name
 
 The "...l" is a type variable. This means it can take the place of literally any other record (including records that have a `name` key in them, as duplicate keys are allowed).
 
 You can perform pattern matching on records, as you might expect.
 
-    changeNameUnlessNamedSteve: { name: String, ...l } -> Bool
+    changeNameUnlessNamedSteve ~ { name ~ String, ...l } -> Bool
     r.changeNameUnlessNamedSteve = match r with:
         { name = "Steve", ...r } -> { name = "Steve", ...r }
         { name = _, ...r }       -> { name = "Mike", ...r }
 
 Example of a function that modifies the name field of a record
 
-    addJrSuffix: { name: String | r } -> { name: String | r }
+    addJrSuffix ~ { name ~ String | r } -> { name ~ String | r }
     addJrSuffix hasName = hasName{name $= _.concat(", Jr.") }
     addJrSuffix { name = "Bob" }                -- { name = "Bob, Jr." }   
     addJrSuffix { age = 42, name = "Gerald" }   -- { age = 42, name = "Gerald, Jr." }   
@@ -628,43 +628,43 @@ Example of a function that modifies the name field of a record
 
 You can give a name to a record type with `synonym`
 
-    synonym Book = { name: String, text: String }
-    synonym Author = { name: String, books: List<Book> }
+    synonym Book = { name ~ String, text ~ String }
+    synonym Author = { name ~ String, books ~ List<Book> }
 
 You can unwrap a record into another when defining them
 
-    synonym Name: { name: String }
-    synonym Country: { population: Int, ...Name }
+    synonym Name ~ { name ~ String }
+    synonym Country ~ { population ~ Int, ...Name }
     myCountry = { name = "usa", population = 2000 }
 
 A `_` inside a record literal creates a function which takes some values and creates a record with that type
 
-    ["usa", "canada"].map({name: _, population: 2000})
+    ["usa", "canada"].map({name ~ _, population ~ 2000})
 
 Like how `a` is a variable that can take any type, `{ ...r }` is a record with any (or no) values
 
-    myFunc: { ...r } -> { ...r }
+    myFunc ~ { ...r } -> { ...r }
     r.myFunc = r -- the only possible implementation of a function with this type is the identity function.
 
 
-In general, two record types are equal if they contain the same `key: type` pairs. The order is irrelevant when they keys are all unique. With duplicate keys, the order in the type always matches the order in the literal. Here is an example:
+In general, two record types are equal if they contain the same `key ~ type` pairs. The order is irrelevant when they keys are all unique. With duplicate keys, the order in the type always matches the order in the literal. Here is an example:
 
-    fst = { x = 2, x = True }      -- { x: Int, x: Bool }
-    snd = { x = True, x = 2 }      -- { x: Bool, x: Int }
-    thrd = { x = True, x = 2 }:       { x: Bool, x: Int } -- type error
-    frth = { x = True, x = False } -- { x: Bool, x: Bool } -- type error
+    fst = { x = 2, x = True }      -- { x ~ Int, x ~ Bool }
+    snd = { x = True, x = 2 }      -- { x ~ Bool, x ~ Int }
+    thrd = { x = True, x = 2 } ~     { x ~ Bool, x ~ Int } -- type error
+    frth = { x = True, x = False } -- { x ~ Bool, x ~ Bool } -- type error
     
     fst.without-x.x = True
     snd.without-x.x = 2
     snd.without-x.x = False
 
-    -- if you had a function of type  `{ x: Int, x: Bool } -> Bool`, you would not be able to pass it `snd`.
+    -- if you had a function of type  `{ x ~ Int, x ~ Bool } -> Bool`, you would not be able to pass it `snd`.
 
 Due to the inherent complexity of having records with duplicate keys, I reccomend you keep their usage to a minimum. 
 
 Oh and I glossed over this, but records can have type constraints
 
-    fst = { x = 2, x = True }: Integral a => { x: a, x: Bool }
+    fst = { x = 2, x = True } ~ Integral a => { x ~ a, x ~ Bool }
 
 
 # Corecords
@@ -673,49 +673,49 @@ Records:Corecords ~ Product types:Sum types
 
 While a record must have every value in its type, a corecord can only have one.
 
-    a: {+ b: Int, c: String +}
+    a ~ {+ b ~ Int, c ~ String +}
     a = {+ b = 3 +}
 
-These can also be open, like so: 
+These can also be open, like so:
 
-    {+ name: String, ...v +}
+    {+ name ~ String, ...v +}
 
 Again, duplicate keys are allowed:
 
-    {+ name: String, name: String, name: Bool +}
+    {+ name ~ String, name ~ String, name ~ Bool +}
 
-This basically means it can have any possible `key: value` pair but definitely might have `name: String`. This seems useless until you use it with functions:
+This basically means it can have any possible `key ~ value` pair but definitely might have `name ~ String`. This seems useless until you use it with functions:
 
-    {+ name: String, ...v +} -> {+ ...v +} 
+    {+ name ~ String, ...v +} -> {+ ...v +} 
 
-This function takes a corecord has the possibility of containing a `name: String` pair, and returns one that has "one less possibility" to have a `name: String` pair.
+This function takes a corecord has the possibility of containing a `name ~ String` pair, and returns one that has "one less possibility" to have a `name ~ String` pair.
 
 These can be pattern matched with `match`, naturally.
 
     -- if the corecord is closed, it can easily be pattern-matched exhaustively  
-    getFooOrBarLength: {+ foo: String, bar: String +} -> Int 
-    r.getFooOrBarLength = match r with:
-        {+ foo: f +} -> f.length
-        {+ bar: b +} -> b.length
+    getFooOrBarLength ~ {+ foo ~ String, bar ~ String +} -> Int 
+    r.getFooOrBarLength = match r:
+        {+ foo = f +} -> f.length
+        {+ bar = b +} -> b.length
 
     -- if it's open, you must have a wildcard element
-    getFooOrBarLength: {+ foo: String, bar: String | l +} -> Int 
-    r.getFooOrBarLength = match r with:
-        {+ foo: f +} -> f.length
-        {+ bar: b +} -> b.length
+    getFooOrBarLength ~ {+ foo ~ String, bar ~ String | l +} -> Int 
+    r.getFooOrBarLength = match r:
+        {+ foo = f +} -> f.length
+        {+ bar = b +} -> b.length
         _            -> 0 
     
 You can have an empty corecord with `{+ +}`, but it is impossible to create a value that occupies this type and the type system knows this.
 
-    getRight: Result<{+ +}, a> -> a
-    e.getRight = match e with:
+    getRight ~ Result<{+ +}, a> -> a
+    e.getRight = match e:
         e.Result ->: e 
         -- No need to pattern match Error because we all know that `{+ +}` can't have any values.
         
 The snazzy thing is that `match-partial` has extra-special support for these - the values you match against are removed from the type.
 
-    deal: {+ a: Int, b: String +} -> Result<{+ a: Int +}, String>
+    deal ~ {+ a ~ Int, b ~ String +} -> Result<{+ a ~ Int +}, String>
     a.deal = match-partial a with:
-        {+ b: b +} -> b 
+        {+ b = b +} -> b 
 
 
