@@ -1,4 +1,21 @@
-# setting a value
+Zoda's goal is to become the best language for the development of games and game engines.
+
+Towards this goal, we have some subgoals.
+
+1) Beginner friendliness. Every feature is evaluated against how easy it is for beginners to understand, and simplicity is an important goal of the language. Zoda is not a research language like Haskell. Documentation is deeply integrated into the language. Research into a visual representation of code is being looked into. High-quality errors are also a priority for Zoda.
+
+2) Good tooling. The syntax of Zoda is designed to be conducive towards IDE autocompletion and informative errors.
+
+3) Efficiency. Zoda lacks features that make it easy to write inefficient code. Code written in Zoda will be efficient without effort, automatically use multiple cores, and even automatically offload some work onto the GPU.
+
+4) Enabling fast prototyping. You will be able to compile Zoda code in two modes, "prototyping" and "production". Prototyping is when you want to run your code quickly and not worry about catching bugs (yet), Production is when you want to your code to run the most efficiently possible and want to be confident that it is bug-free. Code with warnings does not compile under Production, and code must compile under Production to be included in the standard repository of Zoda code.
+
+5) Steering users towards writing bug-free code. At it's core, `Zoda` is a functional programming language. With features like a powerful type system, algebraic effects, checked exceptions, inline tests, and more, it is possible to be confident in the quality of your code. In practice, production Zoda code does not crash at runtime (when it does, it's due to unavoidable issues such as out-of-memory errors).  
+
+6) Self-embedding. Zoda code should be able to read and run other Zoda code at runtime, and run it just as efficiently as if it had been written in the original executable.
+
+
+# Setting a value
 
 An `=` is always followed by a value, it's how you set a value. A ` ~ ` is always followed by a type, it's how you tell Zoda the type of a value.
 
@@ -271,20 +288,21 @@ You can do a full `match`, like so:
         x.Cons(_) ->: x.Just
         _         ->: nothing 
 
-All pattern matches must be exhaustive to perform an optimized build - optimized Zoda builds have no runtime errors 
-
-If you don't want to do a full pattern match, there is another primitive called `partial-match`. It returns a value with the `Errorable` trait where the error contains the value if it could not be matched and the result contains the result of the match if matching was sucessful. An example of `Errorable` is `Result`.
-
-    luckyNumber7 ~ Int -> Result<Int, String>
-    a.luckyNumber7 = partial-match a:
-        7 ->: "Lucky number 7"
-
+All pattern matches must be exhaustive to perform an optimized build - this is to keep the convenient fact that optimized Zoda builds have no runtime errors in practice.
 
 `_` can also be used with `match`:
 
     [Just 3, Nothing].filter(_) <| match _: 
         Just _ -> True
         Nothing -> False                        
+
+A common pattern is to do a pattern match to see if a value is matches a pattern, and to return some kind of "true" result if it is, and an error result if it isn't. `match-partial` exists to solve this need - it returns a value with the trait `Errorable` where successful matches are on the right an unsuccessful matches are on the left.
+
+    luckyNumber7 ~ (Errorable e) => Int -> e<Int, String>
+    a.luckyNumber7 = partial-match a:
+        7 ->: "Lucky number 7"
+        else notSeven ->: notSeven
+         
 
 # Inline docs 
 
@@ -417,7 +435,7 @@ Although I expect `always-terminates` to not be that useful... if a function doe
 For higher-order functions, `always-terminates` is not available but `always-terminates-if-input-functions-terminate` is.  
 
 
-# unwrap
+# Unwrapping error values
 
 In practice, all Zoda functions return a value or become caught in an infinite loop (there are some rare exceptions). This is useful because it prevents the vast majority of uncontrolled runtime crashes. But it can be counterproductive to writing useful functions that are composable.
 
@@ -434,9 +452,13 @@ To solve this, we add the magical `.!` function to the end of it.
 
     x.divided-by-3 = x.divided-by(3).!
 
-`.!` converts a value from a `Optional<a>` (actualy, any value with the `Unwrappable` trait) to an `a` *if* the compiler can prove that it will 
-always actually have a corresponding value. In this case, it can see the call to `divided-by` will only return `Nothing` if the `denominator`
-is `0`. Since we know at compile time the denominator is `3`, the `unwrap` function can automatically unwrap the `Just`. 
+`.!` converts a value from a `Optional<a>` (actually, any value with the `Unwrappable` trait) to an `a` *if* the compiler can prove that it will always actually have a corresponding value. In this case, it can see the call to `divided-by` will only return `Nothing` if the `denominator` is `0`. Since we know at compile time the denominator is `3`, the `unwrap` function can automatically unwrap the `Just`. A more trivial example would be:
+
+    3.Just.! -- 3
+    Nothing.! -- compile time error!
+
+So what's the magic? Simple. During compilation, we compile the program down to a set of verification conditions. These are conditions that are only valid if your program has a given property. One example of a verification condition might be "`divided-by` always returns an Optional<Float>". But these conditions also contain information about how functions behave given their inputs, for example "`divided-by` always returns a `_.Just` when passed a nonzero value". Then, your whole program is fed into an SMT solver, which checks whether all the conditions hold. If you can check that "`divided-by` always returns a `_.Just` when passed a nonzero value", and "`divided-by-3` will always pass a nonzero value to `divided-by`", then we can know it's safe to unwrap the `_.Just` to just `_`.
+
 
 
 # type-wrapper 
@@ -446,6 +468,15 @@ Equivalent to "newtype" in haskell
     type-wrapper Year = Year Int
     type-wrapper Name = Name String
 
+The difference between 
+
+    type-wrapper Year = Year Int
+
+and
+
+    type Year = Year Int
+
+Is that type-wrappers are guaranteed to be equivalent at runtime. This means you can use the `.coerce` function to wrap or unwrap types, even deeply nested ones. 
 
 # type declarations and ADTs
 
@@ -461,7 +492,9 @@ parameterized types
     type Optional<a> = Nothing | Just a 
     type Result<e, r> = e.Error | r.Result 
 
-# Aliases
+# Synonyms
+
+These are just useful when you want to give a possibly more descriptive name to a type. They can have parameters but cannot be partially applied.
 
     synonym FilePath = String
     synonym Either<a><b> = Result<a><b>
@@ -502,6 +535,7 @@ We can also write that a specific class does not have a certain trait
         -- this error message shows up when someone attempts to pass the a function to `serialize` directly.
         serialize = "You are attempting to serialize a function, but functions cannot be serialized"
 
+`has-trait` declarations for a trait `MyTrait a b c` must be either in the same file as the trait is defined, or in the same file as the type `a`, `b`, or `c` is defined. 
 
 # Tuples
 
