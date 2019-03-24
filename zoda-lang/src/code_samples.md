@@ -712,7 +712,7 @@ You can have an empty corecord with `{+ +}`, but it is impossible to create a va
         e.Result ->: e 
         -- No need to pattern match Error because we all know that `{+ +}` can't have any values.
         
-The snazzy thing is that `match-partial` has extra-special support for these - the values you match against are removed from the type.
+The snazzy thing is that `match-partial` has special support for these - the values you match against are removed from the type.
 
     deal: {+ a: Int, b: String +} -> Result<{+ a: Int +}, String>
     a.deal = match-partial a with:
