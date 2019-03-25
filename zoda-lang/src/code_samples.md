@@ -805,11 +805,13 @@ A module is just a collection of values. Every file is a module. Like values, mo
             plus-3, plus-4, plus-5, plus-negative
                   
     x.plus-0 = x -- not exported because it's useless
-    x.plus-3 = x.plus(3) 
+    x.plus-3 = x.plus(3) -- these would typically have their own tests, tiny-docs, and long-docs, but I've left them off for the sake of brevity.
     x.plus-4 = x.plus(4) 
     x.plus-5 = x.plus(5) 
     x.plus-negative(y) = x.plus(y.negation:negate)         -- namespacing is done with `:`
 
-When executing a package, execution begins at the `main` function inside the `main` module. More specifically, it just executes whatever actions the `main` module returns. Every Zoda package has a `main` module - since it must be the root level module, it cannot export anything. The `long-doc` of your main module serves as the description for the whole package!
+When executing a package, execution begins at the `main` function inside the `main` module. More specifically, it just executes whatever actions the `main` module returns. Every Zoda package has a `main` module - since it must be the root level module, it cannot export anything. The `long-doc` of your main module serves as a guide to new contributors to how they should look at and edit the whole package. It is *not* intended to be a high level description of your package for end-users - that should be the `introduction` chapter of the book for your package. (a `readme.md` will be automatically created from the book, more on this later).
+
+
 
 
