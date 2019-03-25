@@ -10,7 +10,7 @@ Towards this goal, we have some subgoals.
 
 4) Enabling fast prototyping. You will be able to compile Zoda code in two modes, "prototyping" and "production". Prototyping is when you want to run your code quickly and not worry about catching bugs (yet), Production is when you want to your code to run the most efficiently possible and want to be confident that it is bug-free. Code with warnings does not compile under Production, and code must compile under Production to be included in the standard repository of Zoda code.
 
-5) Steering users towards writing bug-free code. At it's core, `Zoda` is a functional programming language. With features like a powerful type system, algebraic effects, checked exceptions, inline tests, and more, it is possible to be confident in the quality of your code. In practice, production Zoda code does not crash at runtime (when it does, it's due to unavoidable issues such as out-of-memory errors).  
+5) Steering users towards writing bug-free code. At it's core, `Zoda` is a functional programming language. With features like a powerful type system, algebraic effects, checked exceptions, inline tests, and more, it is possible to be confident in the quality of your code. In practice, production Zoda code does not crash at runtime (when it does, it's due to unavoidable issues such as out-of-memory errors). When you do have a bug, Zoda will have a time-travelling debugger and multiple useful features for debugging.
 
 6) Self-embedding. Zoda code should be able to read and run other Zoda code at runtime, and run it just as efficiently as if it had been written in the original executable.
 
@@ -339,7 +339,7 @@ Comments with `--` are allowed inside tiny-docs and long-docs, and will not be i
                 2.plus(2).should-be(4)
                 3.plus(5).should-be(8)
 
-        tiny-doc: Adds `x` and `y`  
+        tiny-doc: Add { x } and { y } -- tiny-doc is a `debug-rep`. The { } is special syntax for embedding a value into a tiny-doc.
         long-doc:
             Essentially just a wrapper for the `+` operator.
             It works on any values that have the an `Addable` instance, so it can be used anywhere you'd like to add two values together
@@ -382,12 +382,11 @@ A String is a sequence of Unicode scalar values encoded as a stream of UTF-8 byt
 All Strings are guaranteed to be a valid encoding of UTF-8 sequences. 
 Additionally, unlike some languages, Strings are not null-terminated and can contain null bytes. 
 Strings are allowed to span multiple lines, and are indentation-sensitive 
-They can also contain inline expressions with { expr } and {s expr }. 
+They can also contain inline expressions with and {s expr }. 
 
     my-val = 3
-    my-string = "My value is: { my-val }" -- my-val.repr is automatically called. x.repr is a function that expresses a value as a String, in a way that should be developer-friendly.
-    my-string = "3 + 3 is { 3 + 3 }"
-    my-string = "My name is {s "E. Cummings".toLowercase }" -- with `{s expr }`, .repr is not automatically called. For this reason the expression is expected to return a String.
+    my-string = "3 + 3 is {s 3 + 3 }" -- toString is called on the output of `3 + 3` and then concatenated to the rest of the String
+    my-string = "My name is {s "E. Cummings".toLowercase }" 
     my-string = "Line 1 
                  Line 2" -- equivalent to "Line 1\nLine2"
     my-string = "Line 1\ 
@@ -812,6 +811,4 @@ A module is just a collection of values. Every file is a module. Like values, mo
 
 When executing a package, execution begins at the `main` function inside the `main` module. More specifically, it just executes whatever actions the `main` module returns. Every Zoda package has a `main` module - since it must be the root level module, it cannot export anything. The `long-doc` of your main module serves as a guide to new contributors to how they should look at and edit the whole package. It is *not* intended to be a high level description of your package for end-users - that should be the `introduction` chapter of the book for your package. (a `readme.md` will be automatically created from the book, more on this later).
 
-
-
-
+A package is always contained entirely within one folder. It also always has a `book` directory and a `zoda.toml` file. The book directory contains all the documentation about the package that does not make sense to be stored in the source files. The `zoda.toml` file contains information about what other packages this package depends on, and what modules it exports. 
