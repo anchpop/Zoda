@@ -1,8 +1,7 @@
 [package]
-name = "zoda-lang"
+name = "calculator"
 version = "0.1.0"
-authors = ["Andre Popovitch <andre@popovit.ch>"]
-edition = "2018"
+authors = ["Niko Matsakis <niko@alum.mit.edu>"]
 
 [build-dependencies] # <-- We added this and everything after!
 lalrpop = "0.16.3"

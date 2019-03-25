@@ -2,7 +2,7 @@ Zoda's goal is to become the best language for the development of games and game
 
 Towards this goal, we have some subgoals.
 
-1) Beginner friendliness. Every feature is evaluated against how easy it is for beginners to understand, and simplicity is an important goal of the language. Zoda is not a research language like Haskell. Documentation is deeply integrated into the language. Research into a visual representation of code is being looked into. High-quality errors are also a priority for Zoda.
+1) Beginner friendliness. Every feature is evaluated against how easy it is for beginners to understand, and simplicity is an important goal of the language. Zoda is not a research language like Haskell. Documentation is deeply integrated into the language. Research into a visual representation of code is being looked into. High-quality errors are also a priority for Zoda. This is the reason that Zoda is so opinionated, more opinionated than almost any mainstream programming language. Beginers wonder "should I do it this way, or that way?" It is a goal of Zoda that nobody asks this question, and when they ask it there is always a good answer.
 
 2) Good tooling. The syntax of Zoda is designed to be conducive towards IDE autocompletion and informative errors.
 
@@ -33,7 +33,7 @@ Types can be ambiguous with "traits" - here we say "myNum" has the trait "Integr
     myNum ~ (Integral a) => a
     myNum = 3
 
-    myNum = (3 ~(Integral a) => a)
+    myNum = 3 ~ (Integral a => a)
 
 
 # Function application
@@ -117,7 +117,7 @@ any time after a `:`, you should indent if you choose to make a newline
 
 # if expressions
 
-these use indentation for alignment to support nesting
+These use indentation for alignment to support nesting
 
     a.lower-bound(b) = 
         if a > b then:
@@ -125,7 +125,24 @@ these use indentation for alignment to support nesting
         else: 
             b
 
-these are expressions so you may use them however you like. 
+This is equivalent to:
+
+    a.lower-bound(b) = 
+        match a > b:
+            True  ->: a
+            False ->: b
+
+You may be wondering - why have `if` if we can just use `match`? The answer is when we need to have many levels of if.
+
+    a.stable-lower-bound(b) = 
+        if a > b then:
+            a
+        else if a < b then:
+            b
+        else:
+            a
+
+These are expressions so you may use them however you like. 
 
     a.lower-bound-times(b, x) = 
         x * if a > b then:
@@ -148,7 +165,7 @@ for any token that ends in a `:`, followed immediately by another bit of syntax 
 # Lists
 
     my-list = [1,2,3,4]
-    my-list = 1 ::> [2,3,4]   -- [1,2,3,4]
+    my-list = 1.prepend-to([2,3,4])   -- [1,2,3,4]
 
 These aren't lists specifically, as they can be overloaded so `[1,2,3]` can represent a list, a vector, an array, etc.
 Also available are Iterators, which are like lists but lazy and useful for iterating over a range of values.
@@ -306,11 +323,12 @@ A common pattern is to do a pattern match to see if a value is matches a pattern
 
 # Inline docs 
 
-Seperated into "short-doc" and "long-doc". The short-doc should be very short, and has access to the actual values that are passed to the function (in this case, x and y). 
-The short-doc is intended to be shown when the cursor is over the function. So if you hover the cursor over `2.plus(3)`, you would see `Adds 2 and 3 -> 5`.
+Seperated into "tiny-doc" and "long-doc". The tiny-doc should be very short, and has access to the actual values that are passed to the function (in this case, x and y). 
+The tiny-doc is intended to be shown when the cursor is over the function. So if you hover the cursor over `2.plus(3)`, you would see `Adds 2 and 3 -> 5`.
 The long-doc can be as long as you want. It is intended to be shown on documentation pages and should give an in-depth explanation with examples of how it should be used.
 These examples are also tested at compile time. 
-Comments with `--` are allowed inside short-docs and long-docs, and will not be included in the output.
+
+Comments with `--` are allowed inside tiny-docs and long-docs, and will not be included in the output.
     x.plus(y) = 
         sum
         where:
@@ -321,7 +339,7 @@ Comments with `--` are allowed inside short-docs and long-docs, and will not be 
                 2.plus(2).should-be(4)
                 3.plus(5).should-be(8)
 
-        short-doc ~ Adds `x` and `y`  
+        tiny-doc: Adds `x` and `y`  
         long-doc:
             Essentially just a wrapper for the `+` operator.
             It works on any values that have the an `Addable` instance, so it can be used anywhere you'd like to add two values together
@@ -329,7 +347,8 @@ Comments with `--` are allowed inside short-docs and long-docs, and will not be 
             >> 3.plus(5)
             -> 8
 
-            Negative numbers can be added as well.   -- do we need to say this? this seems kind of obvious.
+            -- Do we need to say this? this seems kind of obvious
+            Negative numbers can be added as well.  
 
             >> 3.plus(-5)
             -> -2
@@ -422,13 +441,13 @@ This doesn't blow up the stack because the `Chainable` trait includes instructio
             else:
                 xs.self(f)
                        
-# info statements
+# Tags statements
 
-Functions and values can have certain facts stated about them in `info` statements which serve to provide extra information to the compiler.
+Functions and values can have certain facts stated about them in `tags` statements which serve to provide extra information to the compiler.
 The only one I have any ideas for is `always-terminates`, which says about a function exactly what it says on the tin.
 
     x.plusOne = x + 1 
-        info: always-terminates
+        tags: always-terminates
 
 Although I expect `always-terminates` to not be that useful... if a function doesn't call `recurse` and only calls functions marked as 
 `always-terminates`, then I think it should always terminate.
@@ -728,15 +747,15 @@ These can be pattern matched with `match`, naturally.
     -- if the corecord is closed, it can easily be pattern-matched exhaustively  
     getFooOrBarLength ~ {+ foo ~ String, bar ~ String +} -> Int 
     r.getFooOrBarLength = match r:
-        {+ foo = f +} -> f.length
-        {+ bar = b +} -> b.length
+        {+ foo = f +} ->: f.length
+        {+ bar = b +} ->: b.length
 
     -- if it's open, you must have a wildcard element
     getFooOrBarLength ~ {+ foo ~ String, bar ~ String | l +} -> Int 
     r.getFooOrBarLength = match r:
-        {+ foo = f +} -> f.length
-        {+ bar = b +} -> b.length
-        _            -> 0 
+        {+ foo = f +} ->: f.length
+        {+ bar = b +} ->: b.length
+        _             ->: 0 
     
 You can have an empty corecord with `{+ +}`, but it is impossible to create a value that occupies this type and the type system knows this.
 
@@ -749,6 +768,48 @@ The snazzy thing is that `match-partial` has special support for these - the val
 
     deal ~ {+ a ~ Int, b ~ String +} -> Result<{+ a ~ Int +}, String>
     a.deal = match-partial a with:
-        {+ b = b +} -> b 
+        {+ b = b +} ->: b 
+        else a ->: a
+
+
+# Modules, packages and imports
+
+There are 3 "tiers" in Zoda. The lowest is values - these are functions and constants. They have metadata like `tiny-doc`, `long-doc`, and `tags`. These all live inside "modules". Values form a DAG of their dependencies.
+
+A module is just a collection of values. Every file is a module. Like values, modules can depend on each other via `import` and form a DAG. If a module is named `main`, it must be a "root" module and cannot be imported by any other module. The name of a module is always the name of the file (without the `.zoda` extension), with optional descriptive words at the end seperated by `-`. If a module is named `main`, it must have a value named `main` of type `IO a`. Like functions, they have "tiny-doc" and "long-doc". This is what a module might look like:
+
+    -- adding-utils.zoda
+    module adding-utils
+        author: Andre Popovitch
+        tiny-doc: Collection of utilities related to adding values
+        long-doc: 
+            These utilities are part of the greater "adding" library. 
+            They're useful in all situations where you need to add something.
+            
+            -- maybe include more info here on when to use these?
+            If you need to add 3, check out the `plus-3` function. Other useful 
+            functions include `plus-4` and `plus-5`.           
+
+            Examples: 
+
+            >> 3.plus-4 
+            -> 7
+
+            >> 3.plus-5
+            -> 8
+
+        importing:
+            (plus) from generic-plus           -- import the "plus" function from the module "generic-plus".
+            negation:negation                  -- import the "negation" module from the "negation" package
+        exporting:
+            plus-3, plus-4, plus-5, plus-negative
+                  
+    x.plus-0 = x -- not exported because it's useless
+    x.plus-3 = x.plus(3) 
+    x.plus-4 = x.plus(4) 
+    x.plus-5 = x.plus(5) 
+    x.plus-negative(y) = x.plus(y.negation:negate)         -- namespacing is done with `:`
+
+When executing a package, execution begins at the `main` function inside the `main` module. More specifically, it just executes whatever actions the `main` module returns. Every Zoda package has a `main` module - since it must be the root level module, it cannot export anything. The `long-doc` of your main module serves as the description for the whole package!
 
 
