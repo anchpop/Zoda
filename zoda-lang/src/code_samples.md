@@ -120,46 +120,78 @@ any time after a `:`, you should indent if you choose to make a newline
 These use indentation for alignment to support nesting
 
     a.lower-bound(b) = 
-        if a > b then:
-            a
-        else: 
-            b
+      if a > b then:
+        a
+      else: 
+        b
 
 This is equivalent to:
 
     a.lower-bound(b) = 
-        match a > b:
-            True  ->: a
-            False ->: b
+      match a > b:
+        True  ->: a
+        False ->: b
 
 You may be wondering - why have `if` if we can just use `match`? The answer is when we need to have many levels of if.
 
     a.stable-lower-bound(b) = 
-        if a > b then:
-            a
-        else if a < b then:
-            b
-        else:
-            a
+      if a > b then:
+        a
+      else if a < b then:
+        b
+      else:
+        a
+
+
+The reason you don't need a `:` after that else is because for any token that ends in a `:`, followed immediately by another bit of syntax that ends with a `:`, the first can and should be left off. 
+
+    my-val = 
+      if 2==2 then:
+        True
+      else if 3==3 then:
+        True
+      else do:
+        pure False
 
 These are expressions so you may use them however you like. 
 
     a.lower-bound-times(b, x) = 
-        x * if a > b then:
-            a
-        else: 
-            b
+      x * if a > b then:
+        a
+      else: 
+        b
 
-for any token that ends in a `:`, followed immediately by another bit of syntax that ends with a `:`, the first can and should be left off. 
+# Tiny Docs
 
-    my-val = do:
-        -- blah blah
-    my-val = if 2==2 then:
-                True
-            else if 3==3 then:
-                True
-            else do:
-                pure False
+Tiny-docs are like comments, but better. These are tiny little docs that get scattered across your code, designed to aid other developers and anyone interested in using your library.  In general, you can put them after before `:` sign. They are seperated by \` symbols, and can reference in-scope values with `{ }`
+
+    a.lower-bound-times(b, x) = 
+      x * if a > b then `We don't need to choose {b} as our lower bound`:
+        a
+      else `Default to {b}`: 
+        b
+
+This seems sort of unreadable, I'm hoping syntax highlighting makes it better.
+
+The hope is that since these are so close to the code, we can encourage developers to use them and keep them updated. The programmer is motivated to keep them short because we don't allow them to span more than one line. Since the reference existing values with special syntax, the dream is we can use this to give much better explanations and knowledge to the user. 
+
+They're allowed in a couple other places, too. 
+
+1) After function definitons
+
+    a.lower-bound-times(b, x) `Compute the lower bound between {a} and {b}, then multiply it by {x}` = 
+      x * if a > b then `We don't need to choose {b} as our lower bound`:
+        a
+      else `Default to {b}`: 
+        b
+
+2) After a type in a type signature for a function
+
+    draw-circle ~ Int `Radius of the circle, in pixels` 
+               -> Int `Stroke width of the circle, in pixels` 
+               -> IO () `IO action that draws a circle`
+    radius.draw-circle(stroke-width) = ...
+
 
 
 # Lists
@@ -234,64 +266,89 @@ not really a language feature, just a built-in operator. simply passes a value t
 # do notation
 
     a.print-value-cool = do:
-        putString("=============")
-        print(a)
-        putString("=============")
+      putString("=============")
+      print(a)
+      putString("=============")
 
 desugars to...
 
     a.print-value-cool =
-            putString("=============") >>= \- ->
-            print(a)                 >>= \- ->
-            putString("=============") >>= \- ->
+      putString("=============") >>= \- ->
+      print(a)                   >>= \- ->
+      putString("=============") >>= \- ->
 
 
 # where statements. 
 
-valid for functions as well as values. 
+Valid for functions as well as values. 
 
     my-val = 
         i + j
-        where:
-            i = 3
-            j = 4
+      where:
+        i = 3
+        j = 4
 
 
 #inline test statements. 
-valid for functions as well as values, but there's not really a good reason to put them on a value
 
-these can be run (and are automatically run when creating an optimized build), and only rerun if the function or its dependencies change.
+
+These can be run with a compiler flag (and are automatically run when creating an optimized build), and only rerun if the function or its dependencies change.
+
     a.plus-one = a + 1
-        test:
-            "can add one to two".test(
-                (2.plus-one).should-be(3)
-            )
+      test:
+        Can add one to two
+        >> 2.plus-one
+        -> 3
 
+You can have as many of these as you want.
 
-the "test" section is just a single value - to contain multiple `should-be`s in one test, use do notation.
     a.plus-one = a + 1
-        test:
-            "can add one to positive values".test(_) <| do:
-                (2.plus-one).should-be(3)
-                (3.plus-one).should-be(4)
+      test:
+        Can add one to positive values
+        >> 2.plus-one
+        -> 3
+        >> 3.plus-one 
+        -> 4
 
-and to contain multiple tests, use do notation again
+And to contain multiple tests, use do notation again
+
     a.plus-one = a + 1
-        test do:
-            "can add one to positive values".test(_) <| do:
-                (2.plus-one).should-be(3)
-                (3.plus-one).should-be(4)
-            "can add one to negative values".test(_) <| do:
-                (-2.plus-one).should-be(-1)
-                (-3.plus-one).should-be(-2)
+      test do:
+        Can add one to positive values
+        >> 2.plus-one
+        -> 3
+        >> 3.plus-one
+        -> 4
 
-if you know you haven't implemented the functionality for a test yet, just make it pending
+        Can add one to negative values
+        >> -2.plus-one
+        -> -1
+        >> -3.plus-one
+        -> -2
+
+If you know you haven't implemented the functionality for a test yet, just make it pending
+
     a.incrementAbsoluteValue = a + 1
-        test do:
-            "can increment to positive values".test(_) <| do:
-                2.plus-one.should-be(3)
-            "can increment to positive values".test(_) <| do:
-                -2.plus-one.should-be(-3).pending
+      test do:
+        Can increment to positive values
+        >> 2.plus-one 
+        -> 3
+        
+        Can increment to positive values
+        >>pending -2.plus-one
+        -> -3
+
+If a test must pass
+
+    a.incrementAbsoluteValue = a + 1
+      test do:
+        Can increment to positive values
+        >> 2.plus-one 
+        -> 3
+        
+        Can increment to positive values
+        >>pending -2.plus-one
+        -> -3
 
 
 # Match
@@ -299,76 +356,77 @@ if you know you haven't implemented the functionality for a test yet, just make 
 You can do a full `match`, like so:
 
     a.luckyNumber7 = match a:
-        7 ->: putString("Lucky number 7!")
-        _ ->: putString("sorry, you are a loser")
+      7 ->: putString("Lucky number 7!")
+      _ ->: putString("sorry, you are a loser")
     l.head = match l:
-        x.Cons(_) ->: x.Just
-        _         ->: nothing 
+      x.Cons(_) ->: x.Just
+      _         ->: nothing 
 
 All pattern matches must be exhaustive to perform an optimized build - this is to keep the convenient fact that optimized Zoda builds have no runtime errors in practice.
 
 `_` can also be used with `match`:
 
     [Just 3, Nothing].filter(_) <| match _: 
-        Just _ -> True
-        Nothing -> False                        
+      Just _ -> True
+      Nothing -> False                        
 
 A common pattern is to do a pattern match to see if a value is matches a pattern, and to return some kind of "true" result if it is, and an error result if it isn't. `match-partial` exists to solve this need - it returns a value with the trait `Errorable` where successful matches are on the right an unsuccessful matches are on the left.
 
     luckyNumber7 ~ (Errorable e) => Int -> e<Int, String>
     a.luckyNumber7 = partial-match a:
-        7 ->: "Lucky number 7"
-        else notSeven ->: notSeven
+      7 ->: "Lucky number 7"
+      else notSeven ->: notSeven
          
 
 # Inline docs 
 
-Seperated into "tiny-doc" and "long-doc". The tiny-doc should be very short, and has access to the actual values that are passed to the function (in this case, x and y). 
-The tiny-doc is intended to be shown when the cursor is over the function. So if you hover the cursor over `2.plus(3)`, you would see `Adds 2 and 3 -> 5`.
-The long-doc can be as long as you want. It is intended to be shown on documentation pages and should give an in-depth explanation with examples of how it should be used.
-These examples are also tested at compile time. 
+Seperated into "devl-doc" and "long-doc". The long-doc can be as long as you want. It is intended to be shown on documentation pages and should give an in-depth explanation with examples of how it should be used. The devl-doc is for people who'd like to modify the function, and should contain important information and context. These examples are also tested at compile time. 
 
-Comments with `--` are allowed inside tiny-docs and long-docs, and will not be included in the output.
-    x.plus(y) = 
-        sum
-        where:
-            sum = x + y
+Comments with `--` are allowed inside long-docs and devl-docs, and will not be included in the output.
 
-        test do:
-            "can add positive values".test(_) <| do:
-                2.plus(2).should-be(4)
-                3.plus(5).should-be(8)
+    x.plus(y) `Add {x} and {y}` = 
+      sum
+      where:
+        sum = x + y
 
-        tiny-doc: Add { x } and { y } -- tiny-doc is a `debug-rep`. The { } is special syntax for embedding a value into a tiny-doc.
-        long-doc:
-            Essentially just a wrapper for the `+` operator.
-            It works on any values that have the an `Addable` instance, so it can be used anywhere you'd like to add two values together
-            
-            >> 3.plus(5)
-            -> 8
+      test do:
+        Can add positive values
+        >> 2.plus(2)
+        -> 4
+        >> 3.plus(5)
+        -> 8
 
-            -- Do we need to say this? this seems kind of obvious
-            Negative numbers can be added as well.  
+      long-doc:
+        Essentially just a wrapper for the `+` operator.
+        It works on any values that have the an `Addable` instance, so it can be used anywhere you'd like to add two values together
+           
+        >> 3.plus(5)
+        -> 8
 
-            >> 3.plus(-5)
-            -> -2
+        -- Do we need to say this? this seems kind of obvious
+        Negative numbers can be added as well.  
 
-            One use might be to compute a new bank account balance after some money is deposited:
+        >> 3.plus(-5)
+        -> -2
 
-            >> oldBalance = 300
-            >> amountToAdd = 10
-            >> newBalance = oldBalance.plus(amountToAdd)
-            >> newBalance
-            -> 310
+        One use might be to compute a new bank account balance after some money is deposited:
 
-            Although since this function is just a wrapper for `+` there's little reason to use it unless you need currying. 
+        >> oldBalance = 300
+        >> amountToAdd = 10
+        >> newBalance = oldBalance.plus(amountToAdd)
+        >> newBalance
+        -> 310
 
-            >> [1,2,3].map(_.plus(3)) 
-            -> [4,5,6]
+       Although since this function is just a wrapper for `+` there's little reason to use it unless you need currying. 
 
-            Since Tuples do not have an `Addable` instance, they cannot be added with this function
+        >> [1,2,3].map(_.plus(3)) 
+        -> [4,5,6]
 
-            >>error (3,4).plus((5,6))
+      devl-doc:
+        Since this function is just a wrapper for `+`, it's super snazzy and short. It might be worth it to write a `.minus` function as well.
+        
+        Maybe this function should be moved into the numeric-utils module.
+
 
 Supported editors will have the long-doc collapsed by default, because otherwise it takes quite a bit of space which will probably not always be that helpful. 
 The long-doc requires two newlines for a linebreak to be present in the output, except in code examples. This makes it possible to set the max line width to whatever 
@@ -501,7 +559,9 @@ Is that type-wrappers are guaranteed to be equivalent at runtime. This means you
 Used for creating a new ADT 
 
     type Bool = True | False
-    type CarBrand = GM | Ford | Toyota
+    type CarBrand = GM 
+                  | Ford
+                  | Toyota
     type Car = CarBrand.Car(Year)
     type Person = Name.Person(List<Car>)
     type IntList = EmptyIntList | Int.Cons(IntList) -- recursive data types are allowed, but only one level deep. This restriction also applies to functions, as we'll discuss later
@@ -778,37 +838,37 @@ There are 3 "tiers" in Zoda. The lowest is values - these are functions and cons
 A module is just a collection of values. Every file is a module. Like values, modules can depend on each other via `import` and form a DAG. If a module is named `main`, it must be a "root" module and cannot be imported by any other module. The name of a module is always the name of the file (without the `.zoda` extension), with optional descriptive words at the end seperated by `-`. If a module is named `main`, it must have a value named `main` of type `IO a`. Like functions, they have "tiny-doc" and "long-doc". This is what a module might look like:
 
     -- adding-utils.zoda
-    module adding-utils
-        author: Andre Popovitch
-        tiny-doc: Collection of utilities related to adding values
-        long-doc: 
-            These utilities are part of the greater "adding" library. 
-            They're useful in all situations where you need to add something.
-            
-            -- maybe include more info here on when to use these?
-            If you need to add 3, check out the `plus-3` function. Other useful 
-            functions include `plus-4` and `plus-5`.           
+    module adding-utils `Collection of utilities related to adding values`
+      author: Andre Popovitch
+      user-doc: 
+        These utilities are part of the greater "adding" library. 
+        They're useful in all situations where you need to add something.
+           
+        -- maybe include more info here on when to use these?
+        If you need to add 3, check out the `plus-3` function. Other useful 
+        functions include `plus-4` and `plus-5`.           
 
-            Examples: 
+        Examples: 
 
-            >> 3.plus-4 
-            -> 7
+        >> 3.plus-4 
+        -> 7
 
-            >> 3.plus-5
-            -> 8
-
-        importing:
-            (plus) from generic-plus           -- import the "plus" function from the module "generic-plus".
-            negation:negation                  -- import the "negation" module from the "negation" package
-        exporting:
-            plus-3, plus-4, plus-5, plus-negative
+        >> 3.plus-5
+        -> 8
+      devl-doc:
+        Research is ongoing whether a `x.plus-6` function is possible. Contributions would be welcomed!
+      importing:
+        (plus) from generic-plus           -- import the "plus" function from the module "generic-plus".
+        negation:negation                  -- import the "negation" module from the "negation" package
+      exporting:
+        plus-3, plus-4, plus-5, plus-negative
                   
     x.plus-0 = x -- not exported because it's useless
-    x.plus-3 = x.plus(3) -- these would typically have their own tests, tiny-docs, and long-docs, but I've left them off for the sake of brevity.
+    x.plus-3 = x.plus(3) -- these would typically have their own tests, tiny-docs, user-docs, and devl-docs, but I've left them off for the sake of brevity.
     x.plus-4 = x.plus(4) 
     x.plus-5 = x.plus(5) 
     x.plus-negative(y) = x.plus(y.negation:negate)         -- namespacing is done with `:`
 
-When executing a package, execution begins at the `main` function inside the `main` module. More specifically, it just executes whatever actions the `main` module returns. Every Zoda package has a `main` module - since it must be the root level module, it cannot export anything. The `long-doc` of your main module serves as a guide to new contributors to how they should look at and edit the whole package. It is *not* intended to be a high level description of your package for end-users - that should be the `introduction` chapter of the book for your package. (a `readme.md` will be automatically created from the book, more on this later).
+When executing a package, execution begins at the `main` function inside the `main` module. More specifically, it just executes whatever actions the `main` module returns. Every Zoda package has a `main` module - since it must be the root level module, it cannot export anything (and does not have a `user-doc`). The `devl-doc` of your main module serves as a guide to new contributors to how they should look at and edit the whole package. It is *not* intended to be a high level description of your package for end-users - that should be the `introduction` chapter of the book for your package. (a `readme.md` will be automatically created from the book, more on this later).
 
 A package is always contained entirely within one folder. It also always has a `book` directory and a `zoda.toml` file. The book directory contains all the documentation about the package that does not make sense to be stored in the source files. The `zoda.toml` file contains information about what other packages this package depends on, and what modules it exports. 
