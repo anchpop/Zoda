@@ -91,13 +91,13 @@ If you want to, you can curry a function by leaving an `_` in the place of an ar
 
     my-val = my-list.map(1.plus(_))
 
-You can leave the `_`s at any amount of places in the chain.
+This returns the curried function *immediately* - more functions afterward is probably a bad idea.
 
-    my-val = my-list.foldl(_.plus(_), 0) 
+    my-val = my-list.foldl(_.plus(_), 0)  -- okay
 
-    my-val = my-list.foldl(_.plus(2).divided-by(_), 0) 
+    my-val = my-list.foldl(_.plus(2).divided-by(_), 0) -- not okay, `_.plus(2)` returns a function and `.divided-by` takes a number.
 
-you can also apply none of the arguments of a function just by not doing anything with it at all
+you can also apply none of the arguments of a function just by not doing anything with it at all, because functions are first-class values.
 
     my-val = my-list.map(add-one)
 
@@ -534,6 +534,13 @@ To solve this, we add the magical `.!` function to the end of it.
     Nothing.! -- compile time error!
 
 So what's the magic? Simple. During compilation, we compile the program down to a set of verification conditions. These are conditions that are only valid if your program has a given property. One example of a verification condition might be "`divided-by` always returns an Optional<Float>". But these conditions also contain information about how functions behave given their inputs, for example "`divided-by` always returns a `_.Just` when passed a nonzero value". Then, your whole program is fed into an SMT solver, which checks whether all the conditions hold. If you can check that "`divided-by` always returns a `_.Just` when passed a nonzero value", and "`divided-by-3` will always pass a nonzero value to `divided-by`", then we can know it's safe to unwrap the `_.Just` to just `_`.
+
+In addition, there is also the `!!` function, which unwraps *anything*.
+
+    a = 3.divided-by(1).!!
+    b = 3.divided-by(0).!! 
+
+This function is obviously partial, because it will fail when it tries to evaluate `b`. It's allowed in Prototype builds but not Production builds, because sometimes you just want to bang out something fast without worrying about all the ways a function call could go wrong. 
 
 
 
