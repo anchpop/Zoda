@@ -14,6 +14,7 @@ Towards this goal, we have some subgoals.
 
 6) Self-embedding. Zoda code should be able to read and run other Zoda code at runtime, and run it just as efficiently as if it had been written in the original executable.
 
+7) Cross platform. Compiling to LLVM should make writing cross-platform code easier
 
 # Setting a value
 
@@ -297,58 +298,58 @@ These can be run with a compiler flag (and are automatically run when creating a
     a.plus-one = a + 1
       test:
         Can add one to two
-        >> 2.plus-one
-        -> 3
+        >>> 2.plus-one
+        ->: 3
 
 You can have as many of these as you want.
 
     a.plus-one = a + 1
       test:
         Can add one to positive values
-        >> 2.plus-one
-        -> 3
-        >> 3.plus-one 
-        -> 4
+        >>> 2.plus-one
+        ->: 3
+        >>> 3.plus-one 
+        ->: 4
 
 And to contain multiple tests, use do notation again
 
     a.plus-one = a + 1
       test do:
         Can add one to positive values
-        >> 2.plus-one
-        -> 3
-        >> 3.plus-one
-        -> 4
+        >>> 2.plus-one
+        ->: 3
+        >>> 3.plus-one
+        ->: 4
 
         Can add one to negative values
-        >> -2.plus-one
-        -> -1
-        >> -3.plus-one
-        -> -2
+        >>> -2.plus-one
+        ->: -1
+        >>> -3.plus-one
+        ->: -2
 
 If you know you haven't implemented the functionality for a test yet, just make it pending
 
     a.incrementAbsoluteValue = a + 1
       test do:
         Can increment to positive values
-        >> 2.plus-one 
-        -> 3
+        >>> 2.plus-one 
+        ->: 3
         
         Can increment to positive values
-        >>pending -2.plus-one
-        -> -3
+        >>>pending -2.plus-one
+        ->: -3
 
 If a test must pass
 
     a.incrementAbsoluteValue = a + 1
       test do:
         Can increment to positive values
-        >> 2.plus-one 
-        -> 3
+        >>> 2.plus-one 
+        ->: 3
         
         Can increment to positive values
-        >>pending -2.plus-one
-        -> -3
+        >>critical -2.plus-one
+        ->: -3
 
 
 # Match
@@ -391,36 +392,36 @@ Comments with `--` are allowed inside long-docs and devl-docs, and will not be i
 
       test do:
         Can add positive values
-        >> 2.plus(2)
-        -> 4
-        >> 3.plus(5)
-        -> 8
+        >>> 2.plus(2)
+        ->: 4
+        >>> 3.plus(5)
+        ->: 8
 
       long-doc:
         Essentially just a wrapper for the `+` operator.
         It works on any values that have the an `Addable` instance, so it can be used anywhere you'd like to add two values together
            
-        >> 3.plus(5)
-        -> 8
+        >>> 3.plus(5)
+        ->: 8
 
         -- Do we need to say this? this seems kind of obvious
         Negative numbers can be added as well.  
 
-        >> 3.plus(-5)
-        -> -2
+        >>> 3.plus(-5)
+        ->: -2
 
         One use might be to compute a new bank account balance after some money is deposited:
 
-        >> oldBalance = 300
-        >> amountToAdd = 10
-        >> newBalance = oldBalance.plus(amountToAdd)
-        >> newBalance
-        -> 310
+        >>> oldBalance = 300
+        >>> amountToAdd = 10
+        >>> newBalance = oldBalance.plus(amountToAdd)
+        >>> newBalance
+        ->: 310
 
        Although since this function is just a wrapper for `+` there's little reason to use it unless you need currying. 
 
-        >> [1,2,3].map(_.plus(3)) 
-        -> [4,5,6]
+        >>> [1,2,3].map(_.plus(3)) 
+        ->: [4,5,6]
 
       devl-doc:
         Since this function is just a wrapper for `+`, it's super snazzy and short. It might be worth it to write a `.minus` function as well.
@@ -507,11 +508,7 @@ The only one I have any ideas for is `always-terminates`, which says about a fun
         tags: always-terminates
 
 Although I expect `always-terminates` to not be that useful... if a function doesn't call `recurse` and only calls functions marked as 
-`always-terminates`, then I think it should always terminate.
-For higher-order functions, `always-terminates` is not available but `always-terminates-if-input-functions-terminate` is.  
-
-
-# Unwrapping error values
+`always-terminates`, then I think it should
 
 In practice, all Zoda functions return a value or become caught in an infinite loop (there are some rare exceptions). This is useful because it prevents the vast majority of uncontrolled runtime crashes. But it can be counterproductive to writing useful functions that are composable.
 
@@ -857,16 +854,16 @@ A module is just a collection of values. Every file is a module. Like values, mo
 
         Examples: 
 
-        >> 3.plus-4 
-        -> 7
+        >>> 3.plus-4 
+        ->: 7
 
-        >> 3.plus-5
-        -> 8
+        >>> 3.plus-5
+        ->: 8
       devl-doc:
         Research is ongoing whether a `x.plus-6` function is possible. Contributions would be welcomed!
       importing:
         (plus) from generic-plus           -- import the "plus" function from the module "generic-plus".
-        negation:negation                  -- import the "negation" module from the "negation" package
+        negatory:negation                  -- import the "negation" module from the "negatory" package
       exporting:
         plus-3, plus-4, plus-5, plus-negative
                   
