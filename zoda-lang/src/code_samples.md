@@ -562,17 +562,24 @@ Is that type-wrappers are guaranteed to be equivalent at runtime. This means you
 
 Used for creating a new ADT 
 
-    type Bool = True | False
-    type CarBrand = GM 
-                  | Ford
-                  | Toyota
-    type Car = CarBrand.Car(Year)
-    type Person = Name.Person(List<Car>)
-    type IntList = EmptyIntList | Int.Cons(IntList) -- recursive data types are allowed, but only one level deep. This restriction also applies to functions, as we'll discuss later
+    type Bool = True :: Bool 
+              | False :: Bool
+    type CarBrand = GM :: CarBrand
+                  | Ford :: CarBrand
+                  | Toyota :: CarBrand
+    type Car = Car :: CarBrand -> Year -> Car
+    type Person = Person :: Name -> List<Car> -> Person
+    type IntList = EmptyIntList :: IntList 
+                 | Cons :: Int -> IntList -> IntList -- Recursive data types are allowed, but only "one level deep". 
+                                                     -- This restriction also applies to functions, as we'll discuss later
 
 parameterized types
-    type Optional<a> = Nothing | Just a 
-    type Result<e, r> = e.Error | r.Result 
+
+    type Optional<a> = Nothing :: Optional<a> 
+                     | Just :: a -> Optional<a>
+
+    type Result<e, r> = Error :: e -> Result<e, r> 
+                      | Result :: r -> Result<e, r>  
 
 # Synonyms
 

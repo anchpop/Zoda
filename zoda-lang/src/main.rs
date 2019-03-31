@@ -80,8 +80,14 @@ enum Token {
   SubTok(SourcePos, String)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum LexicalError {
+    UnknownToken(SourcePos, String),
+    BadIndentation(SourcePos)
+}
 
-fn tokenizeLine(line: &str, current_column: usize, current_line: usize) -> Result<Vec<Token>, String>  {
+
+fn tokenizeLine(line: &str, current_column: usize, current_line: usize) -> Result<Vec<Token>, LexicalError>  {
   let mut line_tokens: Vec<Token> = Vec::new();
   if line == "" {
     return Ok(line_tokens);
@@ -142,11 +148,11 @@ fn tokenizeLine(line: &str, current_column: usize, current_line: usize) -> Resul
   }
 
   
-  return Err(format!("Unable to lex character at line {} column {} - `{}`", current_line, current_column, line))
+  return Err(LexicalError::UnknownToken(SourcePos::SourcePos { line: current_line, column: current_column }, line.to_string()))
 } 
 
 
-fn tokenize(s: &str) -> Result<Vec<Token>, String> {
+fn tokenize(s: &str) -> Result<Vec<Token>, LexicalError> {
 
   let mut current_line = 0;
   let mut current_column = 0;
@@ -163,7 +169,7 @@ fn tokenize(s: &str) -> Result<Vec<Token>, String> {
     line_tokens.push(Token::StartLine(SourcePos::SourcePos { line: current_line, column: current_column }));
     let num_spaces = line.chars().take_while(|c| c.is_whitespace()).count();
     if num_spaces % INDENTATION_CHANGE_THRESH != 0 {
-      return Err(format!("Line indentation of {} not a multiple of {}", num_spaces, INDENTATION_CHANGE_THRESH));
+      return Err(LexicalError::BadIndentation(SourcePos::SourcePos{line: current_line, column: current_column}));
     }
     let indentation_level = num_spaces / INDENTATION_CHANGE_THRESH;
     
