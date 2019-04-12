@@ -3,6 +3,19 @@ extern crate regex;
 
 use regex::Regex;
 
+const TEST_STR: &'static str = "x.plus-0 = x -- not exported because it's useless
+x.plus-3 = x.plus(3) -- these would typically have their own tests, tiny-docs, user-docs, and devl-docs, but I've left them off for the sake of brevity.
+x.plus-4 = x.plus(4) 
+x.plus-5 `Add {x} and 5` = 
+    res
+  where:
+    res = x.(_.plus(5))
+  user-doc: 
+    Adds 5 to a value, or adds a value to 5, whatever way you want to think about it 
+  devl-doc: 
+    This function is unrealistically convoluted, it's designed to showcase many different features within Zoda
+x.plus-negative(y) = x.plus(y.negation:negate)         -- namespacing is done with `:`
+";/*
 const TEST_STR: &'static str = "\
 module adding-utils `Collection of utilities related to adding values`
   author: Andre Popovitch
@@ -41,7 +54,7 @@ x.plus-5 `Add {x} and 5` =
   devl-doc: 
     This function is unrealistically convoluted, it's designed to showcase many different features within Zoda
 x.plus-negative(y) = x.plus(y.negation:negate)         -- namespacing is done with `:`
-";
+";*/
 const INDENTATION_CHANGE_THRESH: usize = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -16,7 +16,7 @@ Towards this goal, we have some subgoals.
 
 7) Cross platform. Compiling to LLVM should make writing cross-platform code easier
 
-# Setting a value
+## Setting a value
 
 An `=` is always followed by a value, it's how you set a value. A ` ~ ` is always followed by a type, it's how you tell Zoda the type of a value.
 
@@ -31,13 +31,13 @@ Here we're defining the same value multiple times, this is illegal but we're jus
 
 Types can be ambiguous with "traits" - here we say "myNum" has the trait "Integral", but we're not any more specific.
 
-    myNum ~ (Integral a) => a
+    myNum ~ Integral a => a
     myNum = 3
 
     myNum = 3 ~ (Integral a => a)
 
 
-# Function application
+## Function Application
 
 Operators always take two values. the format for applying them is `value1 SPACE operator SPACE value2` 
 
@@ -55,7 +55,7 @@ Function application is simple, it's `argument1.functionName(argument2, argument
     myNum = 2.pow(4)
 
 
-# Function creation
+## Function Creation
 
 Defining a function "add-one" that takes a parameter "a" - no signature. Zoda will use type inference to give `a` the trait `Addable`.
  
@@ -72,11 +72,53 @@ We can give a signature to a function. All functions are values, the only differ
     add3 ~ Int -> Int -> Int -> Int
     a.plus(b, c) = a + b + c
 
-    add3: (Addable a) => a -> a -> a -> a
+    add3 ~ (Addable a) => a -> a -> a -> a
     a.plus(b, c) = a + b + c
 
+## Polymorphic Functions
 
-# Function chaining
+The last section had a function that worked on any type that has the trait `Addable`.
+
+    add3 ~ (Addable a) => a -> a -> a -> a
+    a.plus(b, c) = a + b + c
+
+The `=>` creates a "type variable", in this case it has the constraint that it must have the type `Addable`. You can have ones without the type.
+
+    apply-to ~ (a, b) => (a -> b) -> a -> b 
+    f.apply-to(a) = a.f
+
+The `=>` does not have to be at the very front of the type.
+
+    id-both ~ (b, c) => (a => a -> a) -> b -> c -> {* b, c *}
+    f.id-both(b, c) =  {* f.b, f.c *}
+
+But type inference typically won't assume a type has a `=>` in the middle of a type, so if you want to have a function like the above you should give it a type signature.  
+
+# Existentials
+
+By default, polymorphic values are universally quantified. Putting a `*` before the type variable makes it existentially qualified.
+
+
+    useless ~ (a, *b) => a -> *b -- a is universally quantified, *b is existentially quantified
+    s.useless = True -- can return literally any value
+
+Since the return value of `useless` is existentially quantified, it could be any value, but you don't know what the value is.
+
+    useless ~ (a, *b) => a -> *b -- a is universally quantified, *b is existentially quantified
+    s.useless = True -- can return literally any value, but all possible return values must be the same type
+
+    v ~ *b => *b
+    v = 3.useless -- really nothing I can do with this value 
+
+These are useful for recovering some nice properties from dynamic languages in a type safe way. For example, the following is allowed:
+
+    myList = [1, "test", True] ~ List<*a => a>
+
+Although you can't do anything with the contents of that list (yet).
+
+The `*` syntax is a little but ugly because we use `{* *}` for tuples, if you used both together I imagine the types would start to look pretty hairy. I hope I eventually find a better syntax for tuples than `{* *}`
+
+## Function chaining
 
 You can chain functions using `.`. This is useful for "pipelines"
 
@@ -84,7 +126,7 @@ You can chain functions using `.`. This is useful for "pipelines"
     my-value = 3.plus(4).subtract(1).times(4).negate.divide(2).absolute-value
 
 
-# Currying
+## Currying
 
 If you want to, you can curry a function by leaving an `_` in the place of an argument.
 
@@ -103,7 +145,7 @@ you can also apply none of the arguments of a function just by not doing anythin
     my-val = my-list.map(add-one)
 
 
-# Style tips
+## Style tips
 
 With the x.f(z) syntax, you probably want to make function names read nicely
 
@@ -111,12 +153,12 @@ With the x.f(z) syntax, you probably want to make function names read nicely
     3.lower-bound(4) -- good
 
 
-# Indentation-sensitive Syntax
+## Indentation-sensitive Syntax
 
 any time after a `:`, you should indent if you choose to make a newline
 
 
-# if expressions
+## if expressions
 
 These use indentation for alignment to support nesting
 
@@ -162,7 +204,7 @@ These are expressions so you may use them however you like.
       else: 
         b
 
-# Tiny Docs
+## Tiny Docs
 
 Tiny-docs are like comments, but better. These are tiny little docs that get scattered across your code, designed to aid other developers and anyone interested in using your library.  In general, you can put them after before `:` sign. They are seperated by \` symbols, and can reference in-scope values with `{ }`
 
@@ -195,7 +237,7 @@ They're allowed in a couple other places, too.
 
 
 
-# Lists
+## Lists
 
     my-list = [1,2,3,4]
     my-list = 1.prepend-to([2,3,4])   -- [1,2,3,4]
@@ -235,7 +277,7 @@ not present in standard haskell.
 
 
 
-# higher order functions
+## higher order functions
 
     x.plus-one = x + 1
     my-list = [1,2,3,4,5].map(add-one)
@@ -243,7 +285,7 @@ not present in standard haskell.
 
 
 
-# lambdas
+## lambdas
 
     x.plus-one = x.(|x| ->: x + 1)
 
@@ -254,7 +296,7 @@ is equivalent to...
 In some languages you can set a lambda to a value directly, but this is not allowed in Zoda
 
 
-# The value-passing operator
+## The value-passing operator
 
 not really a language feature, just a built-in operator. simply passes a value to a function, left associative
 
@@ -264,7 +306,7 @@ not really a language feature, just a built-in operator. simply passes a value t
     my-val = 4
 
 
-# do notation
+## do notation
 
     a.print-value-cool = do:
       putString("=============")
@@ -279,7 +321,7 @@ desugars to...
       putString("=============") >>= \- ->
 
 
-# where statements. 
+## where statements. 
 
 Valid for functions as well as values. 
 
@@ -290,7 +332,7 @@ Valid for functions as well as values.
         j = 4
 
 
-#inline test statements. 
+##inline test statements. 
 
 
 These can be run with a compiler flag (and are automatically run when creating an optimized build), and only rerun if the function or its dependencies change.
@@ -352,16 +394,16 @@ If a test must pass
         ->: -3
 
 
-# Match
+## Match
 
 You can do a full `match`, like so:
 
     a.luckyNumber7 = match a:
       7 ->: putString("Lucky number 7!")
-      _ ->: putString("sorry, you are a loser")
+      * ->: putString("sorry, you are a loser")
     l.head = match l:
-      x.Cons(_) ->: x.Just
-      _         ->: nothing 
+      x.Cons(*) ->: x.Just
+      *         ->: nothing 
 
 All pattern matches must be exhaustive to perform an optimized build - this is to keep the convenient fact that optimized Zoda builds have no runtime errors in practice.
 
@@ -379,7 +421,7 @@ A common pattern is to do a pattern match to see if a value is matches a pattern
       else notSeven ->: notSeven
          
 
-# Inline docs 
+## Inline docs 
 
 Seperated into "devl-doc" and "long-doc". The long-doc can be as long as you want. It is intended to be shown on documentation pages and should give an in-depth explanation with examples of how it should be used. The devl-doc is for people who'd like to modify the function, and should contain important information and context. These examples are also tested at compile time. 
 
@@ -434,7 +476,7 @@ The long-doc requires two newlines for a linebreak to be present in the output, 
 you want within the long-doc and the formatter will adjust it for you.
 
 
-# Strings and Chars
+## Strings and Chars
 
 We use the same approach to handling Strings that Rust does. To borrow from their documentation:
 A String is a sequence of Unicode scalar values encoded as a stream of UTF-8 bytes. 
@@ -459,7 +501,7 @@ for use with regular expression libraries, prefix the string with 'r'. This disa
     
     my-regex = r""
 
-# recursion
+## recursion
 
 Zoda does not allow unrestricted recursion. The reason is that unrestricted recursion makes it easy to create a stack explosion:
 
@@ -499,7 +541,7 @@ This doesn't blow up the stack because the `Chainable` trait includes instructio
             else:
                 xs.self(f)
                        
-# Tags statements
+## Tags statements
 
 Functions and values can have certain facts stated about them in `tags` statements which serve to provide extra information to the compiler.
 The only one I have any ideas for is `always-terminates`, which says about a function exactly what it says on the tin.
@@ -541,7 +583,7 @@ This function is obviously partial, because it will fail when it tries to evalua
 
 
 
-# type-wrapper 
+## type-wrapper 
 
 Equivalent to "newtype" in haskell
 
@@ -558,7 +600,7 @@ and
 
 Is that type-wrappers are guaranteed to be equivalent at runtime. This means you can use the `.coerce` function to wrap or unwrap types, even deeply nested ones. 
 
-# type declarations and ADTs
+## type declarations and ADTs
 
 Used for creating a new ADT 
 
@@ -581,7 +623,7 @@ parameterized types
     type Result<e, r> = Error :: e -> Result<e, r> 
                       | Result :: r -> Result<e, r>  
 
-# Synonyms
+## Synonyms
 
 These are just useful when you want to give a possibly more descriptive name to a type. They can have parameters but cannot be partially applied.
 
@@ -589,7 +631,7 @@ These are just useful when you want to give a possibly more descriptive name to 
     synonym Either<a><b> = Result<a><b>
 
 
-# Trait and instance declarations
+## Trait and instance declarations
 
 Unlike in default haskell, type classes can have multiple parameters. In this case, we're relating two types by saying one is a collection
 and another is an element. We also say that `Eq` is a supertrait for `e`, so the elements of any collection are required to have the `Eq` trait.
@@ -626,7 +668,7 @@ We can also write that a specific class does not have a certain trait
 
 `has-trait` declarations for a trait `MyTrait a b c` must be either in the same file as the trait is defined, or in the same file as the type `a`, `b`, or `c` is defined. 
 
-# Tuples
+## Tuples
 
 Usage of tuples is typically discouraged but they can sometimes make code simpler. Tuples cannot have more than 64 values.
 
@@ -662,7 +704,7 @@ You can write a function that inserts a value into a tuple with an `_`.
 =================== Need to get batter at purescript ==================
 
 
-# Records 
+## Records 
 
 http://www.cs.ioc.ee/tfp-icfp-gpce05/tfp-proc/21num.pdf
 
@@ -789,7 +831,7 @@ Oh and I glossed over this, but records can have type constraints
     fst = { x = 2, x = True } ~ Integral a => { x ~ a, x ~ Bool }
 
 
-# Corecords
+## Corecords
 
 Records:Corecords ~ Product types:Sum types
 
@@ -825,7 +867,7 @@ These can be pattern matched with `match`, naturally.
     r.getFooOrBarLength = match r:
         {+ foo = f +} ->: f.length
         {+ bar = b +} ->: b.length
-        _             ->: 0 
+        *             ->: 0 
     
 You can have an empty corecord with `{+ +}`, but it is impossible to create a value that occupies this type and the type system knows this.
 
@@ -842,7 +884,7 @@ The snazzy thing is that `match-partial` has special support for these - the val
         else a ->: a
 
 
-# Modules, packages and imports
+## Modules, packages and imports
 
 There are 3 "tiers" in Zoda. The lowest is values - these are functions and constants. They have metadata like `tiny-doc`, `long-doc`, and `tags`. These all live inside "modules". Values form a DAG of their dependencies.
 
@@ -883,3 +925,15 @@ A module is just a collection of values. Every file is a module. Like values, mo
 When executing a package, execution begins at the `main` function inside the `main` module. More specifically, it just executes whatever actions the `main` module returns. Every Zoda package has a `main` module - since it must be the root level module, it cannot export anything (and does not have a `user-doc`). The `devl-doc` of your main module serves as a guide to new contributors to how they should look at and edit the whole package. It is *not* intended to be a high level description of your package for end-users - that should be the `introduction` chapter of the book for your package. (a `readme.md` will be automatically created from the book, more on this later).
 
 A package is always contained entirely within one folder. It also always has a `book` directory and a `zoda.toml` file. The book directory contains all the documentation about the package that does not make sense to be stored in the source files. The `zoda.toml` file contains information about what other packages this package depends on, and what modules it exports. 
+
+
+
+# Grammar
+
+This isn't a full grammar for the whole language. WIP
+
+```
+Module := ModuleHeader Definitions
+ModuleHeader := "module" LowercaseIdentifier 
+
+```
