@@ -96,27 +96,25 @@ But type inference typically won't assume a type has a `=>` in the middle of a t
 
 # Existentials
 
-By default, polymorphic values are universally quantified. Putting a `*` before the type variable makes it existentially qualified.
+By default, polymorphic values are universally quantified. Putting a `^` before the type variable makes it existentially qualified.
 
 
-    useless ~ (a, *b) => a -> *b -- a is universally quantified, *b is existentially quantified
+    useless ~ (a, ^b) => a -> ^b -- a is universally quantified, ^b is existentially quantified
     s.useless = True -- can return literally any value
 
 Since the return value of `useless` is existentially quantified, it could be any value, but you don't know what the value is.
 
-    useless ~ (a, *b) => a -> *b -- a is universally quantified, *b is existentially quantified
+    useless ~ (a, ^b) => a -> ^b -- a is universally quantified, ^b is existentially quantified
     s.useless = True -- can return literally any value, but all possible return values must be the same type
 
-    v ~ *b => *b
+    v ~ ^b => ^b
     v = 3.useless -- really nothing I can do with this value 
 
 These are useful for recovering some nice properties from dynamic languages in a type safe way. For example, the following is allowed:
 
-    myList = [1, "test", True] ~ List<*a => a>
+    myList = [1, "test", True] ~ List<^a => a>
 
 Although you can't do anything with the contents of that list (yet).
-
-The `*` syntax is a little but ugly because we use `{* *}` for tuples, if you used both together I imagine the types would start to look pretty hairy. I hope I eventually find a better syntax for tuples than `{* *}`
 
 ## Function chaining
 
