@@ -92,7 +92,7 @@ The `=>` does not have to be at the very front of the type.
     id-both ~ (b, c) => (a => a -> a) -> b -> c -> {* b, c *}
     f.id-both(b, c) =  {* f.b, f.c *}
 
-But type inference typically won't assume a type has a `=>` in the middle of a type, so if you want to have a function like the above you should give it a type signature.  
+But type inference typically won't assume a type has a `=>` in the middle of a type, only at the beginning so if you want to have a function like the above you should give it a type signature.  
 
 # Existentials
 
