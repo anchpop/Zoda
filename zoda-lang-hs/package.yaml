@@ -1,0 +1,100 @@
+name:                zoda-lang-hs
+version:             0.1.0.0
+github:              "anchpop/zoda-lang-hs"
+license:             BSD3
+author:              "Andre Popovitch"
+maintainer:          "andre@popovit.ch"
+copyright:           "2019 Andre Popovitch"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/anchpop/zoda-lang-hs#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- megaparsec
+- hspec
+- safe
+- mtl
+
+ghc-options:
+- -Wall
+- -Wcompat
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wredundant-constraints
+- -fno-warn-unused-do-bind
+- -fno-warn-unused-imports
+- -fno-warn-unused-top-binds
+
+
+default-extensions:
+- BangPatterns
+- ConstraintKinds
+- DataKinds
+- DefaultSignatures
+- DeriveFoldable
+- DeriveFunctor
+- DeriveGeneric
+- DeriveLift
+- DeriveTraversable
+- DerivingStrategies
+- EmptyCase
+- ExistentialQuantification
+- FlexibleContexts
+- FlexibleInstances
+- FunctionalDependencies
+- GADTs
+- GeneralizedNewtypeDeriving
+- InstanceSigs
+- KindSignatures
+- LambdaCase
+- MultiParamTypeClasses
+- MultiWayIf
+- NamedFieldPuns
+- OverloadedStrings
+- PatternSynonyms
+- RankNTypes
+- ScopedTypeVariables
+- StandaloneDeriving
+- TupleSections
+- TypeApplications
+- TypeFamilies
+- TypeFamilyDependencies
+- TypeOperators
+- TemplateHaskell
+- QuasiQuotes
+
+library:
+  source-dirs: src
+
+executables:
+  zoda-lang-hs-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - zoda-lang-hs
+
+tests:
+  zoda-lang-hs-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - zoda-lang-hs
