@@ -16,10 +16,24 @@ parseModule text =
 moduleP :: ASTParser Module
 moduleP = empty
 
-identifierP :: ASTParser Identifier
-identifierP = empty
+lowercaseIdentifierP :: ASTParser Identifier
+lowercaseIdentifierP = sourcePosWrapper $ do
+  c    <- lowerChar
+  rest <- many identifierCharacter
+  pure (Identifier (c : rest))
 
 
+
+identifierCharacter :: Parser Char
+identifierCharacter =
+  try letterChar <|> try alphaNumChar <|> try (char '\'') <|> try (char '-')
+
+sourcePosWrapper :: Parser (SourcePosition -> a) -> Parser a
+sourcePosWrapper f = do
+  (SourcePos n l1 c1) <- getSourcePos
+  toApply             <- f
+  (SourcePos _ l2 c2) <- getSourcePos
+  pure $ toApply (SourcePosition n (unPos l1) (unPos c1) (unPos l2) (unPos c2))
 
 
 data ParserState = ParserState Int deriving (Show, Read, Eq)
