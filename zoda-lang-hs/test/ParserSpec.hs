@@ -82,3 +82,20 @@ test = parallel $ do
       shouldNotParse $ parseSomething "03" numberLiteralP
 
 
+
+
+  describe "Parser.expressionP" $ do
+    it "parses number literals" $ do
+      parseSomething "3" expressionP
+        `shouldParseTo` Expression
+                          (NumberLiteral 3 (SourcePosition "no_file" 1 1 1 2))
+                          (SourcePosition "no_file" 1 1 1 2)
+
+
+
+  describe "Parser.declarationP" $ do
+    it "allows assignment to number literals" $ do
+      parseSomething "i = 3" declarationP `shouldParseTo` Declaration
+        (LowercaseIdentifier "i" (SourcePosition "no_file" 1 1 1 2))
+        (Expression (NumberLiteral 3 (SourcePosition "no_file" 1 5 1 6)) (SourcePosition "no_file" 1 5 1 6))
+        (SourcePosition "no_file" 1 1 1 6)

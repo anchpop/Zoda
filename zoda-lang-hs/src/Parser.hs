@@ -15,8 +15,31 @@ parseModule :: String -> Either (ParseErrorBundle String Void) (Module SourcePos
 parseModule text = runParser (evalStateT moduleP (ParserState 0)) "book.md" text
 
 moduleP :: ASTParser Module
-moduleP = empty
+moduleP = sourcePosWrapper $ do
+  header       <- moduleHeaderP
+  declarations <- many declarationP
+  pure (Module header declarations)
 
+
+moduleHeaderP :: ASTParser ModuleHeader
+moduleHeaderP = sourcePosWrapperWithNewlines $ do
+  string "module"
+  some separatorChar
+  ident <- lowercaseIdentifierP
+  some separatorChar
+  doc <- tinydocP
+  pure (ModuleHeader ident doc)
+
+
+
+declarationP :: ASTParser Declaration
+declarationP = sourcePosWrapperWithNewlines $ do
+  ident <- lowercaseIdentifierP
+  some separatorChar
+  char '='
+  some separatorChar
+  expression <- expressionP
+  pure (Declaration ident expression)
 
 
 expressionP :: ASTParser Expression
@@ -73,6 +96,11 @@ sourcePosWrapper f = do
   toApply             <- f
   (SourcePos _ l2 c2) <- getSourcePos
   pure $ toApply (SourcePosition n (unPos l1) (unPos c1) (unPos l2) (unPos c2))
+
+sourcePosWrapperWithNewlines :: Parser (SourcePosition -> a) -> Parser a
+sourcePosWrapperWithNewlines f = sourcePosWrapper f <* (some newline *> pure () <|> eof)
+
+
 
 getRight :: Either (ParseErrorBundle String Void) b -> b
 getRight (Right b  ) = b
