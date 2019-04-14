@@ -1,13 +1,13 @@
 module Ast where
 
-data Module p = Module (ModuleHeader p) [(Declaration p)] p deriving (Show, Read, Eq)
-data ModuleHeader p = ModuleHeader (LowercaseIdentifier p) (Tinydoc p) p deriving (Show, Read, Eq)
+data Module p = Module (ModuleHeader p) [(Declaration p)] p deriving (Show, Read, Eq, Ord)
+data ModuleHeader p = ModuleHeader (LowercaseIdentifier p) (Tinydoc p) p deriving (Show, Read, Eq, Ord)
 
-data Declaration p = Declaration (LowercaseIdentifier p) (Expression p) p deriving (Show, Read, Eq)
+data Declaration p = Declaration (LowercaseIdentifier p) (Expression p) p deriving (Show, Read, Eq, Ord)
 
-data Expression p = Expression (NumberLiteral p) p deriving (Show, Read, Eq)
+data Expression p = NumberLiteralExpression (NumberLiteral p) p | IdentifierExpression (LowercaseIdentifier p) p deriving (Show, Read, Eq, Ord)
 
-data NumberLiteral p = NumberLiteral Rational p deriving (Show, Read, Eq)
-data Tinydoc p = Tinydoc String p deriving (Show, Read, Eq)
-data LowercaseIdentifier p = LowercaseIdentifier String p deriving (Show, Read, Eq)
-data UppercaseIdentifier p = UppercaseIdentifier String p deriving (Show, Read, Eq)
+data NumberLiteral p = NumberLiteral Rational p deriving (Show, Read, Eq, Ord)
+data Tinydoc p = Tinydoc String p deriving (Show, Read, Eq, Ord)
+data LowercaseIdentifier p = LowercaseIdentifier String p deriving (Show, Read, Eq, Ord)
+data UppercaseIdentifier p = UppercaseIdentifier String p deriving (Show, Read, Eq, Ord)

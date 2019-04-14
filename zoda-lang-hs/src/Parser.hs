@@ -43,9 +43,16 @@ declarationP = sourcePosWrapperWithNewlines $ do
 
 
 expressionP :: ASTParser Expression
-expressionP = sourcePosWrapper $ do
-  numb <- try numberLiteralP
-  pure (Expression numb)
+expressionP =
+  sourcePosWrapper
+    $   ( do
+          numb <- try numberLiteralP
+          pure (NumberLiteralExpression numb)
+        )
+    <|> ( do
+          ident <- try lowercaseIdentifierP
+          pure (IdentifierExpression ident)
+        )
 
 numberLiteralP :: ASTParser NumberLiteral
 numberLiteralP = sourcePosWrapper $ do
@@ -83,10 +90,12 @@ identifierCharacter :: Parser Char
 identifierCharacter = try letterChar <|> try alphaNumChar <|> try (char '\'') <|> try (char '-')
 
 
-data ParserState = ParserState Int deriving (Show, Read, Eq)
+data ParserState = ParserState Int deriving (Show, Read, Eq, Ord)
 type Parser a = StateT ParserState (Parsec Void String) a
 type ASTParser a = Parser (a SourcePosition)
-data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} deriving (Show, Read, Eq)
+data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} deriving (Read, Eq, Ord)
+instance Show SourcePosition where
+  show (SourcePosition f l1 c1 l2 c2) = ""--"(SourcePosition " <> f <> " " <> (show l1) <> " " <> (show c1) <> " " <> (show l2) <> " " <> (show c2) <> ")"
 
 
 

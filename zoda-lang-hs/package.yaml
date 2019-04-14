@@ -25,6 +25,7 @@ dependencies:
 - hspec
 - safe
 - mtl
+- containers
 
 ghc-options:
 - -Wall
