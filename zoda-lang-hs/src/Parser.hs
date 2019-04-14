@@ -1,12 +1,15 @@
 module Parser where
 import Ast
 
+import Data.List
 import Data.Void
 import Text.Megaparsec hiding (State)
 import Text.Megaparsec.Char
 import Control.Monad.State
 
 import Debug.Trace
+
+import Data.Ratio
 
 parseModule :: String -> Either (ParseErrorBundle String Void) (Module SourcePosition)
 parseModule text = runParser (evalStateT moduleP (ParserState 0)) "book.md" text
@@ -23,10 +26,13 @@ expressionP = sourcePosWrapper $ do
 
 numberLiteralP :: ASTParser NumberLiteral
 numberLiteralP = sourcePosWrapper $ do
-  sign  <- try (char '-' *> pure False) <|> (pure True)
+  sign  <- try (string "-" *> pure False) <|> (pure True)
   major <- some (digitChar)
   minor <- (try (char '.') *> some (digitChar)) <|> (pure "0")
-  pure (NumberLiteral sign (read major) (read minor))
+  guard $ head major /= '0'
+  let value1 = (read minor) % (10 ^ (length minor)) + ((read $ major <> "% 1") :: Rational) -- % is division, not modulo
+      value2 = if sign then value1 else (negate value1)
+  pure (NumberLiteral value2)
 
 tinydocP :: ASTParser Tinydoc
 tinydocP = sourcePosWrapper $ do
