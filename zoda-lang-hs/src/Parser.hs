@@ -1,5 +1,6 @@
 module Parser where
 import Ast
+import Errors
 
 import Data.List
 import Data.Void
@@ -7,12 +8,13 @@ import Text.Megaparsec hiding (State)
 import Text.Megaparsec.Char
 import Control.Monad.State
 
+import Data.Ratio
+import qualified Data.Bifunctor as Data.Bifunctor
+
 import Debug.Trace
 
-import Data.Ratio
-
-parseModule :: String -> Either (ParseErrorBundle String Void) (Module SourcePosition)
-parseModule text = runParser (evalStateT moduleP (ParserState 0)) "book.md" text
+parseModule :: String -> Either (ProductionError p) (Module SourcePosition)
+parseModule text = Data.Bifunctor.first ZodaSyntaxError (runParser (evalStateT moduleP (ParserState 0)) "book.md" text)
 
 moduleP :: ASTParser Module
 moduleP = sourcePosWrapper $ do
@@ -115,7 +117,7 @@ getRight :: Either (ParseErrorBundle String Void) b -> b
 getRight (Right b  ) = b
 getRight (Left  err) = error $ errorBundlePretty err
 
--- parseSomething :: String -> StateT ParserState (Parsec Void String) b -> b
+parseSomething :: Stream s => s -> StateT ParserState (Parsec e s) a -> Either (ParseErrorBundle s e) a
 parseSomething text parser = (runParser (evalStateT parser (ParserState 0)) "no_file" text)
 
 
