@@ -21,12 +21,14 @@ description:         Please see the README on GitHub at <https://github.com/anch
 
 dependencies:
 - base >= 4.7 && < 5
+- classy-prelude
 - megaparsec
 - hspec
 - safe
 - mtl
 - containers
 - capability
+
 
 ghc-options:
 - -Wall
@@ -76,6 +78,8 @@ default-extensions:
 - TemplateHaskell
 - QuasiQuotes
 - DerivingVia
+- DeriveAnyClass 
+- NoImplicitPrelude
 
 library:
   source-dirs: src

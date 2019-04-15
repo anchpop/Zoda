@@ -1,4 +1,5 @@
 module CopyPropagatedProgram where
+import ClassyPrelude
 import Data.Int
 import Data.Ratio
 

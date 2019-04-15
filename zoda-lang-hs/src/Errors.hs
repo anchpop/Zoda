@@ -1,4 +1,5 @@
 module Errors where
+import ClassyPrelude
 import Ast
 import Data.Void
 import Text.Megaparsec hiding (State)

@@ -1,8 +1,8 @@
 module Parser where
+import ClassyPrelude hiding (try, many, some)
 import Ast
 import Errors
 
-import Data.List
 import Data.Void
 import Text.Megaparsec hiding (State)
 import Text.Megaparsec.Char
@@ -58,34 +58,40 @@ expressionP =
 
 numberLiteralP :: ASTParser NumberLiteral
 numberLiteralP = sourcePosWrapper $ do
-  sign  <- try (string "-" *> pure False) <|> (pure True)
-  major <- some (digitChar)
-  minor <- (try (char '.') *> some (digitChar)) <|> (pure "0")
-  guard $ head major /= '0'
-  let value1 = (read minor) % (10 ^ (length minor)) + ((read $ major <> "% 1") :: Rational) -- % is division, not modulo
-      value2 = if sign then value1 else (negate value1)
-  pure (NumberLiteral value2)
+  sign   <- try (string "-" *> pure False) <|> (pure True)
+  majorS <- some (digitChar)
+  minorS <- (try (char '.') *> some (digitChar)) <|> (pure "0")
+  guard $ headUnsafe majorS /= '0'
+  case readMay minorS of
+    Just (minor) -> case (readMay (majorS <> "% 1") :: Maybe Rational) of
+      Just (major) -> do
+        let value1 = minor % (10 ^ (length minorS)) + (major) -- % is division, not modulo
+            value2 = if sign then value1 else (negate value1)
+        pure (NumberLiteral value2)
+      _ -> empty
+    _ -> empty
+  where headUnsafe (x:_) = x
 
 tinydocP :: ASTParser Tinydoc
 tinydocP = sourcePosWrapper $ do
   char '`'
   doc <- some (noNewlineOrChars "`")
   char '`'
-  pure (Tinydoc doc)
+  pure . Tinydoc . fromString $ doc
 
 
 uppercaseIdentifierP :: ASTParser UppercaseIdentifier
 uppercaseIdentifierP = sourcePosWrapper $ do
   c    <- upperChar
   rest <- many identifierCharacter
-  pure (UppercaseIdentifier (c : rest))
+  pure . UppercaseIdentifier . fromString $ (c : rest)
 
 
 lowercaseIdentifierP :: ASTParser LowercaseIdentifier
 lowercaseIdentifierP = sourcePosWrapper $ do
   c    <- lowerChar
   rest <- many identifierCharacter
-  pure (LowercaseIdentifier (c : rest))
+  pure . LowercaseIdentifier . fromString $ (c : rest)
 
 
 identifierCharacter :: Parser Char
