@@ -26,6 +26,7 @@ dependencies:
 - safe
 - mtl
 - containers
+- capability
 
 ghc-options:
 - -Wall
@@ -74,6 +75,7 @@ default-extensions:
 - TypeOperators
 - TemplateHaskell
 - QuasiQuotes
+- DerivingVia
 
 library:
   source-dirs: src
