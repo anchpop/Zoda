@@ -28,22 +28,39 @@ checkNoUndefinedIdentifiers m = mapM (checkIdentifiersInExpressionDefined m) (fm
   checkIdentifiersInExpressionDefined m e = checkIndentifiersDefined m (getIdentifiersInExpression e) *> pure True
 
 
-checkHasMain :: (HasThrow "perr" (ProductionError p) m) => Module p -> (Map.Map Text (Expression p)) -> m (Map.Map Text (Expression p))
-checkHasMain moduleAST m = if isJust (Map.lookup "main" m) then pure m else throw @"perr" (NoMain moduleAST)
+getMainFunc :: (HasThrow "perr" (ProductionError p) m) => Module p -> (Map.Map Text (Expression p)) -> m (Expression p)
+getMainFunc moduleAST m = handleMainFunc mainFunc
+  where
+    mainFunc = Map.lookup "main" m
+    handleMainFunc (Just f) = pure f
+    handleMainFunc (Nothing) = throw @"perr" (NoMain moduleAST)
 
---convertToCPP :: Module p -> CPP.Expression P
---convertToCPP = 
+
+
+evaluateMain :: (Eq p) => (Map.Map Text (Expression p)) -> Expression p -> Expression p
+evaluateMain identValMap mainFunc = fullyReduce mainFunc
+  where
+    --reduceExpression :: Expression p -> Expression p
+    reduceExpression e@(NumberLiteralExpression _ _) = e 
+    reduceExpression (IdentifierExpression (LowercaseIdentifier ident _) _) = e
+      where
+        (Just e) = (Map.lookup ident identValMap)
+    fullyReduce e = if reduceExpression e == e 
+                      then e
+                      else fullyReduce (reduceExpression e)
 
 
 
 example :: String
 example = "module i `test module`\n\
           \test = 3\n\
-          \rend = test\n\
+          \main = test\n\
           \"
 
 
 produceProgram moduleAST = do
   identValMap <- createMapOfIdentifiersToValues moduleAST
   checkNoUndefinedIdentifiers identValMap
-  checkHasMain moduleAST identValMap
+  mainFunc <- getMainFunc moduleAST identValMap
+  pure $ evaluateMain identValMap mainFunc
+-- use with `runM (parseModule example >>= produceProgram)`
