@@ -60,6 +60,11 @@ expressionP =
           ident <- try lowercaseIdentifierP
           pure (IdentifierExpression ident)
         )
+    <|> ( do
+          flit <- try functionLiteralP
+          pure (FunctionLiteralExpression flit)
+        )
+
 
 numberLiteralP :: ASTParser NumberLiteral
 numberLiteralP = sourcePosWrapper $ do
@@ -76,6 +81,19 @@ numberLiteralP = sourcePosWrapper $ do
       _ -> empty
     _ -> empty
   where headUnsafe (x:_) = x
+
+functionLiteralP :: ASTParser FunctionLiteral
+functionLiteralP = sourcePosWrapper $ do
+  char '|'
+  identifiers <- lowercaseIdentifierP `sepBy1` (char ',' *> some separatorChar)
+  char '|'
+  some separatorChar
+  string "->"
+  some separatorChar
+  exp <- expressionP
+  pure $ FunctionLiteral identifiers exp
+
+
 
 tinydocP :: ASTParser Tinydoc
 tinydocP = sourcePosWrapper $ do
