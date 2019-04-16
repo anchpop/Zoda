@@ -1,20 +1,25 @@
 module Parser where
 import ClassyPrelude hiding (try, many, some)
 import Ast
-import Errors
+import Basic
 
 import Data.Void
 import Text.Megaparsec hiding (State)
 import Text.Megaparsec.Char
 import Control.Monad.State
+import Capability.Error
 
 import Data.Ratio
 import qualified Data.Bifunctor as Data.Bifunctor
 
 import Debug.Trace
 
-parseModule :: String -> Either (ProductionError p) (Module SourcePosition)
-parseModule text = Data.Bifunctor.first ZodaSyntaxError (runParser (evalStateT moduleP (ParserState 0)) "book.md" text)
+parseModule :: (HasThrow "perr" (ProductionError p) m) => String -> m (Module SourcePosition)
+parseModule text = handleResult result
+  where 
+    result = Data.Bifunctor.first (ZodaSyntaxError) (runParser (evalStateT moduleP (ParserState 0)) "book.md" text)
+    handleResult (Left e) = throw @"perr" e
+    handleResult (Right r) = pure r 
 
 moduleP :: ASTParser Module
 moduleP = sourcePosWrapper $ do

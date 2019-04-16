@@ -79,6 +79,7 @@ default-extensions:
 - QuasiQuotes
 - DerivingVia
 - DeriveAnyClass 
+- PolyKinds
 - NoImplicitPrelude
 
 library:
