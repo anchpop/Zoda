@@ -39,7 +39,7 @@ test = parallel $ do
       parseSomething "Test-case" uppercaseIdentifierP `shouldParseTo` UppercaseIdentifier "Test-case" (SourcePosition "no_file" 1 1 1 10)
 
     it "doesn't accept what it shouldn't" $ do
-      shouldNotParse $ parseSomething "Test case" uppercaseIdentifierP 
+      shouldNotParse $ parseSomething "Test case" uppercaseIdentifierP
       shouldNotParse $ parseSomething "test" uppercaseIdentifierP
       shouldNotParse $ parseSomething "-Test" uppercaseIdentifierP
 
@@ -98,11 +98,9 @@ test = parallel $ do
 
 
     it "parses function applications" $ do
-      parseSomething "3.b" expressionP `shouldParseTo` FunctionApplicationExpression
-        (NumberLiteralExpression (NumberLiteral (3 % 1) (SourcePosition "no_file" 1 1 1 2)) (SourcePosition "no_file" 1 1 1 2))
-        (IdentifierExpression (LowercaseIdentifier "b" (SourcePosition "no_file" 1 3 1 4)) (SourcePosition "no_file" 1 3 1 4))
+      parseSomething "3.b" expressionP `shouldParseTo` FunctionApplicationExpression (IdentifierExpression (LowercaseIdentifier "b" (SourcePosition "no_file" 1 3 1 4)) (SourcePosition "no_file" 1 3 1 4))
+        [ NumberLiteralExpression (NumberLiteral (3 % 1) (SourcePosition "no_file" 1 1 1 2))   (SourcePosition "no_file" 1 1 1 2) ]
         (SourcePosition "no_file" 1 1 1 4)
-
 
   describe "Parser.declarationP" $ do
     it "allows assignment to number literals" $ do

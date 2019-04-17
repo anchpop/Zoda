@@ -50,16 +50,34 @@ declarationP = sourcePosWrapperWithNewlines $ do
 
 expressionP :: ASTParser Expression
 expressionP = 
-        funcAppOnNum
+        funcAppOnParenthesized
+    <|> funcAppOnNum
+    <|> funcAppOnFliteral
+    <|> funcAppOnIdent
+    <|> parenthesizedExpression
     <|> numb
     <|> ident
     <|> fliteral
   where 
-    funcAppOnNum = sourcePosWrapper . try $ do 
-      exp1 <- sourcePosWrapper $ fmap (NumberLiteralExpression) (numberLiteralP)
-      string "."
-      exp2 <- expressionP
-      pure (FunctionApplicationExpression exp1 exp2)
+    funcAppOnParenthesized = funcAppWrapper parenthesizedExpression
+    funcAppOnFliteral = funcAppWrapper fliteral
+    funcAppOnIdent = funcAppWrapper ident
+    funcAppOnNum = funcAppWrapper numb
+    funcAppWrapper expType = sourcePosWrapper . try . (fmap (uncurry FunctionApplicationExpression)) $  typedotexp
+      where
+        typedotexp = do 
+          applicant <- expType
+          string "."
+          f <- expressionP
+          pure (f, [applicant])
+    parenthesizedExpression = sourcePosWrapper . try $ do 
+      char '('
+      many separatorChar
+      exp <- expressionP
+      many separatorChar
+      char ')'
+      pure (ParenthesizedExpression exp)
+      
     numb     = sourcePosWrapper . try $ do
       numb <- numberLiteralP
       pure (NumberLiteralExpression numb)
