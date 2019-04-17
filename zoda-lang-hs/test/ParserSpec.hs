@@ -7,7 +7,7 @@ import Text.Megaparsec hiding (State)
 import Data.Void
 import Test.Hspec
 import Test.Hspec.Runner
-
+import Data.Ratio
 import Data.Foldable (for_)
 
 import Parser
@@ -82,6 +82,24 @@ test = parallel $ do
 
     it "parses identifiers" $ do
       parseSomething "test" expressionP `shouldParseTo` IdentifierExpression (LowercaseIdentifier "test" (SourcePosition "no_file" 1 1 1 5)) (SourcePosition "no_file" 1 1 1 5)
+
+
+    it "parses functions" $ do
+      parseSomething "|a, b, c| -> 3" expressionP `shouldParseTo` FunctionLiteralExpression
+          ( FunctionLiteral
+            [ LowercaseIdentifier "a" (SourcePosition "no_file" 1 2 1 3)
+            , LowercaseIdentifier "b" (SourcePosition "no_file" 1 5 1 6)
+            , LowercaseIdentifier "c" (SourcePosition "no_file" 1 8 1 9)
+            ]
+            (NumberLiteralExpression (NumberLiteral (3 % 1) (SourcePosition "no_file" 1 14 1 15)) (SourcePosition "no_file" 1 14 1 15))
+            (SourcePosition "no_file" 1 1 1 15)
+          )
+          (SourcePosition "no_file" 1 1 1 15)
+        
+
+
+    it "parses function applications" $ do
+      --parseSomething "a.b" expressionP `shouldParseTo` IdentifierExpression (LowercaseIdentifier "a" (SourcePosition "no_file" 1 1 1 2)) (SourcePosition "no_file" 1 1 1 2)
 
 
   describe "Parser.declarationP" $ do

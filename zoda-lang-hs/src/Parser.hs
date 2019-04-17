@@ -12,7 +12,7 @@ import Capability.Error
 import Data.Ratio
 import qualified Data.Bifunctor as Data.Bifunctor
 
-import Debug.Trace
+import Text.Megaparsec.Debug 
 
 parseModule :: (HasThrow "perr" (ProductionError p) m) => String -> m (Module SourcePosition)
 parseModule text = handleResult result
@@ -38,7 +38,6 @@ moduleHeaderP = sourcePosWrapperWithNewlines $ do
   pure (ModuleHeader ident doc)
 
 
-
 declarationP :: ASTParser Declaration
 declarationP = sourcePosWrapperWithNewlines $ do
   ident <- lowercaseIdentifierP
@@ -50,20 +49,28 @@ declarationP = sourcePosWrapperWithNewlines $ do
 
 
 expressionP :: ASTParser Expression
-expressionP =
-  sourcePosWrapper
-    $   ( do
-          numb <- try numberLiteralP
+expressionP = 
+  sourcePosWrapper $
+        (try $ do
+          exp1 <- sourcePosWrapper $ fmap (NumberLiteralExpression) (numberLiteralP)
+          string "->"
+          exp2 <- expressionP
+          pure (FunctionApplicationExpression exp1 exp2)
+        )
+        
+    <|> (try $ do
+          numb <- numberLiteralP
           pure (NumberLiteralExpression numb)
         )
-    <|> ( do
-          ident <- try lowercaseIdentifierP
+    <|> (try $ do
+          ident <- lowercaseIdentifierP
           pure (IdentifierExpression ident)
         )
-    <|> ( do
-          flit <- try functionLiteralP
+    <|> (try $ do
+          flit <- functionLiteralP
           pure (FunctionLiteralExpression flit)
         )
+
 
 
 numberLiteralP :: ASTParser NumberLiteral
@@ -94,7 +101,6 @@ functionLiteralP = sourcePosWrapper $ do
   pure $ FunctionLiteral identifiers exp
 
 
-
 tinydocP :: ASTParser Tinydoc
 tinydocP = sourcePosWrapper $ do
   char '`'
@@ -111,10 +117,10 @@ uppercaseIdentifierP = sourcePosWrapper $ do
 
 
 lowercaseIdentifierP :: ASTParser LowercaseIdentifier
-lowercaseIdentifierP = sourcePosWrapper $ do
+lowercaseIdentifierP = sourcePosWrapper $ (do
   c    <- lowerChar
   rest <- many identifierCharacter
-  pure . LowercaseIdentifier . fromString $ (c : rest)
+  pure . LowercaseIdentifier . fromString $ (c : rest))
 
 
 identifierCharacter :: Parser Char
@@ -138,7 +144,7 @@ sourcePosWrapper f = do
   pure $ toApply (SourcePosition n (unPos l1) (unPos c1) (unPos l2) (unPos c2))
 
 sourcePosWrapperWithNewlines :: Parser (SourcePosition -> a) -> Parser a
-sourcePosWrapperWithNewlines f = sourcePosWrapper f <* (some newline *> pure () <|> eof)
+sourcePosWrapperWithNewlines f = sourcePosWrapper f <* (some newline *> pure () <|> (lookAhead eof))
 
 
 
@@ -146,8 +152,23 @@ getRight :: Either (ParseErrorBundle String Void) b -> b
 getRight (Right b  ) = b
 getRight (Left  err) = error $ errorBundlePretty err
 
-parseSomething :: Stream s => s -> StateT ParserState (Parsec e s) a -> Either (ParseErrorBundle s e) a
-parseSomething text parser = (runParser (evalStateT parser (ParserState 0)) "no_file" text)
+justUnsafe (Just a) = a
+expression' :: Parser Int
+expression' = 
+  (try $ do
+    n1 <- number'
+    char '+'
+    n2 <- expression'
+    pure (n1 + n2))
+  <|> try number'
+  
+number' :: Parser Int
+number' = do
+  i <- some digitChar
+  pure . justUnsafe . (readMay :: String -> Maybe Int) $ i
+
+--parseSomething :: Stream s => s -> StateT ParserState (Parsec e s) a -> Either (ParseErrorBundle s e) a
+parseSomething text parser = (runParser (evalStateT (parser <* eof) (ParserState 0)) "no_file" text)
 
 
 noNewlineOrChars :: (MonadParsec e s m, Token s ~ Char) => [Char] -> m (Token s)

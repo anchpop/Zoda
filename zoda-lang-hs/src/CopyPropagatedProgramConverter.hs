@@ -43,9 +43,9 @@ evaluateMain identValMap mainFunc = fullyReduce mainFunc
     --reduceExpression :: Expression p -> Expression p
     reduceExpression e@(NumberLiteralExpression _ _) = e 
     reduceExpression (IdentifierExpression (LowercaseIdentifier ident _) _) = e
-    reduceExpression e@(FunctionLiteralExpression (FunctionLiteral _) _) = e
       where
         (Just e) = (Map.lookup ident identValMap)
+    reduceExpression e@(FunctionLiteralExpression (FunctionLiteral _ _ _) _) = e
     fullyReduce e = if reduceExpression e == e 
                       then e
                       else fullyReduce (reduceExpression e)
