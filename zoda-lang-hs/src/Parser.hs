@@ -50,44 +50,53 @@ declarationP = sourcePosWrapperWithNewlines $ do
 
 expressionP :: ASTParser Expression
 expressionP = 
-  sourcePosWrapper $
-        (try $ do
-          exp1 <- sourcePosWrapper $ fmap (NumberLiteralExpression) (numberLiteralP)
-          string "->"
-          exp2 <- expressionP
-          pure (FunctionApplicationExpression exp1 exp2)
-        )
-        
-    <|> (try $ do
-          numb <- numberLiteralP
-          pure (NumberLiteralExpression numb)
-        )
-    <|> (try $ do
-          ident <- lowercaseIdentifierP
-          pure (IdentifierExpression ident)
-        )
-    <|> (try $ do
-          flit <- functionLiteralP
-          pure (FunctionLiteralExpression flit)
-        )
-
-
+        funcAppOnNum
+    <|> numb
+    <|> ident
+    <|> fliteral
+  where 
+    funcAppOnNum = sourcePosWrapper . try $ do 
+      exp1 <- sourcePosWrapper $ fmap (NumberLiteralExpression) (numberLiteralP)
+      string "."
+      exp2 <- expressionP
+      pure (FunctionApplicationExpression exp1 exp2)
+    numb     = sourcePosWrapper . try $ do
+      numb <- numberLiteralP
+      pure (NumberLiteralExpression numb)
+    ident    = sourcePosWrapper . try $ do
+      ident <- lowercaseIdentifierP
+      pure (IdentifierExpression ident)
+    fliteral = sourcePosWrapper . try $ do
+      flit <- functionLiteralP
+      pure (FunctionLiteralExpression flit)
 
 numberLiteralP :: ASTParser NumberLiteral
-numberLiteralP = sourcePosWrapper $ do
-  sign   <- try (string "-" *> pure False) <|> (pure True)
-  majorS <- some (digitChar)
-  minorS <- (try (char '.') *> some (digitChar)) <|> (pure "0")
-  guard $ headUnsafe majorS /= '0'
-  case readMay minorS of
-    Just (minor) -> case (readMay (majorS <> "% 1") :: Maybe Rational) of
-      Just (major) -> do
-        let value1 = minor % (10 ^ (length minorS)) + (major) -- % is division, not modulo
-            value2 = if sign then value1 else (negate value1)
-        pure (NumberLiteral value2)
-      _ -> empty
-    _ -> empty
-  where headUnsafe (x:_) = x
+numberLiteralP = sourcePosWrapper $ 
+  try (do
+    sign   <- try (string "-" *> pure False) <|> (pure True)
+    majorS <- some (digitChar)
+    minorS <- (try (char '.') *> some (digitChar)) <|> (pure "0")
+    guard $ headUnsafe majorS /= '0'
+    case readMay minorS of
+      Just (minor) -> case (readMay (majorS <> " % 1") :: Maybe Rational) of
+        Just (major) -> do
+          let value1 = minor % (10 ^ (length minorS)) + (major) -- % is division, not modulo
+              value2 = if sign then value1 else (negate value1)
+          pure (NumberLiteral value2)
+        _ -> empty
+      _ -> empty)
+  <|> (do 
+    sign   <- try (string "-" *> pure False) <|> (pure True)
+    majorS <- some (digitChar)
+    guard $ headUnsafe majorS /= '0'
+    let 
+      major :: Rational
+      major = justUnsafe (readMay (majorS <> " % 1"))
+    pure . NumberLiteral $ if sign then major else negate major
+    )
+  where 
+    headUnsafe (x:_) = x
+    justUnsafe (Just x) = x
 
 functionLiteralP :: ASTParser FunctionLiteral
 functionLiteralP = sourcePosWrapper $ do

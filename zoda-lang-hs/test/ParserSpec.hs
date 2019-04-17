@@ -25,9 +25,8 @@ test = parallel $ do
       parseSomething "module"    lowercaseIdentifierP `shouldParseTo` LowercaseIdentifier "module" (SourcePosition "no_file" 1 1 1 7)
 
       parseSomething "test-case" lowercaseIdentifierP `shouldParseTo` LowercaseIdentifier "test-case" (SourcePosition "no_file" 1 1 1 10)
-
-      parseSomething "test case" lowercaseIdentifierP `shouldParseTo` LowercaseIdentifier "test" (SourcePosition "no_file" 1 1 1 5)
     it "doesn't accept what it shouldn't" $ do
+      shouldNotParse $ parseSomething "test case" lowercaseIdentifierP
       shouldNotParse $ parseSomething "Test" lowercaseIdentifierP
       shouldNotParse $ parseSomething "-test" lowercaseIdentifierP
 
@@ -39,8 +38,8 @@ test = parallel $ do
 
       parseSomething "Test-case" uppercaseIdentifierP `shouldParseTo` UppercaseIdentifier "Test-case" (SourcePosition "no_file" 1 1 1 10)
 
-      parseSomething "Test case" uppercaseIdentifierP `shouldParseTo` UppercaseIdentifier "Test" (SourcePosition "no_file" 1 1 1 5)
     it "doesn't accept what it shouldn't" $ do
+      shouldNotParse $ parseSomething "Test case" uppercaseIdentifierP 
       shouldNotParse $ parseSomething "test" uppercaseIdentifierP
       shouldNotParse $ parseSomething "-Test" uppercaseIdentifierP
 
@@ -86,20 +85,23 @@ test = parallel $ do
 
     it "parses functions" $ do
       parseSomething "|a, b, c| -> 3" expressionP `shouldParseTo` FunctionLiteralExpression
-          ( FunctionLiteral
-            [ LowercaseIdentifier "a" (SourcePosition "no_file" 1 2 1 3)
-            , LowercaseIdentifier "b" (SourcePosition "no_file" 1 5 1 6)
-            , LowercaseIdentifier "c" (SourcePosition "no_file" 1 8 1 9)
-            ]
-            (NumberLiteralExpression (NumberLiteral (3 % 1) (SourcePosition "no_file" 1 14 1 15)) (SourcePosition "no_file" 1 14 1 15))
-            (SourcePosition "no_file" 1 1 1 15)
-          )
+        ( FunctionLiteral
+          [ LowercaseIdentifier "a" (SourcePosition "no_file" 1 2 1 3)
+          , LowercaseIdentifier "b" (SourcePosition "no_file" 1 5 1 6)
+          , LowercaseIdentifier "c" (SourcePosition "no_file" 1 8 1 9)
+          ]
+          (NumberLiteralExpression (NumberLiteral (3 % 1) (SourcePosition "no_file" 1 14 1 15)) (SourcePosition "no_file" 1 14 1 15))
           (SourcePosition "no_file" 1 1 1 15)
-        
+        )
+        (SourcePosition "no_file" 1 1 1 15)
+
 
 
     it "parses function applications" $ do
-      --parseSomething "a.b" expressionP `shouldParseTo` IdentifierExpression (LowercaseIdentifier "a" (SourcePosition "no_file" 1 1 1 2)) (SourcePosition "no_file" 1 1 1 2)
+      parseSomething "3.b" expressionP `shouldParseTo` FunctionApplicationExpression
+        (NumberLiteralExpression (NumberLiteral (3 % 1) (SourcePosition "no_file" 1 1 1 2)) (SourcePosition "no_file" 1 1 1 2))
+        (IdentifierExpression (LowercaseIdentifier "b" (SourcePosition "no_file" 1 3 1 4)) (SourcePosition "no_file" 1 3 1 4))
+        (SourcePosition "no_file" 1 1 1 4)
 
 
   describe "Parser.declarationP" $ do
