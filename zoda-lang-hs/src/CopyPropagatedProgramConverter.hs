@@ -27,7 +27,7 @@ checkNoUndefinedIdentifiers m = mapM (checkIdentifiersInExpressionDefined m) (fm
   --checkIdentifiersInExpressionDefined :: (Map.Map Text (Expression p)) -> Expression p -> Either (ProductionError p) Bool
   checkIdentifiersInExpressionDefined m e = checkIndentifiersDefined m (getIdentifiersInExpression e) *> pure True
 
-  
+
 getMainFunc :: (HasThrow "perr" (ProductionError p) m) => Module p -> (Map.Map Text (Expression p)) -> m (Expression p)
 getMainFunc moduleAST m = handleMainFunc mainFunc
   where
@@ -43,6 +43,7 @@ evaluateMain identValMap mainFunc = fullyReduce mainFunc
     --reduceExpression :: Expression p -> Expression p
     reduceExpression e@(NumberLiteralExpression _ _) = e 
     reduceExpression (IdentifierExpression (LowercaseIdentifier ident _) _) = e
+    reduceExpression e@(FunctionLiteralExpression (FunctionLiteral _) _) = e
       where
         (Just e) = (Map.lookup ident identValMap)
     fullyReduce e = if reduceExpression e == e 
