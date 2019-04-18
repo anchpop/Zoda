@@ -54,7 +54,7 @@ evaluateMain identValMap mainFunc = fullyReduce mainFunc
 
 example :: String
 example = "module i `test module`\n\
-          \test = -3.5\n\
+          \test = -3.6\n\
           \main = test\n\
           \"
 

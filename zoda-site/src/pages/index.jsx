@@ -67,7 +67,7 @@ const Index = () => {
           <BigTitle>
             Zoda, <br /> A new functional language.
           </BigTitle>
-          <Subtitle>Zoda allows you to write higher-quality programs, faster. Designed from the ground up for application development.</Subtitle>
+          <Subtitle>Zoda allows you to write higher-quality programs, faster. Designed from the ground up for game development.</Subtitle>
         </Hero>
         <About offset={1}>
           <Title>About</Title>
