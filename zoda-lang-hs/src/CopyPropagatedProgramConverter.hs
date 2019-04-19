@@ -19,20 +19,16 @@ createMapOfIdentifiersToValues (Module _ declarations _) continuation = handleMa
     declarationList = fmap extractDec declarations 
 
 
--- getMainFunc :: (HasThrow "perr" (ProductionError p Text) m) => (Unjustified.Map.Map Text (Expression p Text)) -> m (Expression p Text)
 getMainFunc moduleAST m = case "main" `Map.member` m of
   Nothing -> throw @"perr" . NoMain $ moduleAST
   Just i -> pure $ Map.lookup i m
 
 
---evaluateMain :: (Eq p, Ord i) => (Unjustified.Map.Map i (Expression p i)) -> Expression p i -> Expression p i
 evaluateMain identValMap mainFunc =  fullyReduce mainFunc
   where
-    --reduceExpression :: Expression p -> Expression p
     reduceExpression e@(NumberLiteralExpression _ _) = e 
     reduceExpression (IdentifierExpression (LowercaseIdentifier ident _) _) = Map.lookup ident identValMap
     reduceExpression e = e
-    --reduceExpression e@(FunctionLiteralExpression (FunctionLiteral _ _ _) _) = e
     fullyReduce e = if reduceExpression e == e 
                       then e
                       else fullyReduce (reduceExpression e)
