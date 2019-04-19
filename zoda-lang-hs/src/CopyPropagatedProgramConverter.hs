@@ -33,8 +33,6 @@ evaluateMain identValMap mainFunc =  fullyReduce mainFunc
                       then e
                       else fullyReduce (reduceExpression e)
 
-
-
 example :: String
 example = "module i `test module`\n\
           \test = -3.6\n\
@@ -47,9 +45,3 @@ produceProgram moduleAST = do
     mainFunc <- getMainFunc moduleAST valueMap
     let (NumberLiteralExpression (NumberLiteral n _) _) = evaluateMain valueMap mainFunc
     pure n
-    --traceShow valueMap (pure ())
-  {-identValMap <- createMapOfIdentifiersToValues moduleAST
-  checkNoUndefinedIdentifiers identValMap
-  mainFunc <- getMainFunc moduleAST identValMap
-  pure $ evaluateMain identValMap mainFunc-}
--- use with `runM (parseModule example >>= produceProgram)`

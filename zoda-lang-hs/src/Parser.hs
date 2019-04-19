@@ -1,14 +1,15 @@
 module Parser where
-import ClassyPrelude hiding (try, many, some)
+import ClassyPrelude hiding (try, many)
 import Ast
 import Basic
 
 import Data.Void
-import Text.Megaparsec hiding (State)
+import Text.Megaparsec hiding (State, some)
 import Text.Megaparsec.Char
 import Control.Monad.State
 import Capability.Error
 
+import qualified Data.List.NonEmpty as NonEmpty
 import Data.Ratio
 import qualified Data.Bifunctor as Data.Bifunctor
 
@@ -92,11 +93,11 @@ numberLiteralP :: ASTParser NumberLiteral
 numberLiteralP = sourcePosWrapper $ 
   try (do
     sign   <- try (string "-" *> pure False) <|> (pure True)
-    majorS <- some (digitChar)
-    minorS <- (try (char '.') *> some (digitChar)) <|> (pure "0")
-    guard $ headUnsafe majorS /= '0'
+    majorS <- some' (digitChar)
+    minorS <- (try (char '.') *> some' (digitChar)) <|> (pure $ '0' NonEmpty.:| [])
+    guard $ NonEmpty.head majorS /= '0'
     case readMay minorS of
-      Just (minor) -> case (readMay (majorS <> " % 1") :: Maybe Rational) of
+      Just (minor) -> case (readMay ((toList majorS) <> " % 1") :: Maybe Rational) of
         Just (major) -> do
           let value1 = minor % (10 ^ (length minorS)) + (major) -- % is division, not modulo
               value2 = if sign then value1 else (negate value1)
@@ -105,15 +106,14 @@ numberLiteralP = sourcePosWrapper $
       _ -> empty)
   <|> (do 
     sign   <- try (string "-" *> pure False) <|> (pure True)
-    majorS <- some (digitChar)
-    guard $ headUnsafe majorS /= '0'
+    majorS <- some' (digitChar)
+    guard $ NonEmpty.head majorS /= '0'
     let 
       major :: Rational
-      major = justUnsafe (readMay (majorS <> " % 1"))
+      major = justUnsafe (readMay ((toList majorS) <> " % 1"))
     pure . NumberLiteral $ if sign then major else negate major
     )
   where 
-    headUnsafe (x:_) = x
     justUnsafe (Just x) = x
 
 functionLiteralP :: ASTParser FunctionLiteral
@@ -174,25 +174,19 @@ sourcePosWrapperWithNewlines :: Parser (SourcePosition -> a) -> Parser a
 sourcePosWrapperWithNewlines f = sourcePosWrapper f <* (some newline *> pure () <|> (lookAhead eof))
 
 
+some' :: Parser a -> Parser (NonEmpty.NonEmpty a)
+some' p =
+  do
+    first <- p
+    rest <- many p
+    pure $ first NonEmpty.:| rest 
+
 
 getRight :: Either (ParseErrorBundle String Void) b -> b
 getRight (Right b  ) = b
 getRight (Left  err) = error $ errorBundlePretty err
 
 justUnsafe (Just a) = a
-expression' :: Parser Int
-expression' = 
-  (try $ do
-    n1 <- number'
-    char '+'
-    n2 <- expression'
-    pure (n1 + n2))
-  <|> try number'
-  
-number' :: Parser Int
-number' = do
-  i <- some digitChar
-  pure . justUnsafe . (readMay :: String -> Maybe Int) $ i
 
 --parseSomething :: Stream s => s -> StateT ParserState (Parsec e s) a -> Either (ParseErrorBundle s e) a
 parseSomething text parser = (runParser (evalStateT (parser <* eof) (ParserState 0)) "no_file" text)
@@ -200,3 +194,5 @@ parseSomething text parser = (runParser (evalStateT (parser <* eof) (ParserState
 
 noNewlineOrChars :: (MonadParsec e s m, Token s ~ Char) => [Char] -> m (Token s)
 noNewlineOrChars c = noneOf ('\n' : c)
+
+
