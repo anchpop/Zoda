@@ -11,14 +11,14 @@ import Control.Monad.Except (ExceptT (..), Except)
 
 
 
-data ProductionError i p = ZodaSyntaxError (ParseErrorBundle String Void) | ValueRedeclaration (Declaration i p) | UndeclaredValueReferenced (LowercaseIdentifier i p) | NoMain (Module i p) 
+data ProductionError p i = ZodaSyntaxError (ParseErrorBundle String Void) | ValueRedeclaration (Declaration p i) | UndeclaredValueReferenced (LowercaseIdentifier p i) | NoMain (Module p i) 
   deriving (Show, Eq)
   deriving anyclass Exception
 
-newtype M i p r = M { runM :: Either (ProductionError i p) r }
-  deriving (Functor, Applicative, Monad) via Either (ProductionError i p)
-  deriving (HasThrow "perr" (ProductionError i p)) via
-    MonadError (Except (ProductionError i p))
+newtype M p i r = M { runM :: Either (ProductionError p i) r }
+  deriving (Functor, Applicative, Monad) via Either (ProductionError p i)
+  deriving (HasThrow "perr" (ProductionError p i)) via
+    MonadError (Except (ProductionError p i))
     
   --deriving (HasThrow "perr" (ProductionError p)) via
     --MonadError (Except (ProductionError p))

@@ -8,28 +8,34 @@ import qualified Data.Map.Justified as Map
 import qualified Data.Map as Unjustified.Map
 import Capability.Error
 
-createMapOfIdentifiersToValues :: (HasThrow "perr" (ProductionError i p) m, Ord i) => Module i p -> m (Unjustified.Map.Map i (Expression i p))
-createMapOfIdentifiersToValues (Module header declarations _) = valueMap
+createMapOfIdentifiersToValues :: (HasThrow "perr" (ProductionError p i) m, Ord i) => Module p i -> m (Unjustified.Map.Map i (Expression p i))
+createMapOfIdentifiersToValues (Module header declarations _) = undefined {-valueMap
  where
-  valueMap = foldM addValueToValuemap (Unjustified.Map.fromList []) declarations
-  addValueToValuemap m declaration@(Declaration (LowercaseIdentifier name _) expression _) =
-    if isJust (Unjustified.Map.lookup name m) then throw @"perr" (ValueRedeclaration (declaration)) else pure (Unjustified.Map.insert name expression m)
+  valueMap = (foldM addValueToValuemap Unjustified.Map.empty declarations)
+addValueToValuemap m declaration@(Declaration (LowercaseIdentifier name _) expression _) =
+  if isJust (Unjustified.Map.lookup name m) then throw @"perr" (ValueRedeclaration (declaration)) else pure (Unjustified.Map.insert name expression m)-}
 
 
-checkNoUndefinedIdentifiers :: (HasThrow "perr" (ProductionError i p) m, Ord i) => (Unjustified.Map.Map i (Expression i p)) -> m (Unjustified.Map.Map i (Expression i p))
-checkNoUndefinedIdentifiers m = mapM (checkIdentifiersInExpressionDefined m) (fmap snd . Unjustified.Map.toList $ m) *> pure m
+checkNoUndefinedIdentifiers :: (HasThrow "perr" (ProductionError p i) m, Ord i) => (Unjustified.Map.Map i (Expression p i)) -> m ()
+checkNoUndefinedIdentifiers m = undefined{-mapM (checkIdentifiersInExpressionDefined m) (fmap snd . Unjustified.Map.toList $ m) *> pure ()
  where
   getIdentifiersInExpression (NumberLiteralExpression _          _) = []
   getIdentifiersInExpression (IdentifierExpression    identifier _) = [identifier]
-  checkIdentifierDefined m identifier@(LowercaseIdentifier s _) = isJust lookedUp where lookedUp = Unjustified.Map.lookup s m
-  --checkIndentifiersDefined :: (Unjustified.Map.Map Text (Expression p)) -> [LowercaseIdentifier p] -> Either (ProductionError p) [LowercaseIdentifier p]
+  checkIndentifiersDefined ::  (HasThrow "perr" (ProductionError p i) m, Ord i) => (Unjustified.Map.Map i (Expression p i)) -> [LowercaseIdentifier p i] -> m [LowercaseIdentifier p i]
   checkIndentifiersDefined m identifiers = mapM getIdentifierDefinedOrError identifiers
-    where getIdentifierDefinedOrError identifier = if checkIdentifierDefined m identifier then pure identifier else throw @"perr" (UndeclaredValueReferenced identifier)
-  --checkIdentifiersInExpressionDefined :: (Unjustified.Map.Map Text (Expression p)) -> Expression p -> Either (ProductionError p) Bool
-  checkIdentifiersInExpressionDefined m e = checkIndentifiersDefined m (getIdentifiersInExpression e) *> pure True
+    where 
+      getIdentifierDefinedOrError :: (HasThrow "perr" (ProductionError p i) m, Ord i) => LowercaseIdentifier p i -> m ()
+      getIdentifierDefinedOrError identifier = if identifier `Unjustified.Map.member` m then pure () else throw @"perr" (UndeclaredValueReferenced identifier)
+  checkIdentifiersInExpressionDefined :: (HasThrow "perr" (ProductionError p i) m, Ord i) => (Unjustified.Map.Map i (Expression p i)) -> Expression p i -> m ()
+  checkIdentifiersInExpressionDefined m e = checkIndentifiersDefined m (getIdentifiersInExpression e) *> pure ()-}
+
+createMapOfIdentifiersToValues' [declarations] = Map.withRecMap (Unjustified.Map.fromList declarationList) (\i -> traceShow i ())
+  where
+    extractDec (Declaration (LowercaseIdentifier identifierName _) expression _) = (identifierName, expression)
+    declarationList = fmap extractDec declarations 
 
 
-getMainFunc :: (HasThrow "perr" (ProductionError Text p) m) => Module Text p -> (Unjustified.Map.Map Text (Expression Text p)) -> m (Expression Text p)
+getMainFunc :: (HasThrow "perr" (ProductionError p Text) m) => Module p Text -> (Unjustified.Map.Map Text (Expression p Text)) -> m (Expression p Text)
 getMainFunc moduleAST m = handleMainFunc mainFunc
   where
     mainFunc = Unjustified.Map.lookup "main" m
@@ -38,7 +44,7 @@ getMainFunc moduleAST m = handleMainFunc mainFunc
 
 
 
-evaluateMain :: (Eq p, Ord i) => (Unjustified.Map.Map i (Expression i p)) -> Expression i p -> Expression i p
+evaluateMain :: (Eq p, Ord i) => (Unjustified.Map.Map i (Expression p i)) -> Expression p i -> Expression p i
 evaluateMain identValMap mainFunc = fullyReduce mainFunc
   where
     --reduceExpression :: Expression p -> Expression p

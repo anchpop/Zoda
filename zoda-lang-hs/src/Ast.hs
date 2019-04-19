@@ -1,22 +1,27 @@
 module Ast where
 import ClassyPrelude
 
-data Module i p = Module (ModuleHeader i p) [(Declaration i p)] p deriving (Show, Read, Eq, Ord)
-data ModuleHeader i p = ModuleHeader (LowercaseIdentifier i p) (Tinydoc i p) p deriving (Show, Read, Eq, Ord)
+data Module p i = Module (ModuleHeader p i) [(Declaration p i)] p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
+data ModuleHeader p i = ModuleHeader (LowercaseIdentifier p i) (Tinydoc p i) p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
 
-data Declaration i p = Declaration (LowercaseIdentifier i p) (Expression i p) p deriving (Show, Read, Eq, Ord)
+data Declaration p i = Declaration (LowercaseIdentifier p i) (Expression p i) p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
 
-data Expression i p = ParenthesizedExpression (Expression i p) p 
-                    | NumberLiteralExpression (NumberLiteral i p) p 
-                    | IdentifierExpression (LowercaseIdentifier i p) p 
-                    | FunctionLiteralExpression (FunctionLiteral i p) p 
-                    | FunctionApplicationExpression (Expression i p) [Expression i p] p deriving (Show, Read, Eq, Ord)
-
-data NumberLiteral i p = NumberLiteral Rational p deriving (Show, Read, Eq, Ord)
-data FunctionLiteral i p = FunctionLiteral [LowercaseIdentifier i p] (Expression i p) p deriving (Show, Read, Eq, Ord)
+data Expression p i = ParenthesizedExpression (Expression p i) p 
+                    | NumberLiteralExpression (NumberLiteral p i) p 
+                    | IdentifierExpression (LowercaseIdentifier p i) p 
+                    | FunctionLiteralExpression (FunctionLiteral p i) p 
+                    | FunctionApplicationExpression (Expression p i) [Expression p i] p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
 
 
 
-data Tinydoc i p = Tinydoc Text p deriving (Show, Read, Eq, Ord)
-data LowercaseIdentifier i p = LowercaseIdentifier i p deriving (Show, Read, Eq, Ord)
-data UppercaseIdentifier i p = UppercaseIdentifier i p deriving (Show, Read, Eq, Ord)
+data NumberLiteral p i = NumberLiteral Rational p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
+data FunctionLiteral p i = FunctionLiteral [LowercaseIdentifier p i] (Expression p i) p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
+
+
+
+data Tinydoc p i = Tinydoc Text p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
+data LowercaseIdentifier p i = LowercaseIdentifier i p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
+data UppercaseIdentifier p i = UppercaseIdentifier i p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
+
+
+
