@@ -18,23 +18,23 @@ Towards this goal, we have some subgoals.
 
 ## Setting a value
 
-An `=` is always followed by a value, it's how you set a value. A ` ~ ` is always followed by a type, it's how you tell Zoda the type of a value.
+An `=` is always followed by a value, it's how you set a value. A `:` is always followed by a type, it's how you tell Zoda the type of a value.
 
 Here we're defining the same value multiple times, this is illegal but we're just doing it for demonstrative purposes.
 
     myNum = 3
 
-    myNum ~ Int
+    myNum: Int
     myNum = 3
 
-    myNum = (3 ~ Int) -- inline type signatures must be wrapped in parentheses
+    myNum = (3:Int) -- inline type signatures must be wrapped in parentheses
 
 Types can be ambiguous with "traits" - here we say "myNum" has the trait "Integral", but we're not any more specific.
 
-    myNum ~ Integral a => a
+    myNum: Integral a => a
     myNum = 3
 
-    myNum = 3 ~ (Integral a => a)
+    myNum = 3: (Integral a => a)
 
 
 ## Function Application
@@ -66,30 +66,30 @@ We can give a signature to a function. All functions are values, the only differ
     add-one ~Int -> Int
     a.plus-one = a + 1
 
-    add ~ Int -> Int -> Int
+    add: Int -> Int -> Int
     a.plus3(b) = a + b
 
-    add3 ~ Int -> Int -> Int -> Int
+    add3: Int -> Int -> Int -> Int
     a.plus(b, c) = a + b + c
 
-    add3 ~ (Addable a) => a -> a -> a -> a
+    add3: (Addable a) => a -> a -> a -> a
     a.plus(b, c) = a + b + c
 
 ## Polymorphic Functions
 
 The last section had a function that worked on any type that has the trait `Addable`.
 
-    add3 ~ (Addable a) => a -> a -> a -> a
+    add3: (Addable a) => a -> a -> a -> a
     a.plus(b, c) = a + b + c
 
 The `=>` creates a "type variable", in this case it has the constraint that it must have the type `Addable`. You can have ones without the type.
 
-    apply-to ~ (a, b) => (a -> b) -> a -> b 
+    apply-to: (a, b) => (a -> b) -> a -> b 
     f.apply-to(a) = a.f
 
 The `=>` does not have to be at the very front of the type.
 
-    id-both ~ (b, c) => (a => a -> a) -> b -> c -> {* b, c *}
+    id-both: (b, c) => (a => a -> a) -> b -> c -> {* b, c *}
     f.id-both(b, c) =  {* f.b, f.c *}
 
 But type inference typically won't assume a type has a `=>` in the middle of a type, only at the beginning so if you want to have a function like the above you should give it a type signature.  
@@ -99,20 +99,20 @@ But type inference typically won't assume a type has a `=>` in the middle of a t
 By default, polymorphic values are universally quantified. Putting a `^` before the type variable makes it existentially qualified.
 
 
-    useless ~ (a, ^b) => a -> ^b -- a is universally quantified, ^b is existentially quantified
+    useless: (a, ^b) => a -> ^b -- a is universally quantified, ^b is existentially quantified
     s.useless = True -- can return literally any value
 
 Since the return value of `useless` is existentially quantified, it could be any value, but you don't know what the value is.
 
-    useless ~ (a, ^b) => a -> ^b -- a is universally quantified, ^b is existentially quantified
+    useless: (a, ^b) => a -> ^b -- a is universally quantified, ^b is existentially quantified
     s.useless = True -- can return literally any value, but all possible return values must be the same type
 
-    v ~ ^b => ^b
+    v: ^b => ^b
     v = 3.useless -- really nothing I can do with this value 
 
 These are useful for recovering some nice properties from dynamic languages in a type safe way. For example, the following is allowed:
 
-    myList = [1, "test", True] ~ List<^a => a>
+    myList = [1, "test", True]: List<^a => a>
 
 Although you can't do anything with the contents of that list (yet).
 
@@ -153,63 +153,60 @@ With the x.f(z) syntax, you probably want to make function names read nicely
 
 ## Indentation-sensitive Syntax
 
-any time after a `:`, you should indent if you choose to make a newline
-
-
 ## if expressions
 
 These use indentation for alignment to support nesting
 
     a.lower-bound(b) = 
-      if a > b then:
+      if a > b then
         a
-      else: 
+      else
         b
 
-This is equivalent to:
+This is equivalent to
 
     a.lower-bound(b) = 
-      match a > b:
-        True  ->: a
-        False ->: b
+      match a > b
+        True  -> a
+        False -> b
 
 You may be wondering - why have `if` if we can just use `match`? The answer is when we need to have many levels of if.
 
     a.stable-lower-bound(b) = 
-      if a > b then:
+      if a > b then
         a
-      else if a < b then:
+      else if a < b then
         b
-      else:
+      else
         a
 
 
 The reason you don't need a `:` after that else is because for any token that ends in a `:`, followed immediately by another bit of syntax that ends with a `:`, the first can and should be left off. 
 
     my-val = 
-      if 2==2 then:
+      if 2==2 then
         True
-      else if 3==3 then:
+      else if 3==3 then
         True
-      else do:
+      else do
         pure False
 
 These are expressions so you may use them however you like. 
 
     a.lower-bound-times(b, x) = 
-      x * if a > b then:
+      x * if a > b then
         a
-      else: 
+      else
         b
 
 ## Tiny Docs
 
-Tiny-docs are like comments, but better. These are tiny little docs that get scattered across your code, designed to aid other developers and anyone interested in using your library.  In general, you can put them after before `:` sign. They are seperated by \` symbols, and can reference in-scope values with `{ }`
+Tiny-docs are like comments, but better. These are tiny little docs that get scattered across your code, designed to aid other developers and anyone interested in using your library.  They are seperated by \` symbols, and can reference in-scope values with `{ }`
 
     a.lower-bound-times(b, x) = 
-      x * if a > b then `We don't need to choose {b} as our lower bound`:
+      x * if a > b then `We don't need to choose {b} as our lower bound`
         a
-      else `Default to {b}`: 
+      else `Default to {b}`:
         b
 
 This seems sort of unreadable, I'm hoping syntax highlighting makes it better.
@@ -221,14 +218,14 @@ They're allowed in a couple other places, too.
 1) After function definitons
 
     a.lower-bound-times(b, x) `Compute the lower bound between {a} and {b}, then multiply it by {x}` = 
-      x * if a > b then `We don't need to choose {b} as our lower bound`:
+      x * if a > b then `We don't need to choose {b} as our lower bound`
         a
-      else `Default to {b}`: 
+      else `Default to {b}`
         b
 
 2) After a type in a type signature for a function
 
-    draw-circle ~ Int `Radius of the circle, in pixels` 
+    draw-circle: Int `Radius of the circle, in pixels` 
                -> Int `Stroke width of the circle, in pixels` 
                -> IO () `IO action that draws a circle`
     radius.draw-circle(stroke-width) = ...
@@ -285,7 +282,7 @@ not present in standard haskell.
 
 ## lambdas
 
-    x.plus-one = x.(|x| ->: x + 1)
+    x.plus-one = x.(|x| -> x + 1)
 
 is equivalent to...
 
@@ -306,7 +303,7 @@ not really a language feature, just a built-in operator. simply passes a value t
 
 ## do notation
 
-    a.print-value-cool = do:
+    a.print-value-cool = do
       putString("=============")
       print(a)
       putString("=============")
@@ -325,7 +322,7 @@ Valid for functions as well as values.
 
     my-val = 
         i + j
-      where:
+      where
         i = 3
         j = 4
 
@@ -336,7 +333,7 @@ Valid for functions as well as values.
 These can be run with a compiler flag (and are automatically run when creating an optimized build), and only rerun if the function or its dependencies change.
 
     a.plus-one = a + 1
-      test:
+      test
         Can add one to two
         >>> 2.plus-one
         ->: 3
@@ -344,79 +341,79 @@ These can be run with a compiler flag (and are automatically run when creating a
 You can have as many of these as you want.
 
     a.plus-one = a + 1
-      test:
+      test
         Can add one to positive values
-        >>> 2.plus-one
-        ->: 3
-        >>> 3.plus-one 
-        ->: 4
+        >> 2.plus-one
+        -> 3
+        >> 3.plus-one 
+        -> 4
 
 And to contain multiple tests, use do notation again
 
     a.plus-one = a + 1
       test do:
         Can add one to positive values
-        >>> 2.plus-one
-        ->: 3
-        >>> 3.plus-one
-        ->: 4
+        >> 2.plus-one
+        -> 3
+        >> 3.plus-one
+        -> 4
 
         Can add one to negative values
-        >>> -2.plus-one
-        ->: -1
-        >>> -3.plus-one
-        ->: -2
+        >> -2.plus-one
+        -> -1
+        >> -3.plus-one
+        -> -2
 
 If you know you haven't implemented the functionality for a test yet, just make it pending
 
     a.incrementAbsoluteValue = a + 1
       test do:
         Can increment to positive values
-        >>> 2.plus-one 
-        ->: 3
+        >> 2.plus-one 
+        -> 3
         
         Can increment to positive values
-        >>>pending -2.plus-one
-        ->: -3
+        >>pending -2.plus-one
+        -> -3
 
 If a test must pass
 
     a.incrementAbsoluteValue = a + 1
       test do:
         Can increment to positive values
-        >>> 2.plus-one 
-        ->: 3
+        >> 2.plus-one 
+        -> 3
         
         Can increment to positive values
         >>critical -2.plus-one
-        ->: -3
+        -> -3
 
 
 ## Match
 
 You can do a full `match`, like so:
 
-    a.luckyNumber7 = match a:
-      7 ->: putString("Lucky number 7!")
-      * ->: putString("sorry, you are a loser")
-    l.head = match l:
-      x.Cons(*) ->: x.Just
-      *         ->: nothing 
+    a.luckyNumber7 = match a
+      7 -> putString("Lucky number 7!")
+      * -> putString("sorry, you are a loser")
+    l.head = match l
+      x.Cons(*) -> x.Just
+      *         -> nothing 
 
 All pattern matches must be exhaustive to perform an optimized build - this is to keep the convenient fact that optimized Zoda builds have no runtime errors in practice.
 
-`_` can also be used with `match`:
+`_` can also be used with `match`
 
-    [Just 3, Nothing].filter(_) <| match _: 
+    [Just 3, Nothing].filter(_) <| match _
       Just _ -> True
       Nothing -> False                        
 
 A common pattern is to do a pattern match to see if a value is matches a pattern, and to return some kind of "true" result if it is, and an error result if it isn't. `match-partial` exists to solve this need - it returns a value with the trait `Errorable` where successful matches are on the right an unsuccessful matches are on the left.
 
-    luckyNumber7 ~ (Errorable e) => Int -> e<Int, String>
-    a.luckyNumber7 = partial-match a:
-      7 ->: "Lucky number 7"
-      else notSeven ->: notSeven
+    luckyNumber7: (Errorable e) => Int -> e<Int, String>
+    a.luckyNumber7 = partial-match a
+      7 -> "Lucky number 7"
+      else notSeven -> notSeven
          
 
 ## Inline docs 
@@ -427,43 +424,43 @@ Comments with `--` are allowed inside long-docs and devl-docs, and will not be i
 
     x.plus(y) `Add {x} and {y}` = 
       sum
-      where:
+      where
         sum = x + y
 
-      test do:
+      test do
         Can add positive values
-        >>> 2.plus(2)
-        ->: 4
-        >>> 3.plus(5)
-        ->: 8
+        >> 2.plus(2)
+        -> 4
+        >> 3.plus(5)
+        -> 8
 
-      long-doc:
+      long-doc
         Essentially just a wrapper for the `+` operator.
         It works on any values that have the an `Addable` instance, so it can be used anywhere you'd like to add two values together
            
-        >>> 3.plus(5)
-        ->: 8
+        >> 3.plus(5)
+        -> 8
 
         -- Do we need to say this? this seems kind of obvious
         Negative numbers can be added as well.  
 
-        >>> 3.plus(-5)
-        ->: -2
+        >> 3.plus(-5)
+        -> -2
 
         One use might be to compute a new bank account balance after some money is deposited:
 
-        >>> oldBalance = 300
-        >>> amountToAdd = 10
-        >>> newBalance = oldBalance.plus(amountToAdd)
-        >>> newBalance
-        ->: 310
+        >> oldBalance = 300
+        >> amountToAdd = 10
+        >> newBalance = oldBalance.plus(amountToAdd)
+        >> newBalance
+        -> 310
 
        Although since this function is just a wrapper for `+` there's little reason to use it unless you need currying. 
 
-        >>> [1,2,3].map(_.plus(3)) 
-        ->: [4,5,6]
+        >> [1,2,3].map(_.plus(3)) 
+        -> [4,5,6]
 
-      devl-doc:
+      devl-doc
         Since this function is just a wrapper for `+`, it's super snazzy and short. It might be worth it to write a `.minus` function as well.
         
         Maybe this function should be moved into the numeric-utils module.
@@ -503,27 +500,27 @@ for use with regular expression libraries, prefix the string with 'r'. This disa
 
 Zoda does not allow unrestricted recursion. The reason is that unrestricted recursion makes it easy to create a stack explosion:
 
-    x.fib = match x: 
-        0 ->: 1 
-        1 ->: 1 
-        x ->: (x - 1).fib + (x - 2).fib
+    x.fib = match x 
+        0 -> 1 
+        1 -> 1 
+        x -> (x - 1).fib + (x - 2).fib
 
 This is bad because `100000.fib` will result in a stack overflow, which is a form of runtime exception. Since Zoda attempts to make runtime exceptions very rare,
 we need a way to prevent this. There is a way to do recursion without running the risk of a stack overflow - if the recursive call is returned immediately,
 its very simple for the compiler to unroll it into a loop which will not result in unbounded growth of the stack. 
 
     x.fib = internalFib x 0 1 
-        where counter.internalFib(y,z) = match counter:
-            0       ->: z
-            counter ->: (counter - 1).internalFib(z, y+z)
+        where counter.internalFib(y,z) = match counter
+            0       -> z
+            counter -> (counter - 1).internalFib(z, y+z)
 
 so, we can prevent unbounded growth of the stack by disallowing all recursion that is not tail recursion. But, this is annoying because it means recursive calls are 
 "special". I think this would be easier to teach to people if we used a special keyword for tail calls. I'm thinking `self`.
 
     x.fib = internalFib x 0 1 
-        where counter.internalFib(y,z) = match counter:
-            0       ->: z
-            counter ->: (counter - 1).self(z, y+z)
+        where counter.internalFib(y,z) = match counter
+            0       -> z
+            counter -> (counter - 1).self(z, y+z)
 
 so `self` is a special function that calls the function it's used in with the same parameters, and the compiler will not let you do anything to a the output of 
 the `self` function. The self function is the only situation where recursion is possible - all other functions form a DAG of their dependencies. 
@@ -531,12 +528,12 @@ The one exception to the "you can't do anything to the output of the `self` func
 This doesn't blow up the stack because the `Chainable` trait includes instructions on how to compute an intermediate value. `+`, `*` and `::>` are examples of Chainable.
 
     x.factorial = x * (x-1).self
-    l.filter(f) = match l:
-        []      ->: []
-        x ::> xs ->: 
-            if (f x) then: 
-                x ::> xs.self(f)
-            else:
+    l.filter(f) = match l
+        []       -> []
+        x.Cons(xs) -> 
+            if (f x) then 
+                x.Cons(xs.self(f))
+            else
                 xs.self(f)
                        
 ## Tags statements
@@ -545,19 +542,19 @@ Functions and values can have certain facts stated about them in `tags` statemen
 The only one I have any ideas for is `always-terminates`, which says about a function exactly what it says on the tin.
 
     x.plusOne = x + 1 
-        tags: always-terminates
+        tags
+            always-terminates
 
-Although I expect `always-terminates` to not be that useful... if a function doesn't call `recurse` and only calls functions marked as 
-`always-terminates`, then I think it should
+Although I expect `always-terminates` to not be that useful. We should be able to prove most functions terminating with the SMT solver.
 
 In practice, all Zoda functions return a value or become caught in an infinite loop (there are some rare exceptions). This is useful because it prevents the vast majority of uncontrolled runtime crashes. But it can be counterproductive to writing useful functions that are composable.
 
 For example:
 
     divided-by: Float -> Float -> Optional<Float>
-    numerator.divided-by(denominator) = match denominator:
-        0 ->: Nothing
-        denominator ->: (numerator / denominator).Just
+    numerator.divided-by(denominator) = match denominator
+        0           -> Nothing
+        denominator -> (numerator / denominator).Just
 
 Now, we might want to write a `divided-by-3` function, and reuse `divided-by`. But we have an issue! `divided-by-3` will always work, but 
 if we just plug it into `divided-by`, our function will end up returning `Optional<Float>`, instead of `Float`
@@ -572,7 +569,7 @@ To solve this, we add the magical `.!` function to the end of it.
 
 So what's the magic? Simple. During compilation, we compile the program down to a set of verification conditions. These are conditions that are only valid if your program has a given property. One example of a verification condition might be "`divided-by` always returns an Optional<Float>". But these conditions also contain information about how functions behave given their inputs, for example "`divided-by` always returns a `_.Just` when passed a nonzero value". Then, your whole program is fed into an SMT solver, which checks whether all the conditions hold. If you can check that "`divided-by` always returns a `_.Just` when passed a nonzero value", and "`divided-by-3` will always pass a nonzero value to `divided-by`", then we can know it's safe to unwrap the `_.Just` to just `_`.
 
-In addition, there is also the `!!` function, which unwraps *anything*.
+In addition, there is also the `!!` function, which unsafely unwraps *anything* that can be unwrapped.
 
     a = 3.divided-by(1).!!
     b = 3.divided-by(0).!! 
@@ -602,24 +599,24 @@ Is that type-wrappers are guaranteed to be equivalent at runtime. This means you
 
 Used for creating a new ADT 
 
-    type Bool = True :: Bool 
-              | False :: Bool
-    type CarBrand = GM :: CarBrand
-                  | Ford :: CarBrand
-                  | Toyota :: CarBrand
-    type Car = Car :: CarBrand -> Year -> Car
-    type Person = Person :: Name -> List<Car> -> Person
-    type IntList = EmptyIntList :: IntList 
-                 | Cons :: Int -> IntList -> IntList -- Recursive data types are allowed, but only "one level deep". 
+    type Bool = True: Bool 
+              | False: Bool
+    type CarBrand = GM: CarBrand
+                  | Ford: CarBrand
+                  | Toyota: CarBrand
+    type Car = Car: CarBrand -> Year -> Car
+    type Person = Person: Name -> List<Car> -> Person
+    type IntList = EmptyIntList: IntList 
+                 | Cons: Int -> IntList -> IntList -- Recursive data types are allowed, but only "one level deep". 
                                                      -- This restriction also applies to functions, as we'll discuss later
 
 parameterized types
 
-    type Optional<a> = Nothing :: Optional<a> 
-                     | Just :: a -> Optional<a>
+    type Optional<a> = Nothing: Optional<a> 
+                     | Just: a -> Optional<a>
 
-    type Result<e, r> = Error :: e -> Result<e, r> 
-                      | Result :: r -> Result<e, r>  
+    type Result<e, r> = Error: e -> Result<e, r> 
+                      | Result: r -> Result<e, r>  
 
 ## Synonyms
 
@@ -643,12 +640,12 @@ of the collection. This just means that for any `Collection c => c`, there shoul
 
     has-trait Eq a => Collection (List<a>) a where
         collection.insert(element) = element.Cons(collection)
-        collection.member(element) = match collection:
-            EmptyList  ->: False
-            x.Cons(xs) ->:
-                if x == element then:
+        collection.member(element) = match collection
+            EmptyList  -> False
+            x.Cons(xs) ->
+                if x == element then
                     True 
-                else: 
+                else
                     xs.recurse(element)
 
 We can also write that a specific class does not have a certain trait 
@@ -670,28 +667,28 @@ We can also write that a specific class does not have a certain trait
 
 Usage of tuples is typically discouraged but they can sometimes make code simpler. Tuples cannot have more than 64 values.
 
-    {* "Hello", 2 *} ~ {- String, Int *}
+    {* "Hello", 2 *}: {- String, Int *}
 
 These spaces are required
 
 These can sometimes be useful when you want to return a value from a function. 
 
-    one-greater-one-less ~ Addable a => a -> {* a, a *}
+    one-greater-one-less: Addable a => a -> {* a, a *}
     x.one-greater-one-less = {* x - 1, x + 1 *}
 
 You can retrieve a value from a tuple with pattern matching.
 
-    x.very-bad-double = match x.one-greater-one-less:
+    x.very-bad-double = match x.one-greater-one-less
         {* one-greater, one-less *} -> one-greater + one-less
 
 You can also use `.get1st`, `.get2nd`, etc.
 
     x.very-bad-double = t.get1st + t.get2nd
-        where: t = x.one-greater-one-less
+        where t = x.one-greater-one-less
 
 You can write a function that inserts a value into a tuple with an `_`.
 
-    list-to-hello-tuple ~ List<a> -> List<{* a, String *}>
+    list-to-hello-tuple: List<a> -> List<{* a, String *}>
     l.list-to-hello-tuple = l.map({* _, "hello" *})
 
 
@@ -708,7 +705,7 @@ http://www.cs.ioc.ee/tfp-icfp-gpce05/tfp-proc/21num.pdf
 
 A record is like a type-safe dictionary, implemented internally using Rows. Duplicate keys are allowed.
 
-    author ~ { name ~ String, interests ~ List<String> }
+    author: { name: String, interests: List<String> }
     author =
         { name = "Phil"
         , interests = ["Functional Programming", "JavaScript"]
@@ -716,7 +713,7 @@ A record is like a type-safe dictionary, implemented internally using Rows. Dupl
 
 Records have no inherent order
 
-    author ~ { name ~ String, interests ~ List<String> }
+    author: { name: String, interests: List<String> }
     author =
         { interests = ["Functional Programming", "JavaScript"]
         , name = "Phil"
@@ -726,7 +723,7 @@ As a bit of syntax sugar, if you have a value who's name is the same as a record
 
     interests = ["Functional Programming", "JavaScript"]
     
-    author ~ { name ~ String, interests ~ List<String> }
+    author: { name: String, interests: List<String> }
     author =
         { interests
         , name = "Phil"
@@ -743,13 +740,13 @@ Records have 3 operations that work on them:
 
         fst = { i = 4, f = 3.5 }
         fst.i     -- 4
-                  -- i's signature is `{ i ~ a, ...r } -> a 
+                  -- i's signature is `{ i: a, ...r } -> a 
     
     3) Removing a value from a record using the magic `without-x` function 
 
         fst = { i = 4, f = 3.5 }
         fst.without-i     -- { f = 3.5 }
-                          -- without-i ~ { i ~ a, ...r } -> { ...r }
+                          -- without-i: { i: a, ...r } -> { ...r }
 
 There's also some convencience syntax sugar for updating values
 
@@ -768,21 +765,21 @@ To apply a function to a nested value, you can use `$=`
 
 You can write a function that takes a record, if you want.
 
-    getName ~ { name ~ String, ...l } -> String 
+    getName: { name: String, ...l } -> String 
     r.getName = r.name
 
 The "...l" is a type variable. This means it can take the place of literally any other record (including records that have a `name` key in them, as duplicate keys are allowed).
 
 You can perform pattern matching on records, as you might expect.
 
-    changeNameUnlessNamedSteve ~ { name ~ String, ...l } -> Bool
-    r.changeNameUnlessNamedSteve = match r with:
+    changeNameUnlessNamedSteve: { name: String, ...l } -> Bool
+    r.changeNameUnlessNamedSteve = match r
         { name = "Steve", ...r } -> { name = "Steve", ...r }
         { name = _, ...r }       -> { name = "Mike", ...r }
 
 Example of a function that modifies the name field of a record
 
-    addJrSuffix ~ { name ~ String | r } -> { name ~ String | r }
+    addJrSuffix: { name: String | r } -> { name: String | r }
     addJrSuffix hasName = hasName{name $= _.concat(", Jr.") }
     addJrSuffix { name = "Bob" }                -- { name = "Bob, Jr." }   
     addJrSuffix { age = 42, name = "Gerald" }   -- { age = 42, name = "Gerald, Jr." }   
@@ -790,96 +787,96 @@ Example of a function that modifies the name field of a record
 
 You can give a name to a record type with `synonym`
 
-    synonym Book = { name ~ String, text ~ String }
-    synonym Author = { name ~ String, books ~ List<Book> }
+    synonym Book = { name: String, text: String }
+    synonym Author = { name: String, books: List<Book> }
 
 You can unwrap a record into another when defining them
 
-    synonym Name ~ { name ~ String }
-    synonym Country ~ { population ~ Int, ...Name }
+    synonym Name: { name: String }
+    synonym Country: { population: Int, ...Name }
     myCountry = { name = "usa", population = 2000 }
 
 A `_` inside a record literal creates a function which takes some values and creates a record with that type
 
-    ["usa", "canada"].map({name ~ _, population ~ 2000})
+    ["usa", "canada"].map({name: _, population: 2000})
 
 Like how `a` is a variable that can take any type, `{ ...r }` is a record with any (or no) values
 
-    myFunc ~ { ...r } -> { ...r }
+    myFunc: { ...r } -> { ...r }
     r.myFunc = r -- the only possible implementation of a function with this type is the identity function.
 
 
-In general, two record types are equal if they contain the same `key ~ type` pairs. The order is irrelevant when they keys are all unique. With duplicate keys, the order in the type always matches the order in the literal. Here is an example:
+In general, two record types are equal if they contain the same `key: type` pairs. The order is irrelevant when they keys are all unique. With duplicate keys, the order in the type always matches the order in the literal. Here is an example:
 
-    fst = { x = 2, x = True }      -- { x ~ Int, x ~ Bool }
-    snd = { x = True, x = 2 }      -- { x ~ Bool, x ~ Int }
-    thrd = { x = True, x = 2 } ~     { x ~ Bool, x ~ Int } -- type error
-    frth = { x = True, x = False } -- { x ~ Bool, x ~ Bool } -- type error
+    fst = { x = 2, x = True }      -- { x: Int, x: Bool }
+    snd = { x = True, x = 2 }      -- { x: Bool, x: Int }
+    thrd = { x = True, x = 2 }:     { x: Bool, x: Int } -- type error
+    frth = { x = True, x = False } -- { x: Bool, x: Bool } -- type error
     
     fst.without-x.x = True
     snd.without-x.x = 2
     snd.without-x.x = False
 
-    -- if you had a function of type  `{ x ~ Int, x ~ Bool } -> Bool`, you would not be able to pass it `snd`.
+    -- if you had a function of type  `{ x: Int, x: Bool } -> Bool`, you would not be able to pass it `snd`.
 
 Due to the inherent complexity of having records with duplicate keys, I reccomend you keep their usage to a minimum. 
 
 Oh and I glossed over this, but records can have type constraints
 
-    fst = { x = 2, x = True } ~ Integral a => { x ~ a, x ~ Bool }
+    fst = { x = 2, x = True }: Integral a => { x: a, x: Bool }
 
 
 ## Corecords
 
-Records:Corecords ~ Product types:Sum types
+Records:Corecords: Product types:Sum types
 
 While a record must have every value in its type, a corecord can only have one.
 
-    a ~ {+ b ~ Int, c ~ String +}
+    a: {+ b: Int, c: String +}
     a = {+ b = 3 +}
 
 These can also be open, like so:
 
-    {+ name ~ String, ...v +}
+    {+ name: String, ...v +}
 
 Again, duplicate keys are allowed:
 
-    {+ name ~ String, name ~ String, name ~ Bool +}
+    {+ name: String, name: String, name: Bool +}
 
-This basically means it can have any possible `key ~ value` pair but definitely might have `name ~ String`. This seems useless until you use it with functions:
+This basically means it can have any possible `key: value` pair but definitely might have `name: String`. This seems useless until you use it with functions:
 
-    {+ name ~ String, ...v +} -> {+ ...v +} 
+    {+ name: String, ...v +} -> {+ ...v +} 
 
-This function takes a corecord has the possibility of containing a `name ~ String` pair, and returns one that has "one less possibility" to have a `name ~ String` pair.
+This function takes a corecord has the possibility of containing a `name: String` pair, and returns one that has "one less possibility" to have a `name: String` pair.
 
 These can be pattern matched with `match`, naturally.
 
     -- if the corecord is closed, it can easily be pattern-matched exhaustively  
-    getFooOrBarLength ~ {+ foo ~ String, bar ~ String +} -> Int 
-    r.getFooOrBarLength = match r:
-        {+ foo = f +} ->: f.length
-        {+ bar = b +} ->: b.length
+    getFooOrBarLength: {+ foo: String, bar: String +} -> Int 
+    r.getFooOrBarLength = match r
+        {+ foo = f +} -> f.length
+        {+ bar = b +} -> b.length
 
     -- if it's open, you must have a wildcard element
-    getFooOrBarLength ~ {+ foo ~ String, bar ~ String | l +} -> Int 
-    r.getFooOrBarLength = match r:
-        {+ foo = f +} ->: f.length
-        {+ bar = b +} ->: b.length
-        *             ->: 0 
+    getFooOrBarLength: {+ foo: String, bar: String | l +} -> Int 
+    r.getFooOrBarLength = match r
+        {+ foo = f +} -> f.length
+        {+ bar = b +} -> b.length
+        *             -> 0 
     
 You can have an empty corecord with `{+ +}`, but it is impossible to create a value that occupies this type and the type system knows this.
 
-    getRight ~ Result<{+ +}, a> -> a
-    e.getRight = match e:
-        e.Result ->: e 
+    getRight: Result<{+ +}, a> -> a
+    e.getRight = match e
+        e.Result -> e 
         -- No need to pattern match Error because we all know that `{+ +}` can't have any values.
         
 The snazzy thing is that `match-partial` has special support for these - the values you match against are removed from the type.
 
-    deal ~ {+ a ~ Int, b ~ String +} -> Result<{+ a ~ Int +}, String>
-    a.deal = match-partial a with:
-        {+ b = b +} ->: b 
-        else a ->: a
+    deal: {+ a: Int, b: String +} -> Result<{+ a: Int +}, String>
+    a.deal = match-partial a
+        {+ b = b +} -> b 
+        else a -> a
 
 
 ## Modules, packages and imports
@@ -890,8 +887,9 @@ A module is just a collection of values. Every file is a module. Like values, mo
 
     -- adding-utils.zoda
     module adding-utils `Collection of utilities related to adding values`
-      author: Andre Popovitch
-      user-doc: 
+      authors 
+        Andre Popovitch
+      user-doc 
         These utilities are part of the greater "adding" library. 
         They're useful in all situations where you need to add something.
            
@@ -899,28 +897,31 @@ A module is just a collection of values. Every file is a module. Like values, mo
         If you need to add 3, check out the `plus-3` function. Other useful 
         functions include `plus-4` and `plus-5`.           
 
-        Examples: 
+        Examples 
 
-        >>> 3.plus-4 
-        ->: 7
+        >> 3.plus-4 
+        -> 7
 
-        >>> 3.plus-5
-        ->: 8
-      devl-doc:
+        >> 3.plus-5
+        -> 8
+      devl-doc
         Research is ongoing whether a `x.plus-6` function is possible. Contributions would be welcomed!
-      importing:
+      importing
         (plus) from generic-plus           -- import the "plus" function from the module "generic-plus".
-        negatory:negation                  -- import the "negation" module from the "negatory" package
-      exporting:
+        negatory::negation                 -- import the "negation" module from the "negatory" package
+        string-concatenation               -- import everything exported by the main module in the "string-concatenation" package
+      exporting
         plus-3, plus-4, plus-5, plus-negative
                   
     x.plus-0 = x -- not exported because it's useless
     x.plus-3 = x.plus(3) -- these would typically have their own tests, tiny-docs, user-docs, and devl-docs, but I've left them off for the sake of brevity.
     x.plus-4 = x.plus(4) 
     x.plus-5 = x.plus(5) 
-    x.plus-negative(y) = x.plus(y.negation:negate)         -- namespacing is done with `:`
+    x.plus-negative(y) = x.plus(y.negatory::negation::negate)         -- namespacing is done with `::`
 
-When executing a package, execution begins at the `main` function inside the `main` module. More specifically, it just executes whatever actions the `main` module returns. Every Zoda package has a `main` module - since it must be the root level module, it cannot export anything (and does not have a `user-doc`). The `devl-doc` of your main module serves as a guide to new contributors to how they should look at and edit the whole package. It is *not* intended to be a high level description of your package for end-users - that should be the `introduction` chapter of the book for your package. (a `readme.md` will be automatically created from the book, more on this later).
+    s1.concatonate-to(s2) = s1.string-concatenation::concatenate(s2)
+
+When executing a package, execution begins at the `main` function inside the `main` module. More specifically, it just executes whatever actions the `main` module returns. Every Zoda package has a `main` module. It cannot be imported by any other module, and anything it exports is included if you just import the name of the package. The `devl-doc` of your main module serves as a guide to new contributors to how they should look at and edit the whole package. It is *not* intended to be a high level description of your package for end-users - that should be the `introduction` chapter of the book for your package. (a `readme.md` will be automatically created from the book, more on this later).
 
 A package is always contained entirely within one folder. It also always has a `book` directory and a `zoda.toml` file. The book directory contains all the documentation about the package that does not make sense to be stored in the source files. The `zoda.toml` file contains information about what other packages this package depends on, and what modules it exports. 
 
