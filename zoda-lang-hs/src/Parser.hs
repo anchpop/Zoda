@@ -14,7 +14,7 @@ import qualified Data.Bifunctor as Data.Bifunctor
 
 import Text.Megaparsec.Debug 
 
-parseModule :: (HasThrow "perr" (ProductionError p) m) => String -> m (Module SourcePosition)
+parseModule :: (HasThrow "perr" (ProductionError Text p) m) => String -> m (Module Text SourcePosition)
 parseModule text = handleResult result
   where 
     result = Data.Bifunctor.first (ZodaSyntaxError) (runParser (evalStateT moduleP (ParserState 0)) "module" text)
@@ -156,7 +156,7 @@ identifierCharacter = try letterChar <|> try alphaNumChar <|> try (char '\'') <|
 
 data ParserState = ParserState Int deriving (Show, Read, Eq, Ord)
 type Parser a = StateT ParserState (Parsec Void String) a
-type ASTParser a = Parser (a SourcePosition)
+type ASTParser a = Parser (a Text SourcePosition)
 data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} deriving (Read, Eq, Ord)
 instance Show SourcePosition where
   show (SourcePosition f l1 c1 l2 c2) = "(SourcePosition \"" <> f <> "\" " <> (show l1) <> " " <> (show c1) <> " " <> (show l2) <> " " <> (show c2) <> ")"

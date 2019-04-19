@@ -4,18 +4,19 @@ import Basic
 import Data.Maybe
 import Ast
 import qualified CopyPropagatedProgram as CPP
+--import qualified Data.Map.Justified as Map
 import qualified Data.Map as Map
 import Capability.Error
 
-createMapOfIdentifiersToValues :: (HasThrow "perr" (ProductionError p) m) => Module p -> m (Map.Map Text (Expression p))
+createMapOfIdentifiersToValues :: (HasThrow "perr" (ProductionError i p) m, Ord i) => Module i p -> m (Map.Map i (Expression i p))
 createMapOfIdentifiersToValues (Module header declarations _) = valueMap
  where
-  valueMap = foldM addValueToValuemap Map.empty declarations
+  valueMap = foldM addValueToValuemap (Map.fromList []) declarations
   addValueToValuemap m declaration@(Declaration (LowercaseIdentifier name _) expression _) =
     if isJust (Map.lookup name m) then throw @"perr" (ValueRedeclaration (declaration)) else pure (Map.insert name expression m)
 
 
-checkNoUndefinedIdentifiers :: (HasThrow "perr" (ProductionError p) m) => (Map.Map Text (Expression p)) -> m (Map.Map Text (Expression p))
+checkNoUndefinedIdentifiers :: (HasThrow "perr" (ProductionError i p) m, Ord i) => (Map.Map i (Expression i p)) -> m (Map.Map i (Expression i p))
 checkNoUndefinedIdentifiers m = mapM (checkIdentifiersInExpressionDefined m) (fmap snd . Map.toList $ m) *> pure m
  where
   getIdentifiersInExpression (NumberLiteralExpression _          _) = []
@@ -28,7 +29,7 @@ checkNoUndefinedIdentifiers m = mapM (checkIdentifiersInExpressionDefined m) (fm
   checkIdentifiersInExpressionDefined m e = checkIndentifiersDefined m (getIdentifiersInExpression e) *> pure True
 
 
-getMainFunc :: (HasThrow "perr" (ProductionError p) m) => Module p -> (Map.Map Text (Expression p)) -> m (Expression p)
+getMainFunc :: (HasThrow "perr" (ProductionError Text p) m) => Module Text p -> (Map.Map Text (Expression Text p)) -> m (Expression Text p)
 getMainFunc moduleAST m = handleMainFunc mainFunc
   where
     mainFunc = Map.lookup "main" m
@@ -37,7 +38,7 @@ getMainFunc moduleAST m = handleMainFunc mainFunc
 
 
 
-evaluateMain :: (Eq p) => (Map.Map Text (Expression p)) -> Expression p -> Expression p
+evaluateMain :: (Eq p, Ord i) => (Map.Map i (Expression i p)) -> Expression i p -> Expression i p
 evaluateMain identValMap mainFunc = fullyReduce mainFunc
   where
     --reduceExpression :: Expression p -> Expression p

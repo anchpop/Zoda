@@ -87,8 +87,6 @@ const Index = () => {
             <ContactText>
               I'm Andre Popovitch. Email me at <a href="mailto:andre@popovit.ch">andre@popovit.ch</a> or find me on <a href="https://twitter.com/popovitchandre">Twitter</a>. 
               Also check out my blog at <a href="https://blog.andrepopovitch.com">blog.andrepopovitch.com</a>. I talk about programming languages and reduction algorithms, and maybe one day other things.
-
-
             </ContactText>
           </Inner>
         </Contact>

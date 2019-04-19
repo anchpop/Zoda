@@ -1,18 +1,22 @@
 module Ast where
 import ClassyPrelude
 
-data Module p = Module (ModuleHeader p) [(Declaration p)] p deriving (Show, Read, Eq, Ord)
-data ModuleHeader p = ModuleHeader (LowercaseIdentifier p) (Tinydoc p) p deriving (Show, Read, Eq, Ord)
+data Module i p = Module (ModuleHeader i p) [(Declaration i p)] p deriving (Show, Read, Eq, Ord)
+data ModuleHeader i p = ModuleHeader (LowercaseIdentifier i p) (Tinydoc i p) p deriving (Show, Read, Eq, Ord)
 
-data Declaration p = Declaration (LowercaseIdentifier p) (Expression p) p deriving (Show, Read, Eq, Ord)
+data Declaration i p = Declaration (LowercaseIdentifier i p) (Expression i p) p deriving (Show, Read, Eq, Ord)
 
-data Expression p = ParenthesizedExpression (Expression p) p | NumberLiteralExpression (NumberLiteral p) p | IdentifierExpression (LowercaseIdentifier p) p | FunctionLiteralExpression (FunctionLiteral p) p | FunctionApplicationExpression (Expression p) [Expression p] p deriving (Show, Read, Eq, Ord)
+data Expression i p = ParenthesizedExpression (Expression i p) p 
+                    | NumberLiteralExpression (NumberLiteral i p) p 
+                    | IdentifierExpression (LowercaseIdentifier i p) p 
+                    | FunctionLiteralExpression (FunctionLiteral i p) p 
+                    | FunctionApplicationExpression (Expression i p) [Expression i p] p deriving (Show, Read, Eq, Ord)
 
-data NumberLiteral p = NumberLiteral Rational p deriving (Show, Read, Eq, Ord)
-data FunctionLiteral p = FunctionLiteral [LowercaseIdentifier p] (Expression p) p deriving (Show, Read, Eq, Ord)
+data NumberLiteral i p = NumberLiteral Rational p deriving (Show, Read, Eq, Ord)
+data FunctionLiteral i p = FunctionLiteral [LowercaseIdentifier i p] (Expression i p) p deriving (Show, Read, Eq, Ord)
 
 
 
-data Tinydoc p = Tinydoc Text p deriving (Show, Read, Eq, Ord)
-data LowercaseIdentifier p = LowercaseIdentifier Text p deriving (Show, Read, Eq, Ord)
-data UppercaseIdentifier p = UppercaseIdentifier Text p deriving (Show, Read, Eq, Ord)
+data Tinydoc i p = Tinydoc Text p deriving (Show, Read, Eq, Ord)
+data LowercaseIdentifier i p = LowercaseIdentifier i p deriving (Show, Read, Eq, Ord)
+data UppercaseIdentifier i p = UppercaseIdentifier i p deriving (Show, Read, Eq, Ord)

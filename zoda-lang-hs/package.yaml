@@ -26,9 +26,11 @@ dependencies:
 - hspec
 - safe
 - mtl
+- free
+- justified-containers
 - containers
 - capability
-
+- recursion-schemes
 
 ghc-options:
 - -Wall
