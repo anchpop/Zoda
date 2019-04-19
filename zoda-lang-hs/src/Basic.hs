@@ -6,12 +6,12 @@ import Text.Megaparsec hiding (State)
 import Text.Megaparsec.Char
 import Capability.Error
 import Capability.Writer
-import CopyPropagatedProgram
+import qualified CopyPropagatedProgram as CPP
 import Control.Monad.Except (ExceptT (..), Except)
 
 
 
-data ProductionError p i = ZodaSyntaxError (ParseErrorBundle String Void) | ValueRedeclaration (Declaration p i) | UndeclaredValueReferenced (LowercaseIdentifier p i) | NoMain (Module p i) 
+data ProductionError p i = ZodaSyntaxError (ParseErrorBundle String Void) | ValueRedeclaration (Declaration p i) | UndeclaredValuesReferenced [(i, Expression p i)] | NoMain (Module p i) 
   deriving (Show, Eq)
   deriving anyclass Exception
 
