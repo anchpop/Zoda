@@ -15,7 +15,7 @@ import qualified Data.Bifunctor as Data.Bifunctor
 
 import Text.Megaparsec.Debug
 
-parseModule :: (HasThrow "perr" (ProductionError p Text) m) => String -> m (Module SourcePosition Text)
+parseModule :: (HasThrow "perr" (ProductionError Untyped p Text) m) => String -> m (Module Untyped SourcePosition Text)
 parseModule text = handleResult result
  where
   result = Data.Bifunctor.first (ZodaSyntaxError) (runParser (evalStateT moduleP (ParserState 0)) "module" text)
@@ -56,7 +56,7 @@ expressionP = funcAppOnParenthesized <|> funcAppOnNum <|> funcAppOnFliteral <|> 
   funcAppOnFliteral      = funcAppWrapper fliteral
   funcAppOnIdent         = funcAppWrapper ident
   funcAppOnNum           = funcAppWrapper numb
-  funcAppWrapper expType = sourcePosWrapper . try . (fmap (uncurry FunctionApplicationExpression)) $ typedotexp
+  funcAppWrapper expType = sourcePosWrapper . try . (fmap (\(f, applicants) -> FunctionApplicationExpression f applicants Untyped)) $ typedotexp
    where
     typedotexp = do
       applicant <- expType
@@ -69,22 +69,20 @@ expressionP = funcAppOnParenthesized <|> funcAppOnNum <|> funcAppOnFliteral <|> 
     exp <- expressionP
     many separatorChar
     char ')'
-    pure (ParenthesizedExpression exp)
+    pure (ParenthesizedExpression exp Untyped)
 
   numb = sourcePosWrapper . try $ do
     numb <- numberLiteralP
-    pure (NumberLiteralExpression numb)
+    pure (NumberLiteral numb Untyped)
   ident = sourcePosWrapper . try $ do
     ident <- lowercaseIdentifierP
-    pure (IdentifierExpression ident)
+    pure (IdentifierExpression ident Untyped)
   fliteral = sourcePosWrapper . try $ do
     flit <- functionLiteralP
-    pure (FunctionLiteralExpression flit)
+    pure (FunctionLiteralExpression flit Untyped)
 
-numberLiteralP :: ASTParser NumberLiteral
-numberLiteralP =
-  sourcePosWrapper
-    $   try
+numberLiteralP :: Parser Rational
+numberLiteralP = try
           ( do
             sign   <- try (string "-" *> pure False) <|> (pure True)
             majorS <- some' (digitChar)
@@ -96,7 +94,7 @@ numberLiteralP =
                   let value1 = minor % (10 ^ (length minorS)) + (major) -- % is division, not modulo
 
                       value2 = if sign then value1 else (negate value1)
-                  pure (NumberLiteral value2)
+                  pure (value2)
                 _ -> empty
               _ -> empty
           )
@@ -106,7 +104,7 @@ numberLiteralP =
           guard $ NonEmpty.head majorS /= '0'
           let major :: Rational
               major = justUnsafe (readMay ((toList majorS) <> " % 1"))
-          pure . NumberLiteral $ if sign then major else negate major
+          pure $ if sign then major else negate major
         )
   where justUnsafe (Just x) = x
 
@@ -119,7 +117,7 @@ functionLiteralP = sourcePosWrapper $ do
   string "->"
   some separatorChar
   exp <- expressionP
-  pure $ FunctionLiteral identifiers exp
+  pure $ FunctionLiteral identifiers exp 
 
 
 tinydocP :: ASTParser Tinydoc
@@ -153,7 +151,7 @@ identifierCharacter = try letterChar <|> try alphaNumChar <|> try (char '\'') <|
 
 data ParserState = ParserState Int deriving (Show, Read, Eq, Ord)
 type Parser a = StateT ParserState (Parsec Void String) a
-type ASTParser a = Parser (a SourcePosition Text)
+type ASTParser a = Parser (a Untyped SourcePosition Text)
 data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} deriving (Read, Eq, Ord)
 instance Show SourcePosition where
   show (SourcePosition f l1 c1 l2 c2) = "(SourcePosition \"" <> f <> "\" " <> (show l1) <> " " <> (show c1) <> " " <> (show l2) <> " " <> (show c2) <> ")"
