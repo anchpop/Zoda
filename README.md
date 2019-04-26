@@ -1,3 +1,3 @@
 # Zoda
 
-license: gpl
+license: agpl
