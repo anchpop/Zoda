@@ -31,10 +31,10 @@ Here we're defining the same value multiple times, this is illegal but we're jus
 
 Types can be ambiguous with "traits" - here we say "myNum" has the trait "Integral", but we're not any more specific.
 
-    myNum: Integral a => a
+    myNum: <a>(Integral<a>) => a
     myNum = 3
 
-    myNum = 3: (Integral a => a)
+    myNum = 3: (<a>(Integral<a>) => a)
 
 
 ## Function Application
@@ -54,6 +54,39 @@ Function application is simple, it's `argument1.functionName(argument2, argument
 
     myNum = 2.pow(4)
 
+Some functions are polymorphic. Zoda will typically be able to figure out the correct type of any application of a function, but sometimes this is impossible:
+
+    -- show: <a>(Show<a>) => a -> String
+    -- read: <a, m>(Read<a>) => CanThrowError<ReadError, m> -> String -> m a
+    three = (3: Int).show.read 
+
+Obviously, `three` should be `<a, m> CanThrowError<ReadError, m> => m Int`, but it does not have access to the information that `show` took an `Int`, so it is instead ambiguous.
+
+There are two solutions: the first is that we can give an explicit type annotation:
+
+    three: <m>(CanThrowError<ReadError, m>) => m Int
+    three = (3: Int).show.read
+
+    -- or...
+    
+    three = (3: Int).show.(read: <m>(CanThrowError<ReadError, m>) => String -> m Int)
+
+But this is pretty visually noisy for something that should be simple. If you notice, all the type variables are before the actual type signature (i.e. this is a rank 1 type), this means we can isntantiate them with `<>`.
+
+    three = (3: Int).show.read<Int, Maybe> -- Maybe has the trait `CanThrowError`
+
+We might not want to restrict ourselves to just throwing `Maybe`, so we can just leave it out.
+
+    three = (3: Int).show.read<Int>
+
+Alternatively, if we want to not specify that the output must be an `Int` but do specify that it must be `Maybe`, we can do this:
+
+    three = (3: Int).show.read<_, Maybe>
+
+If a function takes more than one parameter, the `<>` preceed the `()`.
+
+    three = 3.lower-bound<Int>(4) -- lower-bound takes two `Int`s now, instead of taking two `Ord a`.
+
 
 ## Function Creation
 
@@ -72,24 +105,24 @@ We can give a signature to a function. All functions are values, the only differ
     add3: Int -> Int -> Int -> Int
     a.plus(b, c) = a + b + c
 
-    add3: (Addable a) => a -> a -> a -> a
+    add3: <a>(Addable<a>) => a -> a -> a -> a
     a.plus(b, c) = a + b + c
 
 ## Polymorphic Functions
 
 The last section had a function that worked on any type that has the trait `Addable`.
 
-    add3: (Addable a) => a -> a -> a -> a
+    add3: <a>(Addable<a>) => a -> a -> a -> a
     a.plus(b, c) = a + b + c
 
 The `=>` creates a "type variable", in this case it has the constraint that it must have the type `Addable`. You can have ones without the type.
 
-    apply-to: (a, b) => (a -> b) -> a -> b 
+    apply-to: <a, b> => (a -> b) -> a -> b 
     f.apply-to(a) = a.f
 
 The `=>` does not have to be at the very front of the type.
 
-    id-both: (b, c) => (a => a -> a) -> b -> c -> {* b, c *}
+    id-both: <b, c> => (a => a -> a) -> b -> c -> {* b, c *}
     f.id-both(b, c) =  {* f.b, f.c *}
 
 But type inference typically won't assume a type has a `=>` in the middle of a type, only at the beginning so if you want to have a function like the above you should give it a type signature.  
@@ -99,12 +132,12 @@ But type inference typically won't assume a type has a `=>` in the middle of a t
 By default, polymorphic values are universally quantified. Putting a `^` before the type variable makes it existentially qualified.
 
 
-    useless: (a, ^b) => a -> ^b -- a is universally quantified, ^b is existentially quantified
+    useless: <a, ^b> => a -> ^b -- a is universally quantified, ^b is existentially quantified
     s.useless = True -- can return literally any value
 
 Since the return value of `useless` is existentially quantified, it could be any value, but you don't know what the value is.
 
-    useless: (a, ^b) => a -> ^b -- a is universally quantified, ^b is existentially quantified
+    useless: <a, ^b> => a -> ^b -- a is universally quantified, ^b is existentially quantified
     s.useless = True -- can return literally any value, but all possible return values must be the same type
 
     v: ^b => ^b
@@ -112,7 +145,7 @@ Since the return value of `useless` is existentially quantified, it could be any
 
 These are useful for recovering some nice properties from dynamic languages in a type safe way. For example, the following is allowed:
 
-    myList = [1, "test", True]: List<^a => a>
+    myList = [1, "test", True]: List< <^a> => a >
 
 Although you can't do anything with the contents of that list (yet).
 
@@ -410,7 +443,7 @@ All pattern matches must be exhaustive to perform an optimized build - this is t
 
 A common pattern is to do a pattern match to see if a value is matches a pattern, and to return some kind of "true" result if it is, and an error result if it isn't. `match-partial` exists to solve this need - it returns a value with the trait `Errorable` where successful matches are on the right an unsuccessful matches are on the left.
 
-    luckyNumber7: (Errorable e) => Int -> e<Int, String>
+    luckyNumber7: <e>(Errorable<e>) => Int -> e<Int, String>
     a.luckyNumber7 = partial-match a
       7 -> "Lucky number 7"
       else notSeven -> notSeven
@@ -492,9 +525,15 @@ String literals are escaped with a backslash. it's acceptable to use "\n", "\t",
 
     my-string = "\"What is it?\" she asked.\n"
 
-for use with regular expression libraries, prefix the string with 'r'. This disables `{}`, 
+for use with regular expression libraries, consider raw strings (done the exact same way as rust): 
     
-    my-regex = r""
+    my-regex = r###" test #"# lala\\efdsfds "###
+
+These contain newlines but still need indentation:
+
+    my-regex = r###"test
+                    test"### -- equivalent to "test\ntest"
+
 
 ## recursion
 
@@ -593,7 +632,7 @@ and
 
     type Year = Year Int
 
-Is that type-wrappers are guaranteed to be equivalent at runtime. This means you can use the `.coerce` function to wrap or unwrap types, even deeply nested ones. 
+Is that type-wrappers are guaranteed to be equivalent at runtime. This means you can use the `.coerce` function to wrap or unwrap types, even deeply nested ones. If a type is meant to be a container for values of some other type, you can give it the trait `representational` which allows you to use `.coerce` to change the types of values being contained - i.e. `[1, 2, 3].coerce == [3.Year, 2.Year, 3.Year]` works because lists have the `representational` trait. 
 
 ## type declarations and ADTs
 
@@ -628,17 +667,13 @@ These are just useful when you want to give a possibly more descriptive name to 
 
 ## Trait and instance declarations
 
-Unlike in default haskell, type classes can have multiple parameters. In this case, we're relating two types by saying one is a collection
-and another is an element. We also say that `Eq` is a supertrait for `e`, so the elements of any collection are required to have the `Eq` trait.
-We probably wouldn't do that in real life though because it's useful sometimes to have collections of functions and it's not possible to give
-functions an `Eq` instance. Also, we've added a functional dependency `c -> e`, by saying that the type of the element is soley determined by the type
-of the collection. This just means that for any `Collection c => c`, there should be a unique type `e` known at compile time.  
+Unlike in default haskell, type classes can have multiple parameters. In this case, we're relating two types by saying one is a collection and another is an element. We also say that `Eq` is a supertrait for `e`, so the elements of any collection are required to have the `Eq` trait. We probably wouldn't do that in real life though because it's useful sometimes to have collections of functions and it's not possible to give functions an `Eq` instance. Also, we've added a functional dependency `c -> e`, by saying that the type of the element is soley determined by the type of the collection. This just means that for any `<c>(Collection c) => c`, there should be a unique type `e` known at compile time.  
 
-    new-trait Eq e => Collection c e | c -> e where
+    new-trait <e>(Eq<e>) => Collection<c, e> | c -> e where
         insert: c -> e -> c
         member: c -> e -> Bool
 
-    has-trait Eq a => Collection (List<a>) a where
+    has-trait Collection (List<e>) e where
         collection.insert(element) = element.Cons(collection)
         collection.member(element) = match collection
             EmptyList  -> False
@@ -650,7 +685,7 @@ of the collection. This just means that for any `Collection c => c`, there shoul
 
 We can also write that a specific class does not have a certain trait 
 
-    hasnt-trait Serializable (a -> b) where
+    hasnt-trait <a, b> => Serializable (a -> b) where
         -- "general" shows up when someone trys to pass a function assuming it has the trait "Serializable"
         general = "Functions do not have the Serializable trait because they don't have a consistent representation in memory."
         -- "hint" shows up every time the typeclass is used improperly. It is intended for giving general information about a topic. 
@@ -673,7 +708,7 @@ These spaces are required
 
 These can sometimes be useful when you want to return a value from a function. 
 
-    one-greater-one-less: Addable a => a -> {* a, a *}
+    one-greater-one-less: <a>(Addable<a>) => a -> {* a, a *}
     x.one-greater-one-less = {* x - 1, x + 1 *}
 
 You can retrieve a value from a tuple with pattern matching.
@@ -688,7 +723,7 @@ You can also use `.get1st`, `.get2nd`, etc.
 
 You can write a function that inserts a value into a tuple with an `_`.
 
-    list-to-hello-tuple: List<a> -> List<{* a, String *}>
+    list-to-hello-tuple: <a>(List<a>) => List<a> -> List<{* a, String *}>
     l.list-to-hello-tuple = l.map({* _, "hello" *})
 
 
@@ -819,11 +854,11 @@ In general, two record types are equal if they contain the same `key: type` pair
 
     -- if you had a function of type  `{ x: Int, x: Bool } -> Bool`, you would not be able to pass it `snd`.
 
-Due to the inherent complexity of having records with duplicate keys, I reccomend you keep their usage to a minimum. 
+Due to the inherent complexity of having records with duplicate keys, I recommend you keep their usage to a minimum. 
 
 Oh and I glossed over this, but records can have type constraints
 
-    fst = { x = 2, x = True }: Integral a => { x: a, x: Bool }
+    fst = { x = 2, x = True }: <a>(Integral<a>) => { x: a, x: Bool }
 
 
 ## Corecords
@@ -876,7 +911,19 @@ The snazzy thing is that `match-partial` has special support for these - the val
     deal: {+ a: Int, b: String +} -> Result<{+ a: Int +}, String>
     a.deal = match-partial a
         {+ b = b +} -> b 
-        else a -> a
+        else a -> a -- a here has type {+ a: Int +}
+
+Together, records and corecords are called rows, because they both represent a row of associations between names and values.
+
+## Coercion on rows
+
+if two rows' types are identical except for the names, the `.coerce` function can be used to convert one to another. In the case of multiple k/v pairs with the same name, the order in the type is used.
+
+    {name = "test"}.coerce == {buildingName = "test"}
+
+To make it less confusing, use `<>` in coerce: 
+
+    {name = "test"}.coerce<{name: String}, {buildingName: String}> == {buildingName = "test"}
 
 
 ## Modules, packages and imports
@@ -907,23 +954,28 @@ A module is just a collection of values. Every file is a module. Like values, mo
       devl-doc
         Research is ongoing whether a `x.plus-6` function is possible. Contributions would be welcomed!
       importing
-        (plus) from generic-plus           -- import the "plus" function from the module "generic-plus".
-        negatory::negation                 -- import the "negation" module from the "negatory" package
+        { plus } from generic-plus           -- import the "plus" function from the module "generic-plus".
+        negatory                           -- import the "negatory" package and everything inside it (this one has a `negation` module inside of it)
         string-concatenation               -- import everything exported by the main module in the "string-concatenation" package
       exporting
-        plus-3, plus-4, plus-5, plus-negative
+        plus, plus-3, plus-4, plus-5, plus-negative -- re-export the imported "plus" function
                   
     x.plus-0 = x -- not exported because it's useless
     x.plus-3 = x.plus(3) -- these would typically have their own tests, tiny-docs, user-docs, and devl-docs, but I've left them off for the sake of brevity.
     x.plus-4 = x.plus(4) 
     x.plus-5 = x.plus(5) 
-    x.plus-negative(y) = x.plus(y.negatory::negation::negate)         -- namespacing is done with `::`
+    x.plus-negative(y) = x.plus(y.(negatory.negation.negate))         -- namespacing is done with `.` but often requires extra parentheses
 
     s1.concatonate-to(s2) = s1.string-concatenation::concatenate(s2)
 
-When executing a package, execution begins at the `main` function inside the `main` module. More specifically, it just executes whatever actions the `main` module returns. Every Zoda package has a `main` module. It cannot be imported by any other module, and anything it exports is included if you just import the name of the package. The `devl-doc` of your main module serves as a guide to new contributors to how they should look at and edit the whole package. It is *not* intended to be a high level description of your package for end-users - that should be the `introduction` chapter of the book for your package. (a `readme.md` will be automatically created from the book, more on this later).
+When executing a package, execution begins at the `main` function inside the `main` module. More specifically, it just executes whatever actions the `main` module returns. Every Zoda package has a `main` module. It cannot be imported by any other module, and anything it exports is included if you just import the name of the package. The only things available to users of you package are things exported by the main module - for obvious reasons you should not export multiple things with the same name. The `devl-doc` of your main module serves as a guide to new contributors to how they should look at and edit the whole package. It is *not* intended to be a high level description of your package for end-users - that should be the `introduction` chapter of the book for your package. (a `readme.md` will be automatically created from the book, more on this later).
 
 A package is always contained entirely within one folder. It also always has a `book` directory and a `zoda.toml` file. The book directory contains all the documentation about the package that does not make sense to be stored in the source files. The `zoda.toml` file contains information about what other packages this package depends on, and what modules it exports. 
+
+
+
+
+# Package namespacing
 
 
 

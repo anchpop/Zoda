@@ -8,7 +8,9 @@ import qualified Data.Map.Justified as Map
 import qualified Data.Map as Unjustified.Map
 import Capability.Error
 
-data Metavariable = Metavariable Int [Metavariable]
+data Metavariable = MetavariableApplication Int [Metavariable] 
+                  | Metavariable Int 
+                  | Constant Int
 
 createMapOfIdentifiersToValues :: (HasThrow "perr" (ProductionError t p i) m, Ord i)	=> Module t p i -> (forall ph. Map.Map ph i (Expression t p (Map.Key ph i)) -> m out) -> m out
 createMapOfIdentifiersToValues (Module _ declarations _) continuation = handleMapOutput mapOutput 
