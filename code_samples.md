@@ -924,14 +924,17 @@ When executing a package, execution begins at the `main` function inside the `ma
 
 A package is always contained entirely within one folder. It also always has a `book` directory and a `zoda.toml` file. The book directory contains all the documentation about the package that does not make sense to be stored in the source files. The `zoda.toml` file contains information about what other packages this package depends on, and what modules it exports. 
 
+## Notes
 
-
-# Grammar
-
-This isn't a full grammar for the whole language. WIP
-
+Notes are a special type of comment in Zoda. The syntax looks like this:
 ```
-Module := ModuleHeader Definitions
-ModuleHeader := "module" LowercaseIdentifier 
+Note [Equality-constrained types]:
+  The type   forall ab. (a ~ [b]) => blah
+  is encoded like this:
 
+     ForAllTy (a:*) $ ForAllTy (b:*) $
+     FunTy (TyConApp (~) [a, [b]]) $
+     blah
 ```
+
+Then, inside any `devl-doc`, `user-doc`, or comment, one can write `[Equality-constrained types]`. This generates a link in the IDE that allows you to easily navigate to the note (view it inline?) and navigate back. Notes are scoped to a package. Multiple notes with the same name result in a compilation error.
