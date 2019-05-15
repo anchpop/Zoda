@@ -94,27 +94,44 @@ The `=>` does not have to be at the very front of the type.
 
 But type inference typically won't assume a type has a `=>` in the middle of a type, only at the beginning so if you want to have a function like the above you should give it a type signature.  
 
-# Existentials
+## Type signatures
 
-By default, polymorphic values are universally quantified. Putting a `^` before the type variable makes it existentially qualified.
+Elsewhere in here for some reason I use `~` to denote a type sig, if you see that, that's incorrect. The correct syntax is `:`. Here's an example:
 
+    equals : @(e : Type) -> e -> e given
+               Eq(e)
+    equals(a, b) = a == b
+   
+`@` is used to denoet an implicit parameter - these are only to make the type system work, because all functions are always parametric with respect to their implicit parameters (never branch based on them or otherwise observe their value directly). One may pass implicit variables explicitly, like this: `equals(@Int, 3, 4)`. 
 
-    useless ~ (a, ^b) => a -> ^b -- a is universally quantified, ^b is existentially quantified
-    s.useless = True -- can return literally any value
+The `given` section describes the constraints that are placed on variables on the function. These can be simple or complex. For example:
 
-Since the return value of `useless` is existentially quantified, it could be any value, but you don't know what the value is.
+    get-index : @(e : Type) -> List(e) -> (n : Int) -> e given
+                  length(list) > n
+                  n > 0
 
-    useless ~ (a, ^b) => a -> ^b -- a is universally quantified, ^b is existentially quantified
-    s.useless = True -- can return literally any value, but all possible return values must be the same type
+This ensures that finding the `n`th element of the list with `get-index` will never fail, because it is statically guaranteed at runtime that the length of the list is greater than the index we're trying to access, and the index we're trying to access is not negative.
 
-    v ~ ^b => ^b
-    v = 3.useless -- really nothing I can do with this value 
+There are two more things we can do with type signatures, to further their explanatory power. We can create an error type, which is not used directly by the function, but will be explained later:
 
-These are useful for recovering some nice properties from dynamic languages in a type safe way. For example, the following is allowed:
+    type ListIndexAccessError = NegativeIndex | IndexOutOfBounds
+    get-index : @(e : Type) -> (l : List(e)) -> (index : Int) -> e given
+                  length(l) > n, IndexOutOfBounds
+                  n > 0        , NegativeIndex 
 
-    myList = [1, "test", True] ~ List<^a => a>
+Finally, we can give a description of the cause of the error in backticks. This is a tiny-doc, which will be touched on more later:
 
-Although you can't do anything with the contents of that list (yet).
+    type ListIndexAccessError = NegativeIndex | IndexOutOfBounds
+    get-index : @(e : Type) -> (l : List(e)) -> (index : Int) -> e given
+                  length(l) > n, IndexOutOfBounds, `You cannot access index {n} of {l} because 
+                                                    it is only {length(l)} long.`
+                  n > 0        , NegativeIndex   , `You cannot access the negative index {n} of {l}.`
+
+These show up when the condition is *not* satisfied for whatever reason. The message in the backtics is used to give a more human-friendly explanation of the error and why it exists than that which can be generated automatically.
+
+(Trait constraints don't get an error-doc or the ability to add an error type)
+
+For any function where you *don't* want to bother making sure the constraints are satisfied, you can just add a `?` to the end of the function name. This makes a function that returns a result type that indicates if the constraints were not found to hold at runtime, or contains the result otherwise. For result types that support it, it can also contain some more detailed information inside a `DebugInfo`, containing the interpolated tiny-doc, the stack trace, all the arguments to the function, etc. Obviously, this would only be done in development builds. This would seem impure, but since the contents of a `DebugInfo` can never affect the execution of a program it's probably fine.
 
 ## Function chaining
 
@@ -934,9 +951,10 @@ A package is always contained entirely within one folder. It also always has a `
 ## Notes
 
 Notes are a special type of comment in Zoda. The syntax looks like this:
+
 ```
-Note [Equality-constrained types]:
-  The type   forall ab. (a ~ [b]) => blah
+note [Equality-constrained types]:
+  The type `forall ab. (a ~ [b]) => blah`
   is encoded like this:
 
      ForAllTy (a:*) $ ForAllTy (b:*) $
@@ -944,4 +962,4 @@ Note [Equality-constrained types]:
      blah
 ```
 
-Then, inside any `devl-doc`, `user-doc`, or comment, one can write `[Equality-constrained types]`. This generates a link in the IDE that allows you to easily navigate to the note (view it inline?) and navigate back. Notes are scoped to a package. Multiple notes with the same name result in a compilation error.
+Then, inside any `devl-doc`, `user-doc`, or comment, one can write `[Equality-constrained types]`. This generates a link in the IDE that allows you to easily navigate to the note (view it inline?) and navigate back. Notes are scoped to a package. Multiple notes with the same name result in a compilation error. Markdown-like formatting is allowed within notes.
