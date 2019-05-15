@@ -881,6 +881,13 @@ The snazzy thing is that `match-partial` has special support for these - the val
         {+ b = b +} ->: b 
         else a ->: a
 
+## The Debuggable Trait
+
+The Debuggable trait only had one function, `createDebugRepresentation`. It takes something with the `Debuggable` trait and outputs a `DebugInfo`. But `createDebugRepresentation` is special because it cannot be called in Production builds (this is verified statically).  
+
+## DebugInfos
+
+`DebugInfo` is a special type. It can be constructed with two constructors - `debugInfo`, which takes anything with the `Debuggable` trait, and `debugEmpty` which just represents no debug information. The constructors for `DebugInfo` are not exposed, so it is impossible to deconstruct. Since the only typeclass that has any functions for `DebugInfo` is `Debuggable`, and `Debuggable`'s functions cannot be used in Production builds, this guarantees that any code which creates, manipulates, or stores `DebugInfo`s cannot affect the runtime behavior of a production build and can therefore be safely optimized away. The utility of this is to create a distinction between values passed around for debugging purposed and values passed around for control flow.
 
 ## Modules, packages and imports
 
