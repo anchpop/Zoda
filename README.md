@@ -1,1 +1,3 @@
 # Zoda
+
+license: agpl
