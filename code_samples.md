@@ -178,38 +178,37 @@ any time after a `:`, you should indent if you choose to make a newline
 
 ## if expressions
 
-These use indentation for alignment to support nesting
+These use indentation for alignment to support nesting. They have similar syntax to match expressions, except the last element doesn't have a rhs (it is always matched if there are no other matches. 
 
-    a.lower-bound(b) = 
-      if a > b then
-        a
-      else
-        b
+    lower-bound(a, b) = 
+      if 
+        a > b -> a
+        else  -> b
 
 This is equivalent to:
 
-    a.lower-bound(b) = 
+    lower-bound(a, b) = 
       match a > b
         True  -> a
         False -> b
 
-You may be wondering - why have `if` if we can just use `match`? The answer is when we need to have many levels of if.
-
-    a.stable-lower-bound(b) = 
-      if a > b then
-        a
-      else if a < b then
-        b
-      else
-        a
-
 These are expressions so you may use them however you like. 
 
-    a.lower-bound-times(b, x) = 
-      x * if a > b then
-        a
-      else
-        b
+    lower-bound-times(a, b, x) = 
+      x * if 
+        a > b -> a
+        else  -> b
+
+You can have as many cases as you like:
+
+    get_salary(name, profession, company) = 
+      if 
+        name == "bob"                     -> 3000
+        profession = "janitor"            -> 40000
+        company.lower.starts-with("goog") -> 2000
+        else                              -> 8000
+    
+Compared to if/else if/else syntax, this is very concice and easy to read. Every if expression must end with an `else` (this ensures exhaustiveness).
 
 ## Tiny Docs
 
@@ -496,9 +495,9 @@ for use with regular expression libraries, prefix the string with 'r'. This disa
 Zoda does not allow unrestricted recursion. The reason is that unrestricted recursion makes it easy to create a stack explosion:
 
     x.fib = match x: 
-        0 ->: 1 
-        1 ->: 1 
-        x ->: (x - 1).fib + (x - 2).fib
+        0 -> 1 
+        1 -> 1 
+        x -> (x - 1).fib + (x - 2).fib
 
 This is bad because `100000.fib` will result in a stack overflow, which is a form of runtime exception. Since Zoda attempts to make runtime exceptions very rare,
 we need a way to prevent this. There is a way to do recursion without running the risk of a stack overflow - if the recursive call is returned immediately,
