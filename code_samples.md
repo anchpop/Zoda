@@ -519,35 +519,32 @@ its very simple for the compiler to unroll it into a loop which will not result 
             counter ->: internalFib(counter - 1, z, y+z)
 
 so, we can prevent unbounded growth of the stack by disallowing all recursion that is not tail recursion. But, this is annoying because it means recursive calls are 
-"special". I think this would be easier to teach to people if we used a special keyword for tail calls. I'm thinking `self` or `recur`.
+"special". I think this would be easier to teach to people if we used a special keyword for tail calls. I'm thinking `and-recurse`.
 
     x.fib = internal-fib x 0 1 
         where internalFib(counter, y,z) = match counter:
             0       ->: z
-            counter ->: internalFib(counter - 1, z, y+z)
+            counter ->: and-recurse(counter - 1, z, y+z)
 
-so `self` is a special function that calls the function it's used in with the same parameters, and the compiler will not let you do anything to a the output of 
-the `self` function. The self function is the only situation where recursion is possible - all other functions form a DAG of their dependencies. 
+so `and-recurse` is a special function that calls the function it's used in. The compiler will not let you do anything to a the output of the `and-recurse` function, this ensures TCE can be performed. The `and-recurse` function is the only situation where recursion is possible - all other functions form a DAG of their dependencies. 
 
-Also polymorphic recursion not allowed for similar reasons.
+Also polymorphic recursion not allowed for performance reasons (prevents you from monomorphizing).
 
-The one exception to the "you can't do anything to the output of the `self` function" rule is functions with the tag `Chainable`.
-This doesn't blow up the stack because the `Chainable` tag includes instructions on how to compute an intermediate value. `+`, `*` and `Cons` are examples of Chainable.
+The one exception to the "you can't do anything to the output of the `and-recurse` function" rule is functions with the tag `Chainable`. This doesn't blow up the stack because the `Chainable` tag includes instructions on how to compute an intermediate value. `+`, `*` and `Cons` are examples of Chainable.
 
-    x.factorial = x * (x-1).self
+    x.factorial = x * (x-1).and-recurse
     
     filter(l, f) = match l:
         []      ->: []
         x.Cons(xs) ->: 
             if (f x) then: 
-                x.Cons(xs.self(f))
+                x.Cons(xs.and-recurse(f))
             else
-                xs.self(f)
+                xs.and-recurse(f)
                        
-## Tags statements
+## Tag statements
 
 Functions and values can have certain facts stated about them in `tags` statements which serve to provide extra information to the compiler.
-The only one I have any ideas for is `always-terminates`, which says about a function exactly what it says on the tin.
 
     x.plusOne = x + 1 
         tags
@@ -555,14 +552,13 @@ The only one I have any ideas for is `always-terminates`, which says about a fun
 
 Although I expect `always-terminates` to not be that useful. We should be able to prove most functions terminating with the SMT solver.
 
-In practice, all Zoda functions return a value or become caught in an infinite loop (there are some rare exceptions). This is useful because it prevents the vast majority of uncontrolled runtime crashes. But it can be counterproductive to writing useful functions that are composable.
+Other ideas:
 
-For example:
+    x.plusOne = x + 1 
+        tags
+            deprication-warning("This function is being depricated, use `+ 1` instead.")
 
-    divided-by: Float -> Float -> Optional<Float>
-    divided-by(numerator, denominator) = match denominator:
-        0 ->: Nothing
-        denominator ->: Just(numerator / denominator)
+
 
 
 ## type-wrapper 
