@@ -32,6 +32,9 @@ dependencies:
 - capability
 - recursion-schemes
 - roles
+- free
+- deriving-compat
+- generic-lens
 
 ghc-options:
 - -Wall

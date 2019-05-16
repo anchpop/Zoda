@@ -1,25 +1,26 @@
 module Parser where
-import ClassyPrelude hiding (try, many, some)
+import ClassyPrelude hiding (try, many)
 import Ast
 import Basic
 
 import Data.Void
-import Text.Megaparsec hiding (State)
+import Text.Megaparsec hiding (State, some)
 import Text.Megaparsec.Char
 import Control.Monad.State
 import Capability.Error
 
+import qualified Data.List.NonEmpty as NonEmpty
 import Data.Ratio
 import qualified Data.Bifunctor as Data.Bifunctor
 
-import Text.Megaparsec.Debug 
+import Text.Megaparsec.Debug
 
-parseModule :: (HasThrow "perr" (ProductionError p Text) m) => String -> m (Module SourcePosition Text)
+parseModule :: (HasThrow "perr" (ProductionError Untyped p Text) m) => String -> m (Module Untyped SourcePosition Text)
 parseModule text = handleResult result
-  where 
-    result = Data.Bifunctor.first (ZodaSyntaxError) (runParser (evalStateT moduleP (ParserState 0)) "module" text)
-    handleResult (Left e) = throw @"perr" e
-    handleResult (Right r) = pure r 
+ where
+  result = Data.Bifunctor.first (ZodaSyntaxError) (runParser (evalStateT moduleP (ParserState 0)) "module" text)
+  handleResult (Left  e) = throw @"perr" e
+  handleResult (Right r) = pure r
 
 moduleP :: ASTParser Module
 moduleP = sourcePosWrapper $ do
@@ -49,72 +50,63 @@ declarationP = sourcePosWrapperWithNewlines $ do
 
 
 expressionP :: ASTParser Expression
-expressionP = 
-        funcAppOnParenthesized
-    <|> funcAppOnNum
-    <|> funcAppOnFliteral
-    <|> funcAppOnIdent
-    <|> parenthesizedExpression
-    <|> numb
-    <|> ident
-    <|> fliteral
-  where 
-    funcAppOnParenthesized = funcAppWrapper parenthesizedExpression
-    funcAppOnFliteral = funcAppWrapper fliteral
-    funcAppOnIdent = funcAppWrapper ident
-    funcAppOnNum = funcAppWrapper numb
-    funcAppWrapper expType = sourcePosWrapper . try . (fmap (uncurry FunctionApplicationExpression)) $  typedotexp
-      where
-        typedotexp = do 
-          applicant <- expType
-          string "."
-          f <- expressionP
-          pure (f, [applicant])
-    parenthesizedExpression = sourcePosWrapper . try $ do 
-      char '('
-      many separatorChar
-      exp <- expressionP
-      many separatorChar
-      char ')'
-      pure (ParenthesizedExpression exp)
-      
-    numb     = sourcePosWrapper . try $ do
-      numb <- numberLiteralP
-      pure (NumberLiteralExpression numb)
-    ident    = sourcePosWrapper . try $ do
-      ident <- lowercaseIdentifierP
-      pure (IdentifierExpression ident)
-    fliteral = sourcePosWrapper . try $ do
-      flit <- functionLiteralP
-      pure (FunctionLiteralExpression flit)
+expressionP = funcAppOnParenthesized <|> funcAppOnNum <|> funcAppOnFliteral <|> funcAppOnIdent <|> parenthesizedExpression <|> numb <|> ident <|> fliteral
+ where
+  funcAppOnParenthesized = funcAppWrapper parenthesizedExpression
+  funcAppOnFliteral      = funcAppWrapper fliteral
+  funcAppOnIdent         = funcAppWrapper ident
+  funcAppOnNum           = funcAppWrapper numb
+  funcAppWrapper expType = sourcePosWrapper . try . (fmap (\(f, applicants) -> FunctionApplicationExpression f applicants Untyped)) $ typedotexp
+   where
+    typedotexp = do
+      applicant <- expType
+      string "."
+      f <- expressionP
+      pure (f, [applicant])
+  parenthesizedExpression = sourcePosWrapper . try $ do
+    char '('
+    many separatorChar
+    exp <- expressionP
+    many separatorChar
+    char ')'
+    pure (ParenthesizedExpression exp Untyped)
 
-numberLiteralP :: ASTParser NumberLiteral
-numberLiteralP = sourcePosWrapper $ 
-  try (do
-    sign   <- try (string "-" *> pure False) <|> (pure True)
-    majorS <- some (digitChar)
-    minorS <- (try (char '.') *> some (digitChar)) <|> (pure "0")
-    guard $ headUnsafe majorS /= '0'
-    case readMay minorS of
-      Just (minor) -> case (readMay (majorS <> " % 1") :: Maybe Rational) of
-        Just (major) -> do
-          let value1 = minor % (10 ^ (length minorS)) + (major) -- % is division, not modulo
-              value2 = if sign then value1 else (negate value1)
-          pure (NumberLiteral value2)
-        _ -> empty
-      _ -> empty)
-  <|> (do 
-    sign   <- try (string "-" *> pure False) <|> (pure True)
-    majorS <- some (digitChar)
-    guard $ headUnsafe majorS /= '0'
-    let 
-      major :: Rational
-      major = justUnsafe (readMay (majorS <> " % 1"))
-    pure . NumberLiteral $ if sign then major else negate major
-    )
-  where 
-    headUnsafe (x:_) = x
-    justUnsafe (Just x) = x
+  numb = sourcePosWrapper . try $ do
+    numb <- numberLiteralP
+    pure (NumberLiteral numb Untyped)
+  ident = sourcePosWrapper . try $ do
+    ident <- lowercaseIdentifierP
+    pure (IdentifierExpression ident Untyped)
+  fliteral = sourcePosWrapper . try $ do
+    flit <- functionLiteralP
+    pure (FunctionLiteralExpression flit Untyped)
+
+numberLiteralP :: Parser Rational
+numberLiteralP = try
+          ( do
+            sign   <- try (string "-" *> pure False) <|> (pure True)
+            majorS <- some' (digitChar)
+            minorS <- (try (char '.') *> some' (digitChar)) <|> (pure $ '0' NonEmpty.:| [])
+            guard $ NonEmpty.head majorS /= '0'
+            case readMay minorS of
+              Just (minor) -> case (readMay ((toList majorS) <> " % 1") :: Maybe Rational) of
+                Just (major) -> do
+                  let value1 = minor % (10 ^ (length minorS)) + (major) -- % is division, not modulo
+
+                      value2 = if sign then value1 else (negate value1)
+                  pure (value2)
+                _ -> empty
+              _ -> empty
+          )
+    <|> ( do
+          sign   <- try (string "-" *> pure False) <|> (pure True)
+          majorS <- some' (digitChar)
+          guard $ NonEmpty.head majorS /= '0'
+          let major :: Rational
+              major = justUnsafe (readMay ((toList majorS) <> " % 1"))
+          pure $ if sign then major else negate major
+        )
+  where justUnsafe (Just x) = x
 
 functionLiteralP :: ASTParser FunctionLiteral
 functionLiteralP = sourcePosWrapper $ do
@@ -125,7 +117,7 @@ functionLiteralP = sourcePosWrapper $ do
   string "->"
   some separatorChar
   exp <- expressionP
-  pure $ FunctionLiteral identifiers exp
+  pure $ FunctionLiteral identifiers exp 
 
 
 tinydocP :: ASTParser Tinydoc
@@ -144,10 +136,13 @@ uppercaseIdentifierP = sourcePosWrapper $ do
 
 
 lowercaseIdentifierP :: ASTParser LowercaseIdentifier
-lowercaseIdentifierP = sourcePosWrapper $ (do
-  c    <- lowerChar
-  rest <- many identifierCharacter
-  pure . LowercaseIdentifier . fromString $ (c : rest))
+lowercaseIdentifierP =
+  sourcePosWrapper
+    $ ( do
+        c    <- lowerChar
+        rest <- many identifierCharacter
+        pure . LowercaseIdentifier . fromString $ (c : rest)
+      )
 
 
 identifierCharacter :: Parser Char
@@ -156,7 +151,7 @@ identifierCharacter = try letterChar <|> try alphaNumChar <|> try (char '\'') <|
 
 data ParserState = ParserState Int deriving (Show, Read, Eq, Ord)
 type Parser a = StateT ParserState (Parsec Void String) a
-type ASTParser a = Parser (a SourcePosition Text)
+type ASTParser a = Parser (a Untyped SourcePosition Text)
 data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} deriving (Read, Eq, Ord)
 instance Show SourcePosition where
   show (SourcePosition f l1 c1 l2 c2) = "(SourcePosition \"" <> f <> "\" " <> (show l1) <> " " <> (show c1) <> " " <> (show l2) <> " " <> (show c2) <> ")"
@@ -174,29 +169,25 @@ sourcePosWrapperWithNewlines :: Parser (SourcePosition -> a) -> Parser a
 sourcePosWrapperWithNewlines f = sourcePosWrapper f <* (some newline *> pure () <|> (lookAhead eof))
 
 
+some' :: Parser a -> Parser (NonEmpty.NonEmpty a)
+some' p = do
+  first <- p
+  rest  <- many p
+  pure $ first NonEmpty.:| rest
+
 
 getRight :: Either (ParseErrorBundle String Void) b -> b
 getRight (Right b  ) = b
 getRight (Left  err) = error $ errorBundlePretty err
 
 justUnsafe (Just a) = a
-expression' :: Parser Int
-expression' = 
-  (try $ do
-    n1 <- number'
-    char '+'
-    n2 <- expression'
-    pure (n1 + n2))
-  <|> try number'
-  
-number' :: Parser Int
-number' = do
-  i <- some digitChar
-  pure . justUnsafe . (readMay :: String -> Maybe Int) $ i
 
 --parseSomething :: Stream s => s -> StateT ParserState (Parsec e s) a -> Either (ParseErrorBundle s e) a
+
 parseSomething text parser = (runParser (evalStateT (parser <* eof) (ParserState 0)) "no_file" text)
 
 
 noNewlineOrChars :: (MonadParsec e s m, Token s ~ Char) => [Char] -> m (Token s)
 noNewlineOrChars c = noneOf ('\n' : c)
+
+
