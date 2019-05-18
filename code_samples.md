@@ -476,11 +476,11 @@ A String is a sequence of Unicode scalar values encoded as a stream of UTF-8 byt
 All Strings are guaranteed to be a valid encoding of UTF-8 sequences. 
 Additionally, unlike some languages, Strings are not null-terminated and can contain null bytes. 
 Strings are allowed to span multiple lines, and are indentation-sensitive 
-They can also contain inline expressions with and {s expr }. 
+They can also contain inline expressions with and {expr}. 
 
     my-val = 3
-    my-string = "3 + 3 is {s 3 + 3 }" -- toString is called on the output of `3 + 3` and then concatenated to the rest of the String
-    my-string = "My name is {s "E. Cummings".toLowercase }" 
+    my-string = "3 + 3 is {3 + 3}" -- toString is called on the output of `3 + 3` and then concatenated to the rest of the String
+    my-string = "My name is {"E. Cummings".toLowercase}" 
     my-string = "Line 1 
                  Line 2" -- equivalent to "Line 1\nLine2"
     my-string = "Line 1\ 
@@ -586,24 +586,29 @@ Is that type-wrappers are guaranteed to be equivalent at runtime. This means you
 
 Used for creating a new ADT 
 
-    type Bool = True  : Bool 
-              | False : Bool
-    type CarBrand = GM     : CarBrand
-                  | Ford   : CarBrand
-                  | Toyota : CarBrand
-    type Car = Car : CarBrand -> Year -> Car
-    type Person = Person : Name -> List<Car> -> Person
-    type IntList = EmptyIntList : IntList 
-                 | Cons         : Int -> IntList -> IntList -- Recursive data types are allowed, but only "one level deep". 
+    type Bool where
+                True  : Bool 
+                False : Bool
+    type CarBrand where
+                    GM     : CarBrand
+                    Ford   : CarBrand
+                    Toyota : CarBrand
+    type Car where Car : CarBrand -> Year -> Car
+    type Person where Person : Name -> List<Car> -> Person
+    type IntList where
+                   EmptyIntList : IntList 
+                   Cons         : Int -> IntList -> IntList -- Recursive data types are allowed, but only "one level deep". 
                                                      -- This restriction also applies to functions, as we'll discuss later
 
 parameterized types
 
-    type Optional(a) = Nothing : Optional<a> 
-                     | Just    : a -> Optional<a>
+    type Optional(a) where
+                       Nothing : Optional<a> 
+                       Just    : a -> Optional<a>
 
-    type Result(e, r) = Error  : e -> Result<e, r> 
-                      | Result : r -> Result<e, r>  
+    type Result(e, r) where
+                        Error  : e -> Result<e, r> 
+                        Result : r -> Result<e, r>  
 
 ## Synonyms
 
@@ -639,7 +644,7 @@ of the collection. This just means that for any `c : Type given Collection(c)`, 
 
 Usage of tuples is typically discouraged but they can sometimes make code simpler. Tuples cannot have more than 64 values.
 
-    {* "Hello", 2 *} : {- String, Int *}
+    {* "Hello", 2 *}: {* String, Int *}
 
 These spaces are required
 
@@ -720,7 +725,7 @@ Records have 3 operations that work on them:
         fst.without-i     -- { f = 3.5 }
                           -- without-i : { i : a, ...r } -> { ...r }
 
-There's also some convencience syntax sugar for updating values
+There's also some convenience syntax sugar for updating values
 
     fst = { i = 4, f = 3.5 }
     fst{ i = 3 } -- { i = 3, f = 3.5 }
@@ -735,23 +740,35 @@ To apply a function to a nested value, you can use `$=`
     snd = { i = { b = { c = 4 } } }
     snd{ i.b.c $= _.plus(1) }      -- { i = { b = { c = 5 } } }
 
-You can write a function that takes a record, if you want.
+You can write a function that takes a record, if you want. (`@` gets the value of a record)
+
+    getName: { name: String } -> String 
+    r.getName = r.name
+
+Type variables can take the place of some elements in a record:
 
     getName : { name : String, ...l } -> String 
     r.getName = r.name
 
-The "...l" is a type variable. This means it can take the place of literally any other record (including records that have a `name` key in them, as duplicate keys are allowed).
+`l` can take the place of literally any other values, so this function works on every record with a `name` field.
 
-You can perform pattern matching on records, as you might expect.
+You can perform pattern matching on records, as you might expect. Excess values are matched with `...<identifier>`.
 
     changeNameUnlessNamedSteve : { name : String, ...l } -> Bool
     r.changeNameUnlessNamedSteve = match r 
         { name = "Steve", ...r } -> { name = "Steve", ...r }
         { name = _, ...r }       -> { name = "Mike", ...r }
 
+A field with name `<name>` may be matched just by putting it in there
+
+    changeNameUnlessNamedSteve: { name: String, ...l } -> Bool
+    r.changeNameUnlessNamedSteve = match r
+        { name = "Steve", title, ...r } -> { name = title <> "Steve", title, ...r }
+        { title, ...r }       -> { name = title <> "Mike", title, ...r }
+
 Example of a function that modifies the name field of a record
 
-    addJrSuffix : { name : String | r } -> { name : String | r }
+    addJrSuffix : { name : String, ...r } -> { name : String, ...r }
     addJrSuffix hasName = hasName{name $= _.concat(", Jr.") }
     addJrSuffix { name = "Bob" }                -- { name = "Bob, Jr." }   
     addJrSuffix { age = 42, name = "Gerald" }   -- { age = 42, name = "Gerald, Jr." }   
@@ -787,7 +804,7 @@ In general, two record types are equal if they contain the same `key : type` pai
     
     fst.without-x.x = True
     snd.without-x.x = 2
-    snd.without-x.x = False
+    frth.without-x.x = False
 
     -- if you had a function of type  `{ x : Int, x : Bool } -> Bool`, you would not be able to pass it `snd`.
 
@@ -831,7 +848,7 @@ These can be pattern matched with `match`, naturally.
         {+ bar = b +} ->: b.length
 
     -- if it's open, you must have a wildcard element
-    getFooOrBarLength : {+ foo : String, bar : String | l +} -> Int 
+    getFooOrBarLength : {+ foo : String, bar : String, ...l +} -> Int 
     r.getFooOrBarLength = match r:
         {+ foo = f +} ->: f.length
         {+ bar = b +} ->: b.length

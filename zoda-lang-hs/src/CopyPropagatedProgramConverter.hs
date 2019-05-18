@@ -8,9 +8,12 @@ import qualified Data.Map.Justified as Map
 import qualified Data.Map as Unjustified.Map
 import Capability.Error
 
-data Metavariable = MetavariableApplication Int [Metavariable] 
+data Metavariable = TypechecksOkay{-MetavariableApplication Int [Metavariable] 
                   | Metavariable Int 
-                  | Constant Int
+                  | Constant Int-}
+
+
+
 
 createMapOfIdentifiersToValues :: (HasThrow "perr" (ProductionError t p i) m, Ord i)	=> Module t p i -> (forall ph. Map.Map ph i (Expression t p (Map.Key ph i)) -> m out) -> m out
 createMapOfIdentifiersToValues (Module _ declarations _) continuation = handleMapOutput mapOutput 
@@ -27,13 +30,19 @@ getMainFunc moduleAST m = case "main" `Map.member` m of
   Nothing -> throw @"perr" . NoMain $ moduleAST
   Just i -> pure $ Map.lookup i m
 
+
+--typeCheck :: (Ord k, IsString k, HasThrow "perr" (ProductionError t p i) f) => Map.Map ph k (Module u p i) -> m (Map.Map ph k (Module Metavariable p i))
+{-typeCheck m = (flip mapM) m $ \case 
+  FunctionLiteralExpression (FunctionLiteral t p i) t p -> pure TypechecksOkay
+_ -> pure TypechecksOkay-}
+
 evaluateMain :: (Ord k, Eq t, Eq p) => Map.Map ph k (Expression t p (Map.Key ph k)) -> Ast.Expression t p (Map.Key ph k) -> Ast.Expression t p (Map.Key ph k)
 evaluateMain identValMap mainFunc =  fullyReduce mainFunc
   where
-    reduceExpression e@(NumberLiteral _ _ _) = e 
+    reduceExpression e@(NumberLiteral _ _ _) = e
     reduceExpression (IdentifierExpression (LowercaseIdentifier ident _) _ _) = Map.lookup ident identValMap
     reduceExpression e = e
-    fullyReduce e = if reduceExpression e == e 
+    fullyReduce e = if reduceExpression e == e
                       then e
                       else fullyReduce (reduceExpression e)
 
