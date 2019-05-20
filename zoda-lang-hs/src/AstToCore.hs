@@ -30,7 +30,6 @@ mapToCore exprMap = Core.Program (fmap (cata mapToCoreF) exprMap)
   where 
     mapToCoreF :: ExpressionF t p (Map.Key ph i) (Core.Expression ph t p i) 
                -> (Core.Expression ph t p i)
-    mapToCoreF (ParenthesizedExpressionF coreExpr t p)  = Core.ParenthesizedExpression coreExpr t p
     mapToCoreF (NumberLiteralF i t p)                   = Core.NumberLiteral i t p
     mapToCoreF (IdentifierExpressionF ident t p)        = Core.IdentifierExpression ident t p
     mapToCoreF (FunctionLiteralExpressionF flit t p)    = Core.LambdaExpression (error "not implemented yet") t p

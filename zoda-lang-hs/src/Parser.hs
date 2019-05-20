@@ -63,13 +63,13 @@ expressionP = funcAppOnParenthesized <|> funcAppOnNum <|> funcAppOnFliteral <|> 
       string "."
       f <- expressionP
       pure (f, [applicant])
-  parenthesizedExpression = sourcePosWrapper . try $ do
+  parenthesizedExpression = try $ do
     char '('
     many separatorChar
     exp <- expressionP
     many separatorChar
     char ')'
-    pure (ParenthesizedExpression exp Untyped)
+    pure (exp)
 
   numb = sourcePosWrapper . try $ do
     numb <- numberLiteralP

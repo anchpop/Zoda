@@ -15,11 +15,11 @@ data ModuleHeader t p i = ModuleHeader (LowercaseIdentifier t p i) (Tinydoc t p 
 
 data Declaration t p i = Declaration (LowercaseIdentifier t p i) (Expression t p i) p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
 
-data Expression t p i = ParenthesizedExpression (Expression t p i) t p 
-                    | NumberLiteral Rational t p 
-                    | IdentifierExpression (LowercaseIdentifier t p i) t p 
-                    | FunctionLiteralExpression (FunctionLiteral t p i) t p 
-                    | FunctionApplicationExpression (Expression t p i) [Expression t p i] t p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
+data Expression t p i = NumberLiteral Rational t p 
+                      | IdentifierExpression (LowercaseIdentifier t p i) t p 
+                      | FunctionLiteralExpression (FunctionLiteral t p i) t p 
+                      | FunctionApplicationExpression (Expression t p i) [Expression t p i] t p 
+                      deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
 
 
 data FunctionLiteral t p i = FunctionLiteral [LowercaseIdentifier t p i] (Expression t p i) p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
