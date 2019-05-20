@@ -8,14 +8,31 @@ import qualified Data.Map.Justified as Map
 import qualified Data.Map as Unjustified.Map
 import Capability.Error
 
-data Metavariable = TypechecksOkay{-MetavariableApplication Int [Metavariable] 
-                  | Metavariable Int 
-                  | Constant Int-}
+data Info = Info String
+data Ty = TyVar Int
+        | TyArr Ty Ty
+        | TyAll String Ty
+        | TySome String Ty
+data Binding = NameBind
+           | VarBind Ty
+           | TyVarBind
+data Term = TmVar Info Int Int
+          | TmAbs Info String Ty Term
+          | TmApp Info Term Term
+          | TmTAbs Info String Term
+          | TmTApp Info Term Ty
+          | TmPack Info Ty Term Ty
+          | TmUnpack Info String String Term Term
 
 
 
 
-createMapOfIdentifiersToValues :: (HasThrow "perr" (ProductionError t p i) m, Ord i)	=> Module t p i -> (forall ph. Map.Map ph i (Expression t p (Map.Key ph i)) -> m out) -> m out
+
+typeCheck = undefined
+
+
+
+createMapOfIdentifiersToValues :: (HasThrow "perr" (ProductionError t p i) m, Ord i) => Module t p i -> (forall ph. Map.Map ph i (Expression t p (Map.Key ph i)) -> m out) -> m out
 createMapOfIdentifiersToValues (Module _ declarations _) continuation = handleMapOutput mapOutput 
   where
     mapOutput = Map.withRecMap (Unjustified.Map.fromList declarationList) continuation
@@ -41,6 +58,7 @@ evaluateMain identValMap mainFunc =  fullyReduce mainFunc
   where
     reduceExpression e@(NumberLiteral _ _ _) = e
     reduceExpression (IdentifierExpression (LowercaseIdentifier ident _) _ _) = Map.lookup ident identValMap
+    reduceExpression (FunctionLiteralExpression (FunctionLiteral boundIdentifiers subExpression _) _ _) = undefined
     reduceExpression e = e
     fullyReduce e = if reduceExpression e == e
                       then e
@@ -49,6 +67,7 @@ evaluateMain identValMap mainFunc =  fullyReduce mainFunc
 example :: String
 example = "module i `test module`\n\
           \test = -3.6\n\
+          \myfunc = |a| -> a\n\
           \main = test\n\
           \"
 
