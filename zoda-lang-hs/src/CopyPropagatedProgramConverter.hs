@@ -6,6 +6,7 @@ import Ast
 import qualified CopyPropagatedProgram as CPP
 import qualified Data.Map.Justified as Map
 import qualified Data.Map as Unjustified.Map
+import qualified Data.Set as Set
 import Capability.Error
 
 data Info = Info String
@@ -24,27 +25,32 @@ data Term = TmVar Info Int Int
           | TmPack Info Ty Term Ty
           | TmUnpack Info String String Term Term
 
-
-
-
-
 typeCheck = undefined
 
-
-
-createMapOfIdentifiersToValues :: (HasThrow "perr" (ProductionError t p i) m, Ord i) => Module t p i -> (forall ph. Map.Map ph i (Expression t p (Map.Key ph i)) -> m out) -> m out
-createMapOfIdentifiersToValues (Module _ declarations _) continuation = handleMapOutput mapOutput 
+checkNoUnreferencedValues :: (HasThrow "perr" (ProductionError t p i) m, Ord i) => Module t p i -> m ()
+checkNoUnreferencedValues (Module _ declarations _) = case allMissingReferences of
+    [] -> pure ()
+    _  -> throw @"perr" (UndeclaredValuesReferenced allMissingReferences)
   where
-    mapOutput = Map.withRecMap (Unjustified.Map.fromList declarationList) continuation
-    handleMapOutput (Left missingReferences) = throw @"perr" . UndeclaredValuesReferenced $ fmap convertError missingReferences
-      where convertError (k, f) = (k, fmap fst f)
-    handleMapOutput (Right output) = output
-    extractDec (Declaration (LowercaseIdentifier identifierName _) expression _) = (identifierName, expression)
-    declarationList = fmap extractDec declarations 
+    allMissingReferences = allReferencesInModule >>= checkNoUnreferencedValuesInternal allTldsInModule
+
+    allTldsInModule = Set.fromList $ fmap (\(Declaration (LowercaseIdentifier ident _) _ _) -> ident) declarations
+    allReferencesInModule = (fmap (\(Declaration _ expression _) -> expression) declarations)
+
+    checkNoUnreferencedValuesInternal vset (NumberLiteral i t p)
+      = []
+    checkNoUnreferencedValuesInternal vset (IdentifierExpression (LowercaseIdentifier ident p) _ _)
+      = if ident `member` vset 
+          then []
+          else [LowercaseIdentifier ident p] 
+    checkNoUnreferencedValuesInternal vset (FunctionLiteralExpression (FunctionLiteral identifiers (expression) _) _ _)
+      = checkNoUnreferencedValuesInternal (vset <> (Set.fromList $ fmap (\(LowercaseIdentifier i _) -> i) identifiers)) expression
+    checkNoUnreferencedValuesInternal vset (FunctionApplicationExpression fBeingApplied arguments _ _) 
+      = (checkNoUnreferencedValuesInternal vset fBeingApplied) <> (arguments >>= checkNoUnreferencedValuesInternal vset)
 
 getMainFunc :: (Ord k, IsString k, HasThrow "perr" (ProductionError t p i) f) => Module t p i -> Map.Map ph k a -> f a
 getMainFunc moduleAST m = case "main" `Map.member` m of
-  Nothing -> throw @"perr" . NoMain $ moduleAST
+  Nothing -> throw @"perr" (NoMain moduleAST)
   Just i -> pure $ Map.lookup i m
 
 
@@ -67,13 +73,16 @@ evaluateMain identValMap mainFunc =  fullyReduce mainFunc
 example :: String
 example = "module i `test module`\n\
           \test = -3.6\n\
-          \myfunc = |a| -> a\n\
+          \myfunc = |a| -> (|b| -> a)\n\
           \main = test\n\
           \"
 
 -- runM (parseModule example >>= produceProgram)
-produceProgram moduleAST = do
-  createMapOfIdentifiersToValues moduleAST $ \valueMap -> do 
+produceProgram moduleAST = do 
+  checkNoUnreferencedValues moduleAST
+  pure ()
+  {-createMapOfIdentifiersToValues moduleAST $ \valueMap -> do 
+    
     mainFunc <- getMainFunc moduleAST valueMap
     let (NumberLiteral n _ _) = evaluateMain valueMap mainFunc
-    pure n
+    pure n-}

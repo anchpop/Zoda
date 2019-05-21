@@ -29,6 +29,8 @@ data Tinydoc t p i = Tinydoc Text p deriving (Show, Read, Eq, Ord, Functor, Fold
 data LowercaseIdentifier t p i = LowercaseIdentifier i p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
 data UppercaseIdentifier t p i = UppercaseIdentifier i p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
 
+
+
 data Untyped = Untyped deriving (Show, Read, Eq, Ord)
 
 makeBaseFunctor ''Expression

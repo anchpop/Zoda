@@ -9,7 +9,7 @@ import Basic
 import Ast 
 import qualified Core
 
-
+{-
 createMapOfIdentifiersToValues :: (HasThrow "perr" (ProductionError t p i) m, Ord i) => Module t p i -> (forall ph. Map.Map ph i (Expression t p (Map.Key ph i)) -> m out) -> m out
 createMapOfIdentifiersToValues (Module _ declarations _) continuation = handleMapOutput mapOutput 
   where
@@ -34,3 +34,4 @@ mapToCore exprMap = Core.Program (fmap (cata mapToCoreF) exprMap)
     mapToCoreF (IdentifierExpressionF ident t p)        = Core.IdentifierExpression ident t p
     mapToCoreF (FunctionLiteralExpressionF flit t p)    = Core.LambdaExpression (error "not implemented yet") t p
     mapToCoreF (FunctionApplicationExpressionF _ _ _ _) = error "not implemented yet"
+    -}
