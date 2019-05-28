@@ -64,6 +64,22 @@ Zoda supports both of the manners in which you are likely accustomed to calling 
 
 Althought he former (called UFCS) is preferred in the vast majority of cases. Since the two are basically equivalent, the fomatter may decide for you which to use.  
 
+If you want to curry a function, you can also use `...`:
+
+    myFunc = pow(2, ...)
+   
+This returns a function that takes `4` and outputs the result of `pow(2, 4)`. If a function expects additional functions *according to its written type signature* then you must either use `...`, `_`, or give it all the parameters it expects. For example:
+
+   id : (a : Type) @-> a -> a
+   id(x) = x
+   myfunc : Int -> Int
+   myfunc(a) = a + 1
+   id(myfunc) -- id only takes one parameter so you only need to give it one. 
+   
+   -- Let's specialize the id function
+   id' : (Int -> Int) -> Int -> Int -- equivalent to (Int -> Int) -> Int -> Int
+   id'(myfunc, 3) == 4
+   
 
 ## Function Creation
 
