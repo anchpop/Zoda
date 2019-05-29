@@ -80,6 +80,63 @@ This returns a function that takes `4` and outputs the result of `pow(2, 4)`. If
    id' : (Int -> Int) -> Int -> Int -- equivalent to (Int -> Int) -> Int -> Int
    id'(myfunc, 3) == 4
    
+## Uniqueness
+
+Each type has a "Uniqueness attribute". I haven't been writing what them elsewhere because I'm still figuring it out. A uniqueness attribute is either `Unique` or `Borrowed`. These have the kind `UA` (Uniqueness Attribute). Base types, like `Int` and `Bool`, have kind `T`. Types, as you would expect, have kind `Type`.
+
+This does not come up when writing an ordianry polymorphic function:
+
+    id : (a : Type) @-> a -> a
+
+But, to be polymorphic over `Type`, your function must follow the restrictions placed by both `Unique` and `Borrowed`. This essentially means values may be `consumed` at most once - they can be passed without worry to any function which takes a `Borrowed`, but can only be passed once to a function which takes a `Unique`.
+
+The classic example is the `write` function, which takes an array, an index, and a value, and returns a new array which has the updated value.
+
+    [10, 20].write(1, 2) == [10, 2]
+   
+For efficiency, `write` takes a unique array. This means that the value can be updated in place, as there is only one reference at runtime to any unique value at the time the function is called.
+
+    [10, 20].write(1, 2).write(0, 1) == [1, 2] -- both `write` operations performed in-place, no copying and no garbage to be collected.
+    
+The other attribute is `Borrowed`, which represents a value for which there may be multiple references at runtime. You cannot pass a `Borrowed` value to a function which expects a `Unique`. 
+
+Here is an example of the type of `write`:
+
+    write : Array^Unique -> Int -> Int -> Array
+
+The `^Unique` means that the value must be `Unique` - the values without a tag represent them being polymorphic in their uniqueness. This means that you must use them in a way that is consistent with them being either `Unique` or `Borrowed`, which pretty much just means that inside the function you must act as if they're a borrowed value.
+
+If you want to require that a parameter be borrowed, naturally you can use `^Borrowed`. You also could require that the output be `Unique`.
+
+    write : Array^Unique -> Int^Borrowed -> Int^Borrowed -> Array^Unique
+    
+The only time you should use this is when you have to guarantee that the return value is used uniquely, for some reason. A value is either unique or borrowed, but in the prior case it is left ambiguous using universal quantification. `Int` is actually syntax sugar for `(u : UA) @-> Int^u` - it can be parameterized with `Unique` or `Borrowed` depending on the situation. This simulates the intutitive fact that if a function expects a borrowed value, you may pass it a unique, but not the other way around.
+
+Also, a tip: the type of `->` is a bit tricky: if the positive position is a unique type (and it's used in the function body), then the type of `->` is also unique, and unique functions can only be applied once. If this were not the case, you would be able to do sneaky things like this:
+
+    one-up-one-down : (a : T) @-> a^Unique -> {fst: a^Unique, snd: a^Unique}
+    one-up-one-down(x) = (|f| -> {fst: f Unit, snd: f Unit})(const(x, _))
+        where
+            const(a, b) = a
+            
+This does not use `x` multiple times, which is the requirement - however, it does use `f` twice, and since `x` is of a unique type, that means `f` must be `unique` as well, which means this won't typecheck. This is all done pretty much automatically for you. Here's the type signature of `const`:
+
+    const : (a : Type) @-> (b : Type) @-> a -> b -> a
+    const(a, b) = a
+
+This looks simple because a lot of the work is being done by the kind system. Specifically `->` is automatically unique if its positive position is unique. Other cases like records and corecords are unique when any of their values are unique. While this is helpful, you might need to have more control over uniqueness types (such as when making your own types), so you can pass them in manually:
+
+    storeBoth : (u : UA) @-> Int^u -> Int^u -> (Int^u, Int^u)
+    
+To implement something like a pair yourself, you can take advantage of the fact that boolean operations work on Uniqueness types (where `Unique` is seen as `True` and `Borrowed` is seen as `False`). Here's how to make a pair type that is unique if any of its elements are unique:
+
+    data Pair(a, b) : (a : T) @-> (au : UA) @-> (b : T) @-> (bu : UA) @-> a^au -> b^bu -> T^(au or bu) where
+        mkPair : (a : Type) @-> (b : Type) -> a -> b -> Pair(a, b)
+        
+God, this is verbose. Luckily I'm pretty sure that this should be inferable 99% of the time and you won't actually have to write it. If it could be inferred, this is what it looks like:
+
+    data Pair(a, b) where
+        mkPair : (a : Type) @-> (b : Type) -> a -> b -> Pair(a, b)
 
 ## Function Creation
 
@@ -120,9 +177,9 @@ The last section had a function that worked on any type that has the trait `Adda
    
 `@` is used to denote an implicit parameter. All functions are always parametric with respect to their implicit parameters (never branch based on them or otherwise observe their value directly). One may pass implicit variables explicitly, like this: `equals(@Int, 3, 4)`. 
 
-The `given` section describes the constraints that are placed on variables on the function. These can be simple or complex. For example:
+The `precondition` section describes the constraints that are placed on variables on the function. These can be simple or complex. For example:
 
-    get-index : (e : Type) @-> List(e) -> (n : Int) -> e given
+    get-index : (e : Type) @-> List(e) -> (n : Int) -> e precondition
                   length(list) > n
                   n > 0
 
@@ -131,14 +188,14 @@ This ensures that finding the `n`th element of the list with `get-index` will ne
 There are two more things we can do with type signatures, to further their explanatory power. We can create an error type (which is not actually used directly by the function):
 
     type ListIndexAccessError = NegativeIndex | IndexOutOfBounds
-    get-index : (e : Type) @-> (l : List(e)) -> (index : Int) -> e given
+    get-index : (e : Type) @-> (l : List(e)) -> (index : Int) -> e precondition
                   length(l) > n, IndexOutOfBounds
                   n > 0        , NegativeIndex 
 
 Finally, we can give a description of the cause of the error in backticks. This is a tiny-doc, which will be touched on more later:
 
     type ListIndexAccessError = NegativeIndex | IndexOutOfBounds
-    get-index : (e : Type) @-> (l : List(e)) -> (index : Int) -> e given
+    get-index : (e : Type) @-> (l : List(e)) -> (index : Int) -> e precondition
                   length(l) > n, IndexOutOfBounds, `You cannot access index {n} of {l} because 
                                                     it is only {length(l)} long.`
                   n > 0        , NegativeIndex   , `You cannot access the negative index {n} of {l}.`
@@ -155,8 +212,8 @@ Names can only be used "after" they're bound.
 
 In addition to `given`, there is also `post-condition`:
 
-add : (a : Int) -> (b : Int) -> (result : Int) post-condition 
-    if b > 0 then result > a else True
+    add : (a : Int) -> (b : Int) -> (result : Int) post-condition 
+        if b > 0 then result > a else True
 
 ## Function chaining
 
@@ -364,7 +421,7 @@ You can have as many of these as you want.
 And to contain multiple tests, use do notation again
 
     a.plus-one = a + 1
-      test do:
+      test
         Can add one to positive values
         >> 2.plus-one
         -> 3
@@ -386,19 +443,8 @@ If you know you haven't implemented the functionality for a test yet, just make 
         -> 3
         
         Can increment to positive values
-        >>pending -2.plus-one
-        -> -3
-
-If a test must pass
-
-    a.incrementAbsoluteValue = a + 1
-      test do:
-        Can increment to positive values
-        >> 2.plus-one 
-        -> 3
-        
-        Can increment to positive values
-        >>critical -2.plus-one
+        >>pending "incrementing negative values is currently not allowed"
+        >> -2.plus-one
         -> -3
 
 
@@ -516,7 +562,7 @@ These contain newlines but still need indentation:
                     test"### -- equivalent to "test\ntest"
 
 
-## recursion
+## Recursion
 
 Zoda does not allow unrestricted recursion. The reason is that unrestricted recursion makes it easy to create a stack explosion:
 
@@ -525,26 +571,23 @@ Zoda does not allow unrestricted recursion. The reason is that unrestricted recu
         1 -> 1 
         x -> (x - 1).fib + (x - 2).fib
 
-This is bad because `100000.fib` will result in a stack overflow, which is a form of runtime exception. Since Zoda attempts to make runtime exceptions very rare,
-we need a way to prevent this. There is a way to do recursion without running the risk of a stack overflow - if the recursive call is returned immediately,
-its very simple for the compiler to unroll it into a loop which will not result in unbounded growth of the stack. 
+This is bad because `100000.fib` will result in a stack overflow, which is a form of runtime exception. Since Zoda attempts to make runtime exceptions very rare, we need a way to prevent this. There is a way to do recursion without running the risk of a stack overflow, though. If the result of the recursive call is returned immediately, its very simple for the compiler to unroll it into a loop which will not result in unbounded growth of the stack. 
 
     x.fib = internalFib x 0 1 
-        where internalFib(counter, y,z) = match counter:
+        where internalFib(counter, y, z) = match counter:
             0       ->: z
             counter ->: internalFib(counter - 1, z, y+z)
 
-so, we can prevent unbounded growth of the stack by disallowing all recursion that is not tail recursion. But, this is annoying because it means recursive calls are 
-"special". I think this would be easier to teach to people if we used a special keyword for tail calls. I'm thinking `and-recurse`.
+so, we can prevent unbounded growth of the stack by disallowing all recursion that is not tail recursion. But, this is annoying because it means recursive calls are  "special". I think this would be easier to teach to people if we used a special keyword for tail calls. I'm thinking `and-recurse`.
 
     x.fib = internal-fib x 0 1 
         where internalFib(counter, y,z) = match counter:
             0       ->: z
             counter ->: and-recurse(counter - 1, z, y+z)
 
-so `and-recurse` is a special function that calls the function it's used in. The compiler will not let you do anything to a the output of the `and-recurse` function, this ensures TCE can be performed. The `and-recurse` function is the only situation where recursion is possible - all other functions form a DAG of their dependencies. 
+so `and-recurse` is a special function that calls the function it's used in. The compiler will not let you do anything to a the output of the `and-recurse` function, this ensures TCE can be performed. The `and-recurse` function is the only situation where recursion is possible - besides this, all functions form a DAG of their dependencies (this means no mutual recursion). 
 
-Also polymorphic recursion not allowed for performance reasons (prevents you from monomorphizing).
+Also polymorphic recursion is not allowed for performance reasons (prevents monomorphization).
 
 The one exception to the "you can't do anything to the output of the `and-recurse` function" rule is functions with the tag `Chainable`. This doesn't blow up the stack because the `Chainable` tag includes instructions on how to compute an intermediate value. `+`, `*` and `Cons` are examples of Chainable.
 
