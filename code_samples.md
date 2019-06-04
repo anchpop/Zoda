@@ -662,6 +662,21 @@ A `safe-wrapper-over-unsafe` tag could be used to allow a value to reference val
         tags
             safe-wrapper-over-unsafe
             
+A `chainable` tag could be used to allow more ergonomic tail-recursion:
+
+    cons(x, xs) = x.Prepend(xs)
+        tags
+            chainable({
+                        start-flattened  = \(a)    -> (\x -> a.Prepend(x)),
+                        append-flattened = \(c, a) -> (\x -> c(a) ++ x),
+                        expand           = \(c, b) -> c(b)
+                     })
+                     
+    -- This function can be made stack-safe by transforming it to be tail-recursive. 
+    map(xs, f) = match xs with
+        x.Prepend(Nil) -> x.f.Prepend(Nil)
+        x.Prepend(xs) -> x.f.cons(and-recurse(xs, f))
+    
 
 
 ## type declarations and ADTs
