@@ -189,31 +189,44 @@ There are two more things we can do with type signatures, to further their expla
 
     type ListIndexAccessError = NegativeIndex | IndexOutOfBounds
     get-index : (e : Type) @-> (l : List(e)) -> (index : Int) -> e precondition
-                  length(l) > n, IndexOutOfBounds
-                  n > 0        , NegativeIndex 
+                  length(l) > n, index-out-of-bounds
+                  n > 0        , negative-index 
 
-Finally, we can give a description of the cause of the error in backticks. This is a tiny-doc, which will be touched on more later:
+Finally, we can give a description of the cause of the error in backticks, and information that might be useful for error-catching. The backtick'd message is a tiny-doc, which will be touched on more later:
 
-    type ListIndexAccessError = NegativeIndex | IndexOutOfBounds
     get-index : (e : Type) @-> (l : List(e)) -> (index : Int) -> e precondition
-                  length(l) > n, IndexOutOfBounds, `You cannot access index {n} of {l} because 
+                  length(l) > n, index-out-of-bounds, {length: length(l), index: n}, `You cannot access index {n} of {l} because 
                                                     it is only {length(l)} long.`
-                  n > 0        , NegativeIndex   , `You cannot access the negative index {n} of {l}.`
+                  n > 0        , negative-index   , {index: n}, `You cannot access the negative index {n} of {l}.`
 
 These show up when the condition is *not* satisfied for whatever reason. The message in the backtics is used to give a more human-friendly explanation of the error and why it exists than that which can be generated automatically.
 
 (Trait constraints don't get an error-doc or the ability to add an error type)
 
-For any function where you *don't* want to bother making sure the constraints are satisfied, you can just add a `?` to the end of the function name. This makes a function that returns a result type that indicates if the constraints were not found to hold at runtime, or contains the result otherwise. For result types that support it, it can also contain some more detailed information inside a `DebugInfo`, containing the interpolated tiny-doc, the stack trace, all the arguments to the function, etc. Obviously, this would only be done in development builds. This would seem impure, but since the contents of a `DebugInfo` can never affect the execution of a program it's probably fine.
+For any function where you *don't* want to bother making sure the constraints are satisfied, you can just add a `?` to the end of the function name. This makes a function that returns a result type that indicates if the constraints were not found to hold at runtime, or contains the result otherwise. For result types that support it, it can also contain some more detailed information inside a `DebugInfo`, containing the interpolated tiny-doc, the stack trace, all the arguments to the function, etc. Obviously, this would only be done in development builds. This would seem impure, but since the contents of a `DebugInfo` can never affect the execution of a program it's probably okay.
 
-Names can only be used "after" they're bound. 
+Names bound in type signatures can only be used "after" they're bound. 
 
 (Note that when you're actually defining a function, the names of parameters inside the type need to match the names of parameters to your function, or a warning will be emitted)
 
-In addition to `given`, there is also `post-condition`:
+In addition to `precondition`, there is also `post-condition`:
 
     add : (a : Int) -> (b : Int) -> (result : Int) post-condition 
         if b > 0 then result > a else True
+        
+Shorthand for `if x then y else True` is the `==>` operator:
+
+    add : (a : Int) -> (b : Int) -> (result : Int) post-condition 
+        b > 0  ==>  result > a 
+        
+Putting a `?` after the name of a function will allow you to use it with values that are not known to match those predicates at runtime, but if they do not match the predicate it will return an error value, and if they do it will return a result value. The error value will be a corecord (polymorphic variant) containing the first mismatched predicate found (predicates are checked in the order in which they appear).
+
+    get-name-from-id(id) = match nameAccess with
+            name.Res                          -> print("The name for id {id} is {name}.")
+            {+ index-out-of-bounds = * +}.Err -> print("The id {id} was not present in our database.")
+            {+ negative-index      = * +}.Err -> print("Negative ids are not permitted.")
+        where
+            nameAccess = nameList.get-index?(id)
 
 ## Function chaining
 
@@ -264,7 +277,7 @@ These use indentation for alignment to support nesting. They have similar syntax
 This is equivalent to
 
     lower-bound(a, b) = 
-      match a > b
+      match a > b with
         True  -> a
         False -> b
 
@@ -452,19 +465,19 @@ If you know you haven't implemented the functionality for a test yet, just make 
 
 You can do a full `match`, like so:
 
-    a.luckyNumber7 = match a
+    a.luckyNumber7 = match a with
       7 -> putString("Lucky number 7!")
       * -> putString("sorry, you are a loser")
-    l.head = match l
+    l.head = match l with
       x.Cons(*) -> x.Just
       *         -> nothing 
 
 All pattern matches must be exhaustive to perform an optimized build - this is to keep the convenient fact that optimized Zoda builds have no runtime errors in practice.
 
-`_` can also be used with `match`
+`_` can also be used with `match` to create a match function. If you don't care about the value of something that might be matched, use `*` to indicate a wildcard.
 
-    [Just 3, Nothing].filter(_) <| match _
-      Just _ -> True
+    [Just 3, Nothing].filter(_) <| match _ with
+      Just(*) -> True
       Nothing -> False                        
 
 A common pattern is to do a pattern match to see if a value is matches a pattern, and to return some kind of "true" result if it is, and an error result if it isn't. `match-partial` exists to solve this need - it returns a value with the trait `Errorable` where successful matches are on the right an unsuccessful matches are on the left.
@@ -613,29 +626,43 @@ Although I expect `always-terminates` to not be that useful. We should be able t
 
 Other ideas:
 
-    x.plusOne = x + 1 
+A deprecation warning tag could be used to provide compile-time warnings when you use a deprecated function.
+
+    plusOne(x) = x + 1 
         tags
             deprication-warning("This function is being depricated, use `+ 1` instead.")
+           
+A `reversable` tag could be used to do some tricks such as allowing more advanced pattern matching, in theory:
+           
+    plus(x, y) = x + y
+        tags
+            reversable-in-first-argument ( \(result, x) -> result - x )
+            reversable-in-second-argument( \(result, y) -> result - y )
+            
+    -- later... 
+    
+    max-index + 1 = length(l) -- gets converted at compile time to max-index = length(l) - 1
+    
+An `unsafe` tag could be used to allow a value to reference other values that have the `unsafe` tag:
 
+    to-Int : Age -> Int
+    to-Int(age) = age.unsafeCoerce -- unsafeCoerce is a function that turns a 
+                                   -- value of one type into a value of any other type, with the same
+                                   -- represenation in memory. Since this could obviously call a segfault,
+                                   -- it's an unsafe function
+        tags
+            unsafe
+            
+A `safe-wrapper-over-unsafe` tag could be used to allow a value to reference values that have the `unsafe` tag, while being able to be referenced by safe values. The idea being that if you use `safe-wrapper-over-unsafe`, you *really* have made sure this function won't ever do unsafe stuff, even though it calls functions that could potentially be used in an unsafe way.
 
+    coerce : a -> b precondition 
+        Coercable(a, b)     -- the Coercable trait only relates types which are 
+                            -- guaranteed to have the same representation in memory
+    coerce(a) = a.unsafeCoerce
+        tags
+            safe-wrapper-over-unsafe
+            
 
-
-## type-wrapper 
-
-Equivalent to "newtype" in haskell
-
-    type-wrapper Year = Year Int
-    type-wrapper Name = Name String
-
-The difference between 
-
-    type-wrapper Year = Year Int
-
-and
-
-    type Year = Year Int
-
-Is that type-wrappers are guaranteed to be equivalent at runtime. This means you can use the `.coerce` function to wrap or unwrap types, even deeply nested ones. If a type is meant to be a container for values of some other type, you can give it the trait `representational` which allows you to use `.coerce` to change the types of values being contained - i.e. `[1, 2, 3].coerce == [3.Year, 2.Year, 3.Year]` works because lists have the `representational` trait. 
 
 ## type declarations and ADTs
 
@@ -649,21 +676,21 @@ Used for creating a new ADT
                     Ford   : CarBrand
                     Toyota : CarBrand
     type Car where Car : CarBrand -> Year -> Car
-    type Person where Person : Name -> List<Car> -> Person
-    type IntList where
-                   EmptyIntList : IntList 
-                   Cons         : Int -> IntList -> IntList -- Recursive data types are allowed, but only "one level deep". 
-                                                     -- This restriction also applies to functions, as we'll discuss later
+    type Person where Person : Name -> Car -> Person
 
-parameterized types
+Parameterized types
 
     type Optional(a) where
-                       Nothing : Optional<a> 
-                       Just    : a -> Optional<a>
+                       Nothing : Optional(a)
+                       Just    : a -> Optional(a)
 
     type Result(e, r) where
-                        Error  : e -> Result<e, r> 
-                        Result : r -> Result<e, r>  
+                        Error  : e -> Result(e, r) 
+                        Result : r -> Result(e, r)  
+                        
+Recursive types
+
+    -- Zoda 
 
 ## Synonyms
 
