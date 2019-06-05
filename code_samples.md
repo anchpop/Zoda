@@ -179,25 +179,28 @@ The last section had a function that worked on any type that has the trait `Adda
 
 The `precondition` section describes the constraints that are placed on variables on the function. These can be simple or complex. For example:
 
-    get-index : (e : Type) @-> List(e) -> (n : Int) -> e precondition
-                  length(list) > n
-                  n > 0
+    get-index : (e : Type) @-> List(e) -> (n : Int) -> e 
+        precondition
+            length(list) > n
+            n > 0
 
 This ensures that finding the `n`th element of the list with `get-index` will never fail, because it is statically guaranteed at runtime that the length of the list is greater than the index we're trying to access, and the index we're trying to access is not negative.
 
 There are two more things we can do with type signatures, to further their explanatory power. We can create an error type (which is not actually used directly by the function):
 
     type ListIndexAccessError = NegativeIndex | IndexOutOfBounds
-    get-index : (e : Type) @-> (l : List(e)) -> (index : Int) -> e precondition
-                  length(l) > n, index-out-of-bounds
-                  n > 0        , negative-index 
+    get-index : (e : Type) @-> (l : List(e)) -> (index : Int) -> e 
+        precondition
+             length(l) > n, index-out-of-bounds
+             n > 0        , negative-index 
 
 Finally, we can give a description of the cause of the error in backticks, and information that might be useful for error-catching. The backtick'd message is a tiny-doc, which will be touched on more later:
 
-    get-index : (e : Type) @-> (l : List(e)) -> (index : Int) -> e precondition
-                  length(l) > n, index-out-of-bounds, {length: length(l), index: n}, `You cannot access index {n} of {l} because 
+    get-index : (e : Type) @-> (l : List(e)) -> (index : Int) -> e 
+        precondition
+            length(l) > n, index-out-of-bounds, {length: length(l), index: n}, `You cannot access index {n} of {l} because 
                                                     it is only {length(l)} long.`
-                  n > 0        , negative-index   , {index: n}, `You cannot access the negative index {n} of {l}.`
+            n > 0        , negative-index   , {index: n}, `You cannot access the negative index {n} of {l}.`
 
 These show up when the condition is *not* satisfied for whatever reason. The message in the backtics is used to give a more human-friendly explanation of the error and why it exists than that which can be generated automatically.
 
@@ -211,13 +214,15 @@ Names bound in type signatures can only be used "after" they're bound.
 
 In addition to `precondition`, there is also `post-condition`:
 
-    add : (a : Int) -> (b : Int) -> (result : Int) post-condition 
-        if b > 0 then result > a else True
+    add : (a : Int) -> (b : Int) -> (result : Int) 
+        post-condition 
+            if b > 0 then result > a else True
         
 Shorthand for `if x then y else True` is the `==>` operator:
 
-    add : (a : Int) -> (b : Int) -> (result : Int) post-condition 
-        b > 0  ==>  result > a 
+    add : (a : Int) -> (b : Int) -> (result : Int) 
+        post-condition 
+            b > 0  ==>  result > a 
         
 Putting a `?` after the name of a function will allow you to use it with values that are not known to match those predicates at runtime, but if they do not match the predicate it will return an error value, and if they do it will return a result value. The error value will be a corecord (polymorphic variant) containing the first mismatched predicate found (predicates are checked in the order in which they appear).
 
@@ -628,16 +633,19 @@ Other ideas:
 
 A deprecation warning tag could be used to provide compile-time warnings when you use a deprecated function.
 
-    plusOne(x) = x + 1 
+    plusOne :: Int -> Int
         tags
             deprication-warning("This function is being depricated, use `+ 1` instead.")
+    plusOne(x) = x + 1 
            
 A `reversable` tag could be used to do some tricks such as allowing more advanced pattern matching, in theory:
            
-    plus(x, y) = x + y
+           
+    plusOne :: Int -> Int -> Int
         tags
             reversable-in-first-argument ( \(result, x) -> result - x )
             reversable-in-second-argument( \(result, y) -> result - y )
+    plus(x, y) = x + y
             
     -- later... 
     
@@ -646,31 +654,32 @@ A `reversable` tag could be used to do some tricks such as allowing more advance
 An `unsafe` tag could be used to allow a value to reference other values that have the `unsafe` tag:
 
     to-Int : Age -> Int
+        tags
+            unsafe
     to-Int(age) = age.unsafeCoerce -- unsafeCoerce is a function that turns a 
                                    -- value of one type into a value of any other type, with the same
                                    -- represenation in memory. Since this could obviously call a segfault,
                                    -- it's an unsafe function
-        tags
-            unsafe
             
 A `safe-wrapper-over-unsafe` tag could be used to allow a value to reference values that have the `unsafe` tag, while being able to be referenced by safe values. The idea being that if you use `safe-wrapper-over-unsafe`, you *really* have made sure this function won't ever do unsafe stuff, even though it calls functions that could potentially be used in an unsafe way.
 
     coerce : a -> b precondition 
         Coercable(a, b)     -- the Coercable trait only relates types which are 
                             -- guaranteed to have the same representation in memory
-    coerce(a) = a.unsafeCoerce
         tags
             safe-wrapper-over-unsafe
+    coerce(a) = a.unsafeCoerce
             
 A `chainable` tag could be used to allow more ergonomic tail-recursion:
 
-    cons(x, xs) = x.Prepend(xs)
+    cons : (a : Type) @-> a -> List(a) -> List(a)
         tags
             chainable({
                         start-flattened  = \(a)    -> (\x -> a.Prepend(x)),
                         append-flattened = \(c, a) -> (\x -> c(a) ++ x),
                         expand           = \(c, b) -> c(b)
                      })
+    cons(x, xs) = x.Prepend(xs)
                      
     -- This function can be made stack-safe by transforming it to be tail-recursive. 
     map(xs, f) = match xs with
