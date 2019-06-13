@@ -114,8 +114,8 @@ functionLiteralP = sourcePosWrapper $ do
   identifiers <- lowercaseIdentifierP `sepBy1` (char ',' *> some separatorChar)
   char '|'
   some separatorChar
-  string "->"
-  some separatorChar
+  -- string "->"
+  -- some separatorChar
   exp <- expressionP
   pure $ FunctionLiteral identifiers exp 
 
