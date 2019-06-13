@@ -8,6 +8,7 @@ import Text.Read.Deriving
 import Data.Eq.Deriving
 import Data.Ord.Deriving
 import Data.Functor.Foldable.TH
+import qualified Data.Map.Justified as Map
 
 data Module t p i = Module (ModuleHeader t p i) [(Declaration t p i)] p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
 data ModuleHeader t p i = ModuleHeader (LowercaseIdentifier t p i) (Tinydoc t p i) p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
@@ -24,10 +25,11 @@ data Expression t p i = ParenthesizedExpression (Expression t p i) t p
 data FunctionLiteral t p i = FunctionLiteral [LowercaseIdentifier t p i] (Expression t p i) p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
 
 
-
 data Tinydoc t p i = Tinydoc Text p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
 data LowercaseIdentifier t p i = LowercaseIdentifier i p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
 data UppercaseIdentifier t p i = UppercaseIdentifier i p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
+
+
 
 data Untyped = Untyped deriving (Show, Read, Eq, Ord)
 

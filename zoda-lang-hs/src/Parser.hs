@@ -63,13 +63,13 @@ expressionP = funcAppOnParenthesized <|> funcAppOnNum <|> funcAppOnFliteral <|> 
       string "."
       f <- expressionP
       pure (f, [applicant])
-  parenthesizedExpression = sourcePosWrapper . try $ do
+  parenthesizedExpression = try $ do
     char '('
     many separatorChar
     exp <- expressionP
     many separatorChar
     char ')'
-    pure (ParenthesizedExpression exp Untyped)
+    pure (exp)
 
   numb = sourcePosWrapper . try $ do
     numb <- numberLiteralP
@@ -191,3 +191,4 @@ noNewlineOrChars :: (MonadParsec e s m, Token s ~ Char) => [Char] -> m (Token s)
 noNewlineOrChars c = noneOf ('\n' : c)
 
 
+testAST = Module (ModuleHeader (LowercaseIdentifier "i" (SourcePosition "module" 1 8 1 9)) (Tinydoc "test module" (SourcePosition "module" 1 10 1 23)) (SourcePosition "module" 1 1 1 23)) [Declaration (LowercaseIdentifier "test" (SourcePosition "module" 2 1 2 5)) (NumberLiteral ((-18) % 5) Untyped (SourcePosition "module" 2 8 2 12)) (SourcePosition "module" 2 1 2 12),Declaration (LowercaseIdentifier "main" (SourcePosition "module" 3 1 3 5)) (IdentifierExpression (LowercaseIdentifier "test" (SourcePosition "module" 3 8 3 12)) Untyped (SourcePosition "module" 3 8 3 12)) (SourcePosition "module" 3 1 3 12)] (SourcePosition "module" 1 1 4 1)

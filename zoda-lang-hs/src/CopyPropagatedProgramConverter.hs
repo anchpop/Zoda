@@ -19,10 +19,9 @@ checkNoUndefinedNames m@(Module _ declarations _) = case allUndefinedNames of
   where 
     allTopLevelNames  = map (\case Declaration (LowercaseIdentifier i p) _ _ -> i) declarations
     allTopLevelValues = map (\case Declaration _ e _ -> e) declarations
-    getUndefinedNamesUsedInExpression :: [i] -> Expression t p i -> [(i, Expression t p i)]
     getUndefinedNamesUsedInExpression context (ParenthesizedExpression e _ _) = getUndefinedNamesUsedInExpression context e
     getUndefinedNamesUsedInExpression context (NumberLiteral _ _ _) = []
-    getUndefinedNamesUsedInExpression context e@(IdentifierExpression (LowercaseIdentifier i _) _ _) = if i `elem` context then [] else [(i, e)]
+    getUndefinedNamesUsedInExpression context e@(IdentifierExpression identifier@(LowercaseIdentifier i _) _ _) = if i `elem` context then [] else [identifier]
     getUndefinedNamesUsedInExpression context (FunctionLiteralExpression (FunctionLiteral newIdentifiers expr _) _ _) = getUndefinedNamesUsedInExpression newContext expr
       where newContext = context <> (map (\case LowercaseIdentifier i _ -> i) newIdentifiers)
 
@@ -35,7 +34,7 @@ checkNoUndefinedNames m@(Module _ declarations _) = case allUndefinedNames of
 
 getMainFunc :: (Ord k, IsString k, HasThrow "perr" (ProductionError t p i) f) => Module t p i -> Map.Map ph k a -> f a
 getMainFunc moduleAST m = case "main" `Map.member` m of
-  Nothing -> throw @"perr" . NoMain $ moduleAST
+  Nothing -> throw @"perr" (NoMain moduleAST)
   Just i -> pure $ Map.lookup i m
 
 
@@ -57,11 +56,10 @@ evaluateMain identValMap mainFunc =  fullyReduce mainFunc
 
 
 -- runM (parseModule example >>= produceProgram)
-produceProgram moduleAST = do
-  createMapOfIdentifiersToValues moduleAST $ \valueMap -> do 
-    mainFunc <- getMainFunc moduleAST valueMap
-    let (NumberLiteral n _ _) = evaluateMain valueMap mainFunc
-    pure n
+produceProgram moduleAST = do 
+  checkNoUnreferencedValues moduleAST
+  pure ()
+
 -}
 
 

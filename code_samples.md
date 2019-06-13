@@ -64,6 +64,79 @@ Zoda supports both of the manners in which you are likely accustomed to calling 
 
 Althought he former (called UFCS) is preferred in the vast majority of cases. Since the two are basically equivalent, the fomatter may decide for you which to use.  
 
+If you want to curry a function, you can also use `...`:
+
+    myFunc = pow(2, ...)
+   
+This returns a function that takes `4` and outputs the result of `pow(2, 4)`. If a function expects additional functions *according to its written type signature* then you must either use `...`, `_`, or give it all the parameters it expects. For example:
+
+   id : (a : Type) @-> a -> a
+   id(x) = x
+   myfunc : Int -> Int
+   myfunc(a) = a + 1
+   id(myfunc) -- id only takes one parameter so you only need to give it one. 
+   
+   -- Let's specialize the id function
+   id' : (Int -> Int) -> Int -> Int -- equivalent to (Int -> Int) -> Int -> Int
+   id'(myfunc, 3) == 4
+   
+## Uniqueness
+
+Each type has a "Uniqueness attribute". I haven't been writing what them elsewhere because I'm still figuring it out. A uniqueness attribute is either `Unique` or `Borrowed`. These have the kind `UA` (Uniqueness Attribute). Base types, like `Int` and `Bool`, have kind `T`. Types, as you would expect, have kind `Type`.
+
+This does not come up when writing an ordianry polymorphic function:
+
+    id : (a : Type) @-> a -> a
+
+But, to be polymorphic over `Type`, your function must follow the restrictions placed by both `Unique` and `Borrowed`. This essentially means values may be `consumed` at most once - they can be passed without worry to any function which takes a `Borrowed`, but can only be passed once to a function which takes a `Unique`.
+
+The classic example is the `write` function, which takes an array, an index, and a value, and returns a new array which has the updated value.
+
+    [10, 20].write(1, 2) == [10, 2]
+   
+For efficiency, `write` takes a unique array. This means that the value can be updated in place, as there is only one reference at runtime to any unique value at the time the function is called.
+
+    [10, 20].write(1, 2).write(0, 1) == [1, 2] -- both `write` operations performed in-place, no copying and no garbage to be collected.
+    
+The other attribute is `Borrowed`, which represents a value for which there may be multiple references at runtime. You cannot pass a `Borrowed` value to a function which expects a `Unique`. 
+
+Here is an example of the type of `write`:
+
+    write : Array^Unique -> Int -> Int -> Array
+
+The `^Unique` means that the value must be `Unique` - the values without a tag represent them being polymorphic in their uniqueness. This means that you must use them in a way that is consistent with them being either `Unique` or `Borrowed`, which pretty much just means that inside the function you must act as if they're a borrowed value.
+
+If you want to require that a parameter be borrowed, naturally you can use `^Borrowed`. You also could require that the output be `Unique`.
+
+    write : Array^Unique -> Int^Borrowed -> Int^Borrowed -> Array^Unique
+    
+The only time you should use this is when you have to guarantee that the return value is used uniquely, for some reason. A value is either unique or borrowed, but in the prior case it is left ambiguous using universal quantification. `Int` is actually syntax sugar for `(u : UA) @-> Int^u` - it can be parameterized with `Unique` or `Borrowed` depending on the situation. This simulates the intutitive fact that if a function expects a borrowed value, you may pass it a unique, but not the other way around.
+
+Also, a tip: the type of `->` is a bit tricky: if the positive position is a unique type (and it's used in the function body), then the type of `->` is also unique, and unique functions can only be applied once. If this were not the case, you would be able to do sneaky things like this:
+
+    one-up-one-down : (a : T) @-> a^Unique -> {fst: a^Unique, snd: a^Unique}
+    one-up-one-down(x) = (|f| -> {fst: f Unit, snd: f Unit})(const(x, _))
+        where
+            const(a, b) = a
+            
+This does not use `x` multiple times, which is the requirement - however, it does use `f` twice, and since `x` is of a unique type, that means `f` must be `unique` as well, which means this won't typecheck. This is all done pretty much automatically for you. Here's the type signature of `const`:
+
+    const : (a : Type) @-> (b : Type) @-> a -> b -> a
+    const(a, b) = a
+
+This looks simple because a lot of the work is being done by the kind system. Specifically `->` is automatically unique if its positive position is unique. Other cases like records and corecords are unique when any of their values are unique. While this is helpful, you might need to have more control over uniqueness types (such as when making your own types), so you can pass them in manually:
+
+    storeBoth : (u : UA) @-> Int^u -> Int^u -> (Int^u, Int^u)
+    
+To implement something like a pair yourself, you can take advantage of the fact that boolean operations work on Uniqueness types (where `Unique` is seen as `True` and `Borrowed` is seen as `False`). Here's how to make a pair type that is unique if any of its elements are unique:
+
+    data Pair(a, b) : (a : T) @-> (au : UA) @-> (b : T) @-> (bu : UA) @-> a^au -> b^bu -> T^(au or bu) where
+        mkPair : (a : Type) @-> (b : Type) -> a -> b -> Pair(a, b)
+        
+God, this is verbose. Luckily I'm pretty sure that this should be inferable 99% of the time and you won't actually have to write it. If it could be inferred, this is what it looks like:
+
+    data Pair(a, b) where
+        mkPair : (a : Type) @-> (b : Type) -> a -> b -> Pair(a, b)
 
 ## Function Creation
 
@@ -104,43 +177,61 @@ The last section had a function that worked on any type that has the trait `Adda
    
 `@` is used to denote an implicit parameter. All functions are always parametric with respect to their implicit parameters (never branch based on them or otherwise observe their value directly). One may pass implicit variables explicitly, like this: `equals(@Int, 3, 4)`. 
 
-The `given` section describes the constraints that are placed on variables on the function. These can be simple or complex. For example:
+The `precondition` section describes the constraints that are placed on variables on the function. These can be simple or complex. For example:
 
-    get-index : (e : Type) @-> List(e) -> (n : Int) -> e given
-                  length(list) > n
-                  n > 0
+    get-index : (e : Type) @-> List(e) -> (n : Int) -> e 
+        precondition
+            length(list) > n
+            n > 0
 
 This ensures that finding the `n`th element of the list with `get-index` will never fail, because it is statically guaranteed at runtime that the length of the list is greater than the index we're trying to access, and the index we're trying to access is not negative.
 
 There are two more things we can do with type signatures, to further their explanatory power. We can create an error type (which is not actually used directly by the function):
 
     type ListIndexAccessError = NegativeIndex | IndexOutOfBounds
-    get-index : (e : Type) @-> (l : List(e)) -> (index : Int) -> e given
-                  length(l) > n, IndexOutOfBounds
-                  n > 0        , NegativeIndex 
+    get-index : (e : Type) @-> (l : List(e)) -> (index : Int) -> e 
+        precondition
+             length(l) > n, index-out-of-bounds
+             n > 0        , negative-index 
 
-Finally, we can give a description of the cause of the error in backticks. This is a tiny-doc, which will be touched on more later:
+Finally, we can give a description of the cause of the error in backticks, and information that might be useful for error-catching. The backtick'd message is a tiny-doc, which will be touched on more later:
 
-    type ListIndexAccessError = NegativeIndex | IndexOutOfBounds
-    get-index : (e : Type) @-> (l : List(e)) -> (index : Int) -> e given
-                  length(l) > n, IndexOutOfBounds, `You cannot access index {n} of {l} because 
+    get-index : (e : Type) @-> (l : List(e)) -> (index : Int) -> e 
+        precondition
+            length(l) > n, index-out-of-bounds, {length: length(l), index: n}, `You cannot access index {n} of {l} because 
                                                     it is only {length(l)} long.`
-                  n > 0        , NegativeIndex   , `You cannot access the negative index {n} of {l}.`
+            n > 0        , negative-index   , {index: n}, `You cannot access the negative index {n} of {l}.`
 
 These show up when the condition is *not* satisfied for whatever reason. The message in the backtics is used to give a more human-friendly explanation of the error and why it exists than that which can be generated automatically.
 
 (Trait constraints don't get an error-doc or the ability to add an error type)
 
-For any function where you *don't* want to bother making sure the constraints are satisfied, you can just add a `?` to the end of the function name. This makes a function that returns a result type that indicates if the constraints were not found to hold at runtime, or contains the result otherwise. For result types that support it, it can also contain some more detailed information inside a `DebugInfo`, containing the interpolated tiny-doc, the stack trace, all the arguments to the function, etc. Obviously, this would only be done in development builds. This would seem impure, but since the contents of a `DebugInfo` can never affect the execution of a program it's probably fine.
+For any function where you *don't* want to bother making sure the constraints are satisfied, you can just add a `?` to the end of the function name. This makes a function that returns a result type that indicates if the constraints were not found to hold at runtime, or contains the result otherwise. For result types that support it, it can also contain some more detailed information inside a `DebugInfo`, containing the interpolated tiny-doc, the stack trace, all the arguments to the function, etc. Obviously, this would only be done in development builds. This would seem impure, but since the contents of a `DebugInfo` can never affect the execution of a program it's probably okay.
 
-Names can only be used "after" they're bound. 
+Names bound in type signatures can only be used "after" they're bound. 
 
 (Note that when you're actually defining a function, the names of parameters inside the type need to match the names of parameters to your function, or a warning will be emitted)
 
-In addition to `given`, there is also `post-condition`:
+In addition to `precondition`, there is also `post-condition`:
 
-add : (a : Int) -> (b : Int) -> (result : Int) post-condition 
-    if b > 0 then result > a else True
+    add : (a : Int) -> (b : Int) -> (result : Int) 
+        post-condition 
+            if b > 0 then result > a else True
+        
+Shorthand for `if x then y else True` is the `==>` operator:
+
+    add : (a : Int) -> (b : Int) -> (result : Int) 
+        post-condition 
+            b > 0  ==>  result > a 
+        
+Putting a `?` after the name of a function will allow you to use it with values that are not known to match those predicates at runtime, but if they do not match the predicate it will return an error value, and if they do it will return a result value. The error value will be a corecord (polymorphic variant) containing the first mismatched predicate found (predicates are checked in the order in which they appear).
+
+    get-name-from-id(id) = match nameAccess with
+            name.Res                          -> print("The name for id {id} is {name}.")
+            {+ index-out-of-bounds = * +}.Err -> print("The id {id} was not present in our database.")
+            {+ negative-index      = * +}.Err -> print("Negative ids are not permitted.")
+        where
+            nameAccess = nameList.get-index?(id)
 
 ## Function chaining
 
@@ -191,7 +282,7 @@ These use indentation for alignment to support nesting. They have similar syntax
 This is equivalent to
 
     lower-bound(a, b) = 
-      match a > b
+      match a > b with
         True  -> a
         False -> b
 
@@ -348,7 +439,7 @@ You can have as many of these as you want.
 And to contain multiple tests, use do notation again
 
     a.plus-one = a + 1
-      test do:
+      test
         Can add one to positive values
         >> 2.plus-one
         -> 3
@@ -370,19 +461,8 @@ If you know you haven't implemented the functionality for a test yet, just make 
         -> 3
         
         Can increment to positive values
-        >>pending -2.plus-one
-        -> -3
-
-If a test must pass
-
-    a.incrementAbsoluteValue = a + 1
-      test do:
-        Can increment to positive values
-        >> 2.plus-one 
-        -> 3
-        
-        Can increment to positive values
-        >>critical -2.plus-one
+        >>pending "incrementing negative values is currently not allowed"
+        >> -2.plus-one
         -> -3
 
 
@@ -390,19 +470,19 @@ If a test must pass
 
 You can do a full `match`, like so:
 
-    a.luckyNumber7 = match a
+    a.luckyNumber7 = match a with
       7 -> putString("Lucky number 7!")
       * -> putString("sorry, you are a loser")
-    l.head = match l
+    l.head = match l with
       x.Cons(*) -> x.Just
       *         -> nothing 
 
 All pattern matches must be exhaustive to perform an optimized build - this is to keep the convenient fact that optimized Zoda builds have no runtime errors in practice.
 
-`_` can also be used with `match`
+`_` can also be used with `match` to create a match function. If you don't care about the value of something that might be matched, use `*` to indicate a wildcard.
 
-    [Just 3, Nothing].filter(_) <| match _
-      Just _ -> True
+    [Just 3, Nothing].filter(_) <| match _ with
+      Just(*) -> True
       Nothing -> False                        
 
 A common pattern is to do a pattern match to see if a value is matches a pattern, and to return some kind of "true" result if it is, and an error result if it isn't. `match-partial` exists to solve this need - it returns a value with the trait `Errorable` where successful matches are on the right an unsuccessful matches are on the left.
@@ -500,7 +580,7 @@ These contain newlines but still need indentation:
                     test"### -- equivalent to "test\ntest"
 
 
-## recursion
+## Recursion
 
 Zoda does not allow unrestricted recursion. The reason is that unrestricted recursion makes it easy to create a stack explosion:
 
@@ -509,45 +589,39 @@ Zoda does not allow unrestricted recursion. The reason is that unrestricted recu
         1 -> 1 
         x -> (x - 1).fib + (x - 2).fib
 
-This is bad because `100000.fib` will result in a stack overflow, which is a form of runtime exception. Since Zoda attempts to make runtime exceptions very rare,
-we need a way to prevent this. There is a way to do recursion without running the risk of a stack overflow - if the recursive call is returned immediately,
-its very simple for the compiler to unroll it into a loop which will not result in unbounded growth of the stack. 
+This is bad because `100000.fib` will result in a stack overflow, which is a form of runtime exception. Since Zoda attempts to make runtime exceptions very rare, we need a way to prevent this. There is a way to do recursion without running the risk of a stack overflow, though. If the result of the recursive call is returned immediately, its very simple for the compiler to unroll it into a loop which will not result in unbounded growth of the stack. 
 
     x.fib = internalFib x 0 1 
-        where internalFib(counter, y,z) = match counter:
+        where internalFib(counter, y, z) = match counter:
             0       ->: z
             counter ->: internalFib(counter - 1, z, y+z)
 
-so, we can prevent unbounded growth of the stack by disallowing all recursion that is not tail recursion. But, this is annoying because it means recursive calls are 
-"special". I think this would be easier to teach to people if we used a special keyword for tail calls. I'm thinking `self` or `recur`.
+so, we can prevent unbounded growth of the stack by disallowing all recursion that is not tail recursion. But, this is annoying because it means recursive calls are  "special". I think this would be easier to teach to people if we used a special keyword for tail calls. I'm thinking `and-recurse`.
 
     x.fib = internal-fib x 0 1 
         where internalFib(counter, y,z) = match counter:
             0       ->: z
-            counter ->: internalFib(counter - 1, z, y+z)
+            counter ->: and-recurse(counter - 1, z, y+z)
 
-so `self` is a special function that calls the function it's used in with the same parameters, and the compiler will not let you do anything to a the output of 
-the `self` function. The self function is the only situation where recursion is possible - all other functions form a DAG of their dependencies. 
+so `and-recurse` is a special function that calls the function it's used in. The compiler will not let you do anything to a the output of the `and-recurse` function, this ensures TCE can be performed. The `and-recurse` function is the only situation where recursion is possible - besides this, all functions form a DAG of their dependencies (this means no mutual recursion). 
 
-Also polymorphic recursion not allowed for similar reasons.
+Also polymorphic recursion is not allowed for performance reasons (prevents monomorphization).
 
-The one exception to the "you can't do anything to the output of the `self` function" rule is functions with the tag `Chainable`.
-This doesn't blow up the stack because the `Chainable` tag includes instructions on how to compute an intermediate value. `+`, `*` and `Cons` are examples of Chainable.
+The one exception to the "you can't do anything to the output of the `and-recurse` function" rule is functions with the tag `Chainable`. This doesn't blow up the stack because the `Chainable` tag includes instructions on how to compute an intermediate value. `+`, `*` and `Cons` are examples of Chainable.
 
-    x.factorial = x * (x-1).self
+    x.factorial = x * (x-1).and-recurse
     
     filter(l, f) = match l:
         []      ->: []
         x.Cons(xs) ->: 
             if (f x) then: 
-                x.Cons(xs.self(f))
+                x.Cons(xs.and-recurse(f))
             else
-                xs.self(f)
+                xs.and-recurse(f)
                        
-## Tags statements
+## Tag statements
 
 Functions and values can have certain facts stated about them in `tags` statements which serve to provide extra information to the compiler.
-The only one I have any ideas for is `always-terminates`, which says about a function exactly what it says on the tin.
 
     x.plusOne = x + 1 
         tags
@@ -555,32 +629,64 @@ The only one I have any ideas for is `always-terminates`, which says about a fun
 
 Although I expect `always-terminates` to not be that useful. We should be able to prove most functions terminating with the SMT solver.
 
-In practice, all Zoda functions return a value or become caught in an infinite loop (there are some rare exceptions). This is useful because it prevents the vast majority of uncontrolled runtime crashes. But it can be counterproductive to writing useful functions that are composable.
+Other ideas:
 
-For example:
+A deprecation warning tag could be used to provide compile-time warnings when you use a deprecated function.
 
-    divided-by: Float -> Float -> Optional<Float>
-    divided-by(numerator, denominator) = match denominator:
-        0 ->: Nothing
-        denominator ->: Just(numerator / denominator)
+    plusOne :: Int -> Int
+        tags
+            deprication-warning("This function is being depricated, use `+ 1` instead.")
+    plusOne(x) = x + 1 
+           
+A `reversable` tag could be used to do some tricks such as allowing more advanced pattern matching, in theory:
+           
+           
+    plusOne :: Int -> Int -> Int
+        tags
+            reversable-in-first-argument ( \(result, x) -> result - x )
+            reversable-in-second-argument( \(result, y) -> result - y )
+    plus(x, y) = x + y
+            
+    -- later... 
+    
+    max-index + 1 = length(l) -- gets converted at compile time to max-index = length(l) - 1
+    
+An `unsafe` tag could be used to allow a value to reference other values that have the `unsafe` tag:
 
+    to-Int : Age -> Int
+        tags
+            unsafe
+    to-Int(age) = age.unsafeCoerce -- unsafeCoerce is a function that turns a 
+                                   -- value of one type into a value of any other type, with the same
+                                   -- represenation in memory. Since this could obviously call a segfault,
+                                   -- it's an unsafe function
+            
+A `safe-wrapper-over-unsafe` tag could be used to allow a value to reference values that have the `unsafe` tag, while being able to be referenced by safe values. The idea being that if you use `safe-wrapper-over-unsafe`, you *really* have made sure this function won't ever do unsafe stuff, even though it calls functions that could potentially be used in an unsafe way.
 
-## type-wrapper 
+    coerce : a -> b precondition 
+        Coercable(a, b)     -- the Coercable trait only relates types which are 
+                            -- guaranteed to have the same representation in memory
+        tags
+            safe-wrapper-over-unsafe
+    coerce(a) = a.unsafeCoerce
+            
+A `chainable` tag could be used to allow more ergonomic tail-recursion:
 
-Equivalent to "newtype" in haskell
+    cons : (a : Type) @-> a -> List(a) -> List(a)
+        tags
+            chainable({
+                        start-flattened  = \(a)    -> (\x -> a.Prepend(x)),
+                        append-flattened = \(c, a) -> (\x -> c(a) ++ x),
+                        expand           = \(c, b) -> c(b)
+                     })
+    cons(x, xs) = x.Prepend(xs)
+                     
+    -- This function can be made stack-safe by transforming it to be tail-recursive. 
+    map(xs, f) = match xs with
+        x.Prepend(Nil) -> x.f.Prepend(Nil)
+        x.Prepend(xs) -> x.f.cons(and-recurse(xs, f))
+    
 
-    type-wrapper Year = Year Int
-    type-wrapper Name = Name String
-
-The difference between 
-
-    type-wrapper Year = Year Int
-
-and
-
-    type Year = Year Int
-
-Is that type-wrappers are guaranteed to be equivalent at runtime. This means you can use the `.coerce` function to wrap or unwrap types, even deeply nested ones. If a type is meant to be a container for values of some other type, you can give it the trait `representational` which allows you to use `.coerce` to change the types of values being contained - i.e. `[1, 2, 3].coerce == [3.Year, 2.Year, 3.Year]` works because lists have the `representational` trait. 
 
 ## type declarations and ADTs
 
@@ -594,21 +700,21 @@ Used for creating a new ADT
                     Ford   : CarBrand
                     Toyota : CarBrand
     type Car where Car : CarBrand -> Year -> Car
-    type Person where Person : Name -> List<Car> -> Person
-    type IntList where
-                   EmptyIntList : IntList 
-                   Cons         : Int -> IntList -> IntList -- Recursive data types are allowed, but only "one level deep". 
-                                                     -- This restriction also applies to functions, as we'll discuss later
+    type Person where Person : Name -> Car -> Person
 
-parameterized types
+Parameterized types
 
     type Optional(a) where
-                       Nothing : Optional<a> 
-                       Just    : a -> Optional<a>
+                       Nothing : Optional(a)
+                       Just    : a -> Optional(a)
 
     type Result(e, r) where
-                        Error  : e -> Result<e, r> 
-                        Result : r -> Result<e, r>  
+                        Error  : e -> Result(e, r) 
+                        Result : r -> Result(e, r)  
+                        
+Recursive types
+
+    -- Zoda 
 
 ## Synonyms
 
