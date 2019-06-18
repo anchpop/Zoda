@@ -60,11 +60,11 @@ test = parallel $ do
 
   describe "Parser.numberLiteralP" $ do
     it "parses number literals" $ do
-      parseSomething "3"      numberLiteralP `shouldParseTo` NumberLiteral 3 (SourcePosition "no_file" 1 1 1 2)
-      parseSomething "-3"     numberLiteralP `shouldParseTo` NumberLiteral (negate 3) (SourcePosition "no_file" 1 1 1 3)
-      parseSomething "-3.5"   numberLiteralP `shouldParseTo` NumberLiteral (negate 3.5) (SourcePosition "no_file" 1 1 1 5)
-      parseSomething "-13.5"  numberLiteralP `shouldParseTo` NumberLiteral (negate 13.5) (SourcePosition "no_file" 1 1 1 6)
-      parseSomething "-13.50" numberLiteralP `shouldParseTo` NumberLiteral (negate 13.5) (SourcePosition "no_file" 1 1 1 7)
+      parseSomething "3"      numberLiteralP `shouldParseTo` 3 
+      parseSomething "-3"     numberLiteralP `shouldParseTo` (negate 3)
+      parseSomething "-3.5"   numberLiteralP `shouldParseTo` (negate 3.5)
+      parseSomething "-13.5"  numberLiteralP `shouldParseTo` (negate 13.5)
+      parseSomething "-13.50" numberLiteralP `shouldParseTo` (negate 13.5)
 
     it "doesn't accept what it shouldn't" $ do
       shouldNotParse $ parseSomething ".3" numberLiteralP
@@ -77,34 +77,34 @@ test = parallel $ do
 
   describe "Parser.expressionP" $ do
     it "parses number literals" $ do
-      parseSomething "3" expressionP `shouldParseTo` NumberLiteralExpression (NumberLiteral 3 (SourcePosition "no_file" 1 1 1 2)) (SourcePosition "no_file" 1 1 1 2)
+      parseSomething "3" expressionP `shouldParseTo` (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 1 1 2)) 
 
     it "parses identifiers" $ do
-      parseSomething "test" expressionP `shouldParseTo` IdentifierExpression (LowercaseIdentifier "test" (SourcePosition "no_file" 1 1 1 5)) (SourcePosition "no_file" 1 1 1 5)
+      parseSomething "test" expressionP `shouldParseTo` IdentifierExpression (LowercaseIdentifier "test" (SourcePosition "no_file" 1 1 1 5)) Untyped (SourcePosition "no_file" 1 1 1 5)
 
 
     it "parses functions" $ do
-      parseSomething "|a, b, c| -> 3" expressionP `shouldParseTo` FunctionLiteralExpression
+      parseSomething "|a, b, c| 3" expressionP `shouldParseTo` FunctionLiteralExpression
         ( FunctionLiteral
           [ LowercaseIdentifier "a" (SourcePosition "no_file" 1 2 1 3)
           , LowercaseIdentifier "b" (SourcePosition "no_file" 1 5 1 6)
           , LowercaseIdentifier "c" (SourcePosition "no_file" 1 8 1 9)
           ]
-          (NumberLiteralExpression (NumberLiteral (3 % 1) (SourcePosition "no_file" 1 14 1 15)) (SourcePosition "no_file" 1 14 1 15))
-          (SourcePosition "no_file" 1 1 1 15)
+          (NumberLiteral (3 % 1) Untyped (SourcePosition "no_file" 1 11 1 12))
+          (SourcePosition "no_file" 1 1 1 12)
         )
-        (SourcePosition "no_file" 1 1 1 15)
+        Untyped (SourcePosition "no_file" 1 1 1 12)
 
 
 
     it "parses function applications" $ do
-      parseSomething "3.b" expressionP `shouldParseTo` FunctionApplicationExpression (IdentifierExpression (LowercaseIdentifier "b" (SourcePosition "no_file" 1 3 1 4)) (SourcePosition "no_file" 1 3 1 4))
-        [ NumberLiteralExpression (NumberLiteral (3 % 1) (SourcePosition "no_file" 1 1 1 2))   (SourcePosition "no_file" 1 1 1 2) ]
-        (SourcePosition "no_file" 1 1 1 4)
+      parseSomething "3.b" expressionP `shouldParseTo` FunctionApplicationExpression (IdentifierExpression (LowercaseIdentifier "b" (SourcePosition "no_file" 1 3 1 4)) Untyped (SourcePosition "no_file" 1 3 1 4))
+        [NumberLiteral (3 % 1) Untyped (SourcePosition "no_file" 1 1 1 2) ]
+        Untyped (SourcePosition "no_file" 1 1 1 4)
 
   describe "Parser.declarationP" $ do
     it "allows assignment to number literals" $ do
       parseSomething "i = 3" declarationP `shouldParseTo` Declaration
         (LowercaseIdentifier "i" (SourcePosition "no_file" 1 1 1 2))
-        (NumberLiteralExpression (NumberLiteral 3 (SourcePosition "no_file" 1 5 1 6)) (SourcePosition "no_file" 1 5 1 6))
+        (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 5 1 6))
         (SourcePosition "no_file" 1 1 1 6)

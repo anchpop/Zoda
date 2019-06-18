@@ -56,11 +56,11 @@ evaluateMain identValMap mainFunc =  fullyReduce mainFunc
 
 
 -- runM (parseModule example >>= produceProgram)
-produceProgram moduleAST = do 
-  checkNoUnreferencedValues moduleAST
-  pure ()
-
 -}
+produceProgram moduleAST = do 
+  checkNoUndefinedNames moduleAST
+  pure undefined
+
 
 
 example :: String

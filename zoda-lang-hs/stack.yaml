@@ -38,8 +38,8 @@ packages:
 # using the same syntax as the packages field.
 # (e.g., acme-missiles-0.3)
 extra-deps:
--  capability-0.2.0.0
-
+- capability-0.2.0.0
+- nominal-0.2.0.0@sha256:1d6153134ecfe386c255d1da6466c5fa3e635d5db435d6c69d21643a6c65a27a
 # Override default flag values for local packages and extra-deps
 # flags: {}
 

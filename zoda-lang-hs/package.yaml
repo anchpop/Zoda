@@ -36,6 +36,7 @@ dependencies:
 - deriving-compat
 - generic-lens
 - text
+- nominal
 
 ghc-options:
 - -Wall
