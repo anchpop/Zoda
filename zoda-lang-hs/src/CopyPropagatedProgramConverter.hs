@@ -12,21 +12,30 @@ data Metavariable = TypechecksOkay{-MetavariableApplication Int [Metavariable]
                   | Metavariable Int 
                   | Constant Int-}
 
-checkNoUndefinedNames :: forall t p i f. (Ord i, HasThrow "perr" (ProductionError t p i) f) => Module t p i -> f ()
-checkNoUndefinedNames m@(Module _ declarations _) = case allUndefinedNames of
+newtype Evaluatable t p i = Evaluatable ((Text, Expression t p i), [Evaluatable t p i])
+
+
+
+checkValid :: forall t p i f. (Ord i, HasThrow "perr" (ProductionError t p i) f) => Module t p i -> f ()
+checkValid modu =  case allUndefinedNames of
     x:_ -> throw @"perr" (UndeclaredValuesReferenced allUndefinedNames)
     _   -> pure ()
-  where 
-    allTopLevelNames  = map (\case Declaration (LowercaseIdentifier i p) _ _ -> i) declarations
-    allTopLevelValues = map (\case Declaration _ e _ -> e) declarations
+  where
+
+    allUndefinedNames = getAllUndefinedNamesInModule modu
+    
+    getAllUndefinedNamesInModule m@(Module _ declarations _) = allUndefinedNames
+      where 
+        allTopLevelNames  = map (\case Declaration (LowercaseIdentifier i p) _ _ -> i) declarations
+        allTopLevelValues = map (\case Declaration _ e _ -> e) declarations
+
+        allUndefinedNames = allTopLevelValues >>= getUndefinedNamesUsedInExpression allTopLevelNames
+
     getUndefinedNamesUsedInExpression context (ParenthesizedExpression e _ _) = getUndefinedNamesUsedInExpression context e
     getUndefinedNamesUsedInExpression context (NumberLiteral _ _ _) = []
     getUndefinedNamesUsedInExpression context e@(IdentifierExpression identifier@(LowercaseIdentifier i _) _ _) = if i `elem` context then [] else [identifier]
     getUndefinedNamesUsedInExpression context (FunctionLiteralExpression (FunctionLiteral newIdentifiers expr _) _ _) = getUndefinedNamesUsedInExpression newContext expr
       where newContext = context <> (map (\case LowercaseIdentifier i _ -> i) newIdentifiers)
-
-    allUndefinedNames = allTopLevelValues >>= getUndefinedNamesUsedInExpression allTopLevelNames
-
 
 
     {-
@@ -58,7 +67,7 @@ evaluateMain identValMap mainFunc =  fullyReduce mainFunc
 -- runM (parseModule example >>= produceProgram)
 -}
 produceProgram moduleAST = do 
-  checkNoUndefinedNames moduleAST
+  checkValid moduleAST
   pure undefined
 
 
