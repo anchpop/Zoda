@@ -14,6 +14,26 @@ data Metavariable = TypechecksOkay{-MetavariableApplication Int [Metavariable]
 
 newtype Evaluatable t p i = Evaluatable ((Text, Expression t p i), [Evaluatable t p i])
 
+data Types = Number | Bool | Arr Types Types deriving (Eq, Show, Read)
+
+
+synth context (Annotation e t _) = check context e t *> pure t
+synth context (IdentifierExpression x _ _) = case lookup x context of 
+  Just t  -> pure t 
+  Nothing -> Left "Type synthesis error bruh"
+synth context (FunctionApplicationExpression fun [arg] _ _) = do
+  functionType <- synth context fun
+  case functionType of 
+    Arr t1 t2 -> check context arg t1 *> pure t2
+    _         -> Left "Type synthesis error bruh"
+check context (FunctionLiteralExpression (FunctionLiteral [x] (body) _) _ _) (Arr t1 t2) = check ((x, t1):context) body t2
+check context (FunctionLiteralExpression (FunctionLiteral [x] (body) _) _ _) _ = Left "Type checking error bruh"
+check context expression against = do
+  t <- synth context expression
+  pure $ t == against
+   
+
+
 
 
 checkValid :: forall t p i f. (Ord i, HasThrow "perr" (ProductionError t p i) f) => Module t p i -> f ()
@@ -23,7 +43,7 @@ checkValid modu =  case allUndefinedNames of
   where
 
     allUndefinedNames = getAllUndefinedNamesInModule modu
-    
+
     getAllUndefinedNamesInModule m@(Module _ declarations _) = allUndefinedNames
       where 
         allTopLevelNames  = map (\case Declaration (LowercaseIdentifier i p) _ _ -> i) declarations

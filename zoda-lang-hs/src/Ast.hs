@@ -19,7 +19,8 @@ data Expression t p i = ParenthesizedExpression (Expression t p i) t p
                       | NumberLiteral Rational t p 
                       | IdentifierExpression (LowercaseIdentifier t p i) t p 
                       | FunctionLiteralExpression (FunctionLiteral t p i) t p 
-                      | FunctionApplicationExpression (Expression t p i) [Expression t p i] t p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
+                      | FunctionApplicationExpression (Expression t p i) [Expression t p i] t p 
+                      | Annotation (Expression t p i) t p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
 
 
 data FunctionLiteral t p i = FunctionLiteral [LowercaseIdentifier t p i] (Expression t p i) p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
