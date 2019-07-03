@@ -33,10 +33,10 @@ Here we're defining the same value multiple times, this is illegal but we're jus
 
 Types can be ambiguous with "traits" - here we say "myNum" has the trait "Integral", but we're not any more specific.
 
-    myNum : (a : Type) @-> a given Integral(a)
+    myNum : (a : Type) @-> a precondition a has-trait Integral
     myNum = 3
 
-    myNum = 3 : ((a : Type) @-> a given Integral(a))
+    myNum = 3 : ((a : Type) @-> a precondition a has-trait Integral
 
 
 
@@ -156,7 +156,7 @@ We can give a signature to a function. All functions are values, the only differ
     add3 : Int -> Int -> Int -> Int
     add3(a, b, c) = a + b + c
 
-    add3 : (a : Type) @-> a -> a -> a -> a given Addable a
+    add3 : (a : Type) @-> a -> a -> a -> a precondition a has-trait Addable
     add3(a, b, c) = a + b + c
     
     
@@ -164,14 +164,14 @@ We can give a signature to a function. All functions are values, the only differ
 
 The last section had a function that worked on any type that has the trait `Addable`.
 
-    add3 : (a : Type) @-> a -> a -> a -> a given Addable a
+    add3 : (a : Type) @-> a -> a -> a -> a precondition a has-trait Addable
     plus(a, b, c) = a + b + c
 
 ## Type signatures
 
 `:` denotes a type sig. Here's an example of a polymorphic function:
 
-    equals : (e : Type) @-> e -> e given
+    equals : (e : Type) @-> e -> e precondition
                Eq(e)
     equals(a, b) = a == b
    
@@ -756,7 +756,7 @@ These spaces are required
 
 These can sometimes be useful when you want to return a value from a function. 
 
-    one-greater-one-less : (a : Type) @-> a -> {* a, a *} given Addable(a)
+    one-greater-one-less : (a : Type) @-> a -> {* a, a *} given a has-trait Addable
     one-greater-one-less(x) = {* x - 1, x + 1 *}
 
 You can retrieve a value from a tuple with pattern matching.
@@ -917,7 +917,7 @@ In general, two record types are equal if they contain the same `key : type` pai
 Due to the inherent complexity of having records with duplicate keys, I recommend you keep their usage to a minimum. 
 
 Oh and I glossed over this, but records can have constraints
-    fst = { x = 2, x = True } : (a : Type) @-> { x : a, x : Bool } given Integral(a)
+    fst = { x = 2, x = True } : (a : Type) @-> { x : a, x : Bool } given a has-trait Integral
 
 
 ## Corecords
