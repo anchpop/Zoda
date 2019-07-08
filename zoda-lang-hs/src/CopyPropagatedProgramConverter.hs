@@ -17,8 +17,9 @@ newtype Evaluatable t p i = Evaluatable ((Text, Expression t p i), [Evaluatable 
 data Types = Number | Bool | Arr Types Types deriving (Eq, Show, Read)
 
 
+synth context (NumberLiteral e t _) = pure Number
 synth context (Annotation e t _) = check context e t *> pure t
-synth context (IdentifierExpression x _ _) = case lookup x context of 
+synth context (IdentifierExpression (LowercaseIdentifier x _) _ _) = case lookup x context of 
   Just t  -> pure t 
   Nothing -> Left "Type synthesis error bruh"
 synth context (FunctionApplicationExpression fun [arg] _ _) = do
@@ -26,8 +27,8 @@ synth context (FunctionApplicationExpression fun [arg] _ _) = do
   case functionType of 
     Arr t1 t2 -> check context arg t1 *> pure t2
     _         -> Left "Type synthesis error bruh"
-check context (FunctionLiteralExpression (FunctionLiteral [x] (body) _) _ _) (Arr t1 t2) = check ((x, t1):context) body t2
-check context (FunctionLiteralExpression (FunctionLiteral [x] (body) _) _ _) _ = Left "Type checking error bruh"
+check context (FunctionLiteralExpression (FunctionLiteral [LowercaseIdentifier x _] (body) _) _ _) (Arr t1 t2) = check ((x, t1):context) body t2
+check context (FunctionLiteralExpression (FunctionLiteral [LowercaseIdentifier x p] (body) _) _ _) _ = Left "Type checking error bruh"
 check context expression against = do
   t <- synth context expression
   pure $ t == against
