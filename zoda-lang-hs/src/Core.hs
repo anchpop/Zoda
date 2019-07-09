@@ -1,5 +1,6 @@
 module Core where
-import ClassyPrelude
+corecorecore = corecorecore
+{-import ClassyPrelude
 import Data.Type.Coercion
 import Data.Roles
 import Data.Functor.Foldable
@@ -25,3 +26,4 @@ data Lambda ph t p k = forall ph'. FunctionLiteral ((Map.Key ph' k, Map.Key ph k
 
 data Untyped = Untyped deriving (Show, Read, Eq, Ord)
 
+-}

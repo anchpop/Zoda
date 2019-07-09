@@ -27,39 +27,42 @@ synth context (FunctionApplicationExpression fun [arg] _ _) = do
   case functionType of 
     Arr t1 t2 -> check context arg t1 *> pure t2
     _         -> Left "Type synthesis error bruh"
-check context (FunctionLiteralExpression (FunctionLiteral [LowercaseIdentifier x _] (body) _) _ _) (Arr t1 t2) = check ((x, t1):context) body t2
-check context (FunctionLiteralExpression (FunctionLiteral [LowercaseIdentifier x p] (body) _) _ _) _ = Left "Type checking error bruh"
+check context (FunctionLiteralExpression [LowercaseIdentifier x _] (body) _ _) (Arr t1 t2) = check ((x, t1):context) body t2
+check context (FunctionLiteralExpression [LowercaseIdentifier x _] (body) _ _) _ = Left "Type checking error bruh"
 check context expression against = do
   t <- synth context expression
   pure $ t == against
    
 
 
+data IdentifierMeaning t p i = Ref (Expression t p i) | Free
 
-
-checkValid :: forall t p i f. (Ord i, HasThrow "perr" (ProductionError t p i) f) => Module t p i -> f ()
-checkValid modu =  case allUndefinedNames of
-    x:_ -> throw @"perr" (UndeclaredValuesReferenced allUndefinedNames)
-    _   -> pure ()
+checkNamesDefined :: forall t p i f. (Ord i, HasThrow "perr" (ProductionError t p i) f) => Module t p i -> f (Module t p (i, IdentifierMeaning t p i))
+checkNamesDefined modu = case allUndefinedNames of
+    _:_ -> throw @"perr" (UndeclaredValuesReferenced allUndefinedNames)
+    _   -> pure undefined
   where
 
-    allUndefinedNames = getAllUndefinedNamesInModule modu
+    allUndefinedNames = snd $ copyPropagate modu
 
-    getAllUndefinedNamesInModule m@(Module _ declarations _) = allUndefinedNames
+    copyPropagate m@(Module _ declarations _) = (propagated, allUndefinedNames)
       where 
         allTopLevelNames  = map (\case Declaration (LowercaseIdentifier i p) _ _ -> i) declarations
         allTopLevelValues = map (\case Declaration _ e _ -> e) declarations
 
         allUndefinedNames = allTopLevelValues >>= getUndefinedNamesUsedInExpression allTopLevelNames
+        propagated = undefined
 
     getUndefinedNamesUsedInExpression context (ParenthesizedExpression e _ _) = getUndefinedNamesUsedInExpression context e
     getUndefinedNamesUsedInExpression context (NumberLiteral _ _ _) = []
-    getUndefinedNamesUsedInExpression context e@(IdentifierExpression identifier@(LowercaseIdentifier i _) _ _) = if i `elem` context then [] else [identifier]
-    getUndefinedNamesUsedInExpression context (FunctionLiteralExpression (FunctionLiteral newIdentifiers expr _) _ _) = getUndefinedNamesUsedInExpression newContext expr
+    getUndefinedNamesUsedInExpression context e@(IdentifierExpression identifier@(LowercaseIdentifier i _) _ _) = 
+      if i `elem` context then [] else [identifier]
+    getUndefinedNamesUsedInExpression context (FunctionLiteralExpression newIdentifiers expr _ _) = getUndefinedNamesUsedInExpression newContext expr
       where newContext = context <> (map (\case LowercaseIdentifier i _ -> i) newIdentifiers)
 
 
-    {-
+
+{-
 
 
 getMainFunc :: (Ord k, IsString k, HasThrow "perr" (ProductionError t p i) f) => Module t p i -> Map.Map ph k a -> f a
@@ -88,13 +91,13 @@ evaluateMain identValMap mainFunc =  fullyReduce mainFunc
 -- runM (parseModule example >>= produceProgram)
 -}
 produceProgram moduleAST = do 
-  checkValid moduleAST
-  pure undefined
+  checkNamesDefined moduleAST
+  pure ()
 
 
 
 example :: String
 example = "module i `test module`\n\
-          \test = -3.6\n\
-          \main = |a| a\n\
+          \test = (-3.6)\n\
+          \main = test.(|a| a)\n\
           \"

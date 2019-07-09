@@ -63,13 +63,13 @@ expressionP = funcAppOnParenthesized <|> funcAppOnNum <|> funcAppOnFliteral <|> 
       string "."
       f <- expressionP
       pure (f, [applicant])
-  parenthesizedExpression = try $ do
+  parenthesizedExpression = sourcePosWrapper . try $ do
     char '('
     many separatorChar
     exp <- expressionP
     many separatorChar
     char ')'
-    pure (exp)
+    pure (ParenthesizedExpression exp Untyped)
 
   numb = sourcePosWrapper . try $ do
     numb <- numberLiteralP
@@ -79,7 +79,7 @@ expressionP = funcAppOnParenthesized <|> funcAppOnNum <|> funcAppOnFliteral <|> 
     pure (IdentifierExpression ident Untyped)
   fliteral = sourcePosWrapper . try $ do
     flit <- functionLiteralP
-    pure (FunctionLiteralExpression flit Untyped)
+    pure ((uncurry FunctionLiteralExpression) flit Untyped)
 
 numberLiteralP :: Parser Rational
 numberLiteralP = try
@@ -108,8 +108,8 @@ numberLiteralP = try
         )
   where justUnsafe (Just x) = x
 
-functionLiteralP :: ASTParser FunctionLiteral
-functionLiteralP = sourcePosWrapper $ do
+functionLiteralP :: Parser ([LowercaseIdentifier Untyped SourcePosition Text], Expression Untyped SourcePosition Text)
+functionLiteralP = do
   char '|'
   identifiers <- lowercaseIdentifierP `sepBy1` (char ',' *> some separatorChar)
   char '|'
@@ -117,7 +117,7 @@ functionLiteralP = sourcePosWrapper $ do
   -- string "->"
   -- some separatorChar
   exp <- expressionP
-  pure $ FunctionLiteral identifiers exp 
+  pure $ (identifiers, exp)
 
 
 tinydocP :: ASTParser Tinydoc
