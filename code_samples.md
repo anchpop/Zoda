@@ -1048,3 +1048,11 @@ note [Equality-constrained types]
 ```
 
 Then, inside any `devl-doc`, `user-doc`, or comment, one can write `[Equality-constrained types]`. This generates a link in the IDE that allows you to easily navigate to the note (view it inline?) and navigate back. Notes are scoped to a package. Multiple notes with the same name result in a compilation error. Markdown-like formatting is allowed within notes.
+
+
+
+# Experiments
+
+add(x: Int, y: Int): Int = x + y
+id(@a: Type, x: a): a = x
+get-index(@e: Type, @n: Nat, v: Vector(n, e), index: Nat): a = v.access(index)
