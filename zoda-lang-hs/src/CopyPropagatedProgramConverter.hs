@@ -4,7 +4,6 @@ import Basic
 import Data.Maybe
 import Ast
 import qualified CopyPropagatedProgram as CPP
-import qualified Data.Map.Justified as Map
 import Capability.Error
 
 
@@ -35,30 +34,41 @@ check context expression against = do
    
 
 
-data IdentifierMeaning t p i = Ref (Expression t p i) | Free
+data IdentifierMeaning t p i = Ref (Expression t p i) | Free | NotAReference
 
-checkNamesDefined :: forall t p i f. (Ord i, HasThrow "perr" (ProductionError t p i) f) => Module t p i -> f (Module t p (i, IdentifierMeaning t p i))
-checkNamesDefined modu = case allUndefinedNames of
-    _:_ -> throw @"perr" (UndeclaredValuesReferenced allUndefinedNames)
-    _   -> pure undefined
+listLookup toLookup [] = Nothing
+listLookup toLookup ((k, v):xs)
+    | k == toLookup = Just v
+    | otherwise = listLookup toLookup xs
+
+
+checkNamesDefined :: forall t p i. Ord i => Module t p i -> (Module t p (i, Maybe (IdentifierMeaning t p i)))
+checkNamesDefined = copyPropagate
   where
 
-    allUndefinedNames = snd $ copyPropagate modu
-
-    copyPropagate m@(Module _ declarations _) = (propagated, allUndefinedNames)
+    copyPropagate ::  Module t p i -> (Module t p (i, Maybe (IdentifierMeaning t p i)))
+    copyPropagate m@(Module (ModuleHeader (LowercaseIdentifier i1 p1) (Tinydoc text p2) p3) declarations p4) = Module (ModuleHeader (LowercaseIdentifier (i1, Just NotAReference) p1) (Tinydoc text p2) p3) propagatedDeclarations p4
       where 
         allTopLevelNames  = map (\case Declaration (LowercaseIdentifier i p) _ _ -> i) declarations
-        allTopLevelValues = map (\case Declaration _ e _ -> e) declarations
+        allTopLevelValues = map (\case Declaration (LowercaseIdentifier i p) e _ -> (i, Ref e)) declarations
 
-        allUndefinedNames = allTopLevelValues >>= getUndefinedNamesUsedInExpression allTopLevelNames
-        propagated = undefined
+        propagatedDeclarations ::  [Declaration t p (i, Maybe (IdentifierMeaning t p i))]
+        propagatedDeclarations = map (propagateDeclaration allTopLevelValues) declarations
+        
+    propagateDeclaration :: [(i, IdentifierMeaning t p i)] -> Declaration t p i -> Declaration t p (i, Maybe (IdentifierMeaning t p i))
+    propagateDeclaration context (Declaration (LowercaseIdentifier i p1) expression p2) = 
+      Declaration (LowercaseIdentifier (i, Just NotAReference) p1) propagatedExpression p2
+        where 
+          propagatedExpression :: Expression t p (i, Maybe (IdentifierMeaning t p i))
+          propagatedExpression = propagateExpression context expression
 
-    getUndefinedNamesUsedInExpression context (ParenthesizedExpression e _ _) = getUndefinedNamesUsedInExpression context e
-    getUndefinedNamesUsedInExpression context (NumberLiteral _ _ _) = []
-    getUndefinedNamesUsedInExpression context e@(IdentifierExpression identifier@(LowercaseIdentifier i _) _ _) = 
-      if i `elem` context then [] else [identifier]
-    getUndefinedNamesUsedInExpression context (FunctionLiteralExpression newIdentifiers expr _ _) = getUndefinedNamesUsedInExpression newContext expr
-      where newContext = context <> (map (\case LowercaseIdentifier i _ -> i) newIdentifiers)
+    propagateExpression :: [(i, IdentifierMeaning t p i)] -> Expression t p i -> Expression t p (i, Maybe (IdentifierMeaning t p i))
+    propagateExpression context (ParenthesizedExpression e p t) = ParenthesizedExpression (propagateExpression context e) p t
+    propagateExpression context (NumberLiteral rational t p) = NumberLiteral rational t p
+    propagateExpression context e@(IdentifierExpression identifier@(LowercaseIdentifier i p) t p2) = 
+      IdentifierExpression (LowercaseIdentifier (i, i `listLookup` context) p) t p2
+    propagateExpression context (FunctionLiteralExpression newIdentifiers expr _ _) = propagateExpression newContext expr
+      where newContext = (map (\case LowercaseIdentifier i _ -> (i, Free)) newIdentifiers) <> context 
 
 
 
