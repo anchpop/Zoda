@@ -34,7 +34,7 @@ check context expression against = do
    
 
 
-data IdentifierMeaning t p i = Ref (Expression t p i) | Free | NotAReference
+data IdentifierMeaning t p i = Ref (Expression t p i) | Free | NotAReference deriving (Eq, Ord, Read, Show)
 
 listLookup toLookup [] = Nothing
 listLookup toLookup ((k, v):xs)
@@ -42,7 +42,7 @@ listLookup toLookup ((k, v):xs)
     | otherwise = listLookup toLookup xs
 
 
-checkNamesDefined :: forall t p i. Ord i => Module t p i -> (Module t p (i, Maybe (IdentifierMeaning t p i)))
+checkNamesDefined :: forall t p i. Ord i => Module t p i -> Module t p (i, Maybe (IdentifierMeaning t p i))
 checkNamesDefined = copyPropagate
   where
 
@@ -72,14 +72,12 @@ checkNamesDefined = copyPropagate
 
 
 
+getMainFunc :: forall t p i. (IsString i, Ord i, Ord t, Eq p) => Module t p (i, Maybe (IdentifierMeaning t p i)) -> Maybe (Expression t p (i, Maybe (IdentifierMeaning t p i)))
+getMainFunc m@(Module _ declarations _) = map (\(Ref (e)) -> e) (lookup ("main", Just NotAReference) allTopLevelValues)
+  where
+    allTopLevelValues = map (\case Declaration (LowercaseIdentifier i p) e _ -> (i, Ref e)) declarations
+
 {-
-
-
-getMainFunc :: (Ord k, IsString k, HasThrow "perr" (ProductionError t p i) f) => Module t p i -> Map.Map ph k a -> f a
-getMainFunc moduleAST m = case "main" `Map.member` m of
-  Nothing -> throw @"perr" (NoMain moduleAST)
-  Just i -> pure $ Map.lookup i m
-
 
 --typeCheck :: (Ord k, IsString k, HasThrow "perr" (ProductionError t p i) f) => Map.Map ph k (Module u p i) -> m (Map.Map ph k (Module Metavariable p i))
 {-typeCheck m = (flip mapM) m $ \case 
@@ -101,7 +99,8 @@ evaluateMain identValMap mainFunc =  fullyReduce mainFunc
 -- runM (parseModule example >>= produceProgram)
 -}
 produceProgram moduleAST = do 
-  checkNamesDefined moduleAST
+  let propagated = checkNamesDefined moduleAST
+      main = getMainFunc propagated
   pure ()
 
 
