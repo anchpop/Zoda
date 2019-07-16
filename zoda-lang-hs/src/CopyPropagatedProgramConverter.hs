@@ -47,10 +47,9 @@ checkNamesDefined = copyPropagate
   where
 
     copyPropagate ::  Module t p i -> (Module t p (i, Maybe (IdentifierMeaning t p i)))
-    copyPropagate m@(Module (ModuleHeader (LowercaseIdentifier i1 p1) (Tinydoc text p2) p3) declarations p4) = Module (ModuleHeader (LowercaseIdentifier (i1, Just NotAReference) p1) (Tinydoc text p2) p3) propagatedDeclarations p4
+    copyPropagate (Module (ModuleHeader (LowercaseIdentifier i1 p1) (Tinydoc text p2) p3) declarations p4) = Module (ModuleHeader (LowercaseIdentifier (i1, Just NotAReference) p1) (Tinydoc text p2) p3) propagatedDeclarations p4
       where 
-        allTopLevelNames  = map (\case Declaration (LowercaseIdentifier i p) _ _ -> i) declarations
-        allTopLevelValues = map (\case Declaration (LowercaseIdentifier i p) e _ -> (i, Ref e)) declarations
+        allTopLevelValues = map (\case Declaration (LowercaseIdentifier i _) e _ -> (i, Ref e)) declarations
 
         propagatedDeclarations ::  [Declaration t p (i, Maybe (IdentifierMeaning t p i))]
         propagatedDeclarations = map (propagateDeclaration allTopLevelValues) declarations
@@ -67,8 +66,11 @@ checkNamesDefined = copyPropagate
     propagateExpression context (NumberLiteral rational t p) = NumberLiteral rational t p
     propagateExpression context e@(IdentifierExpression identifier@(LowercaseIdentifier i p) t p2) = 
       IdentifierExpression (LowercaseIdentifier (i, i `listLookup` context) p) t p2
-    propagateExpression context (FunctionLiteralExpression newIdentifiers expr _ _) = propagateExpression newContext expr
-      where newContext = (map (\case LowercaseIdentifier i _ -> (i, Free)) newIdentifiers) <> context 
+    propagateExpression context (FunctionLiteralExpression parameters expr t p) = FunctionLiteralExpression newParameters (propagateExpression newContext expr) t p
+      where newParameters = (map (\case LowercaseIdentifier i p -> LowercaseIdentifier (i, Just NotAReference) p) parameters)
+            newContext    = (map (\case LowercaseIdentifier i _ -> (i, Free)) parameters) <> context 
+    propagateExpression context (FunctionApplicationExpression e v t p) = FunctionApplicationExpression (propagateExpression context e) (map (propagateExpression context) v) t p
+    propagateExpression context (Annotation e t p) = Annotation (propagateExpression context e) t p
 
 
 
@@ -100,8 +102,12 @@ evaluateMain identValMap mainFunc =  fullyReduce mainFunc
 -}
 produceProgram moduleAST = do 
   let propagated = checkNamesDefined moduleAST
-      main = getMainFunc propagated
-  pure ()
+      mainfunc = getMainFunc propagated
+  case mainfunc of 
+    Nothing -> pure (Left "no main function!")
+    Just e -> evaluate e
+  where 
+    evaluate e = pure (Right $ traceShowId e)
 
 
 
