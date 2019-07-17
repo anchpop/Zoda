@@ -104,10 +104,10 @@ produceProgram moduleAST = do
   let propagated = checkNamesDefined moduleAST
       mainfunc = getMainFunc propagated
   case mainfunc of 
-    Nothing -> pure (Left "no main function!")
+    Nothing -> throw @"perr" (NoMain moduleAST)
     Just e -> evaluate e
   where 
-    evaluate e = pure (Right $ traceShowId e)
+    evaluate e = pure e
 
 
 
