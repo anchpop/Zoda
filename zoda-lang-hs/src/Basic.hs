@@ -10,8 +10,12 @@ import qualified CopyPropagatedProgram as CPP
 import Control.Monad.Except (ExceptT (..), Except)
 
 
-
-data ProductionError t p i = ZodaSyntaxError (ParseErrorBundle String Void) | ValueRedeclaration (Declaration t p i) | UndeclaredValuesReferenced [LowercaseIdentifier t p i] | NoMain (Module t p i) | MultipleValueUse [(i, Expression t p i)] 
+data ProductionError t p i = ZodaSyntaxError (ParseErrorBundle String Void) 
+                           | ValueRedeclaration (Declaration t p i) 
+                           | UndeclaredValuesReferenced [LowercaseIdentifier t p i] 
+                           | NoMain (Module t p i) 
+                           | MultipleValueUse [(i, Expression t p i)] 
+                           | IncorrectNumArgumentsProvided (Expression t p i)
   deriving (Show, Eq)
   deriving anyclass Exception
 

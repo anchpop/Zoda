@@ -20,13 +20,12 @@ data Expression t p i = ParenthesizedExpression (Expression t p i) t p
                       | IdentifierExpression (LowercaseIdentifier t p i) t p 
                       | FunctionLiteralExpression [LowercaseIdentifier t p i] (Expression t p i) t p 
                       | FunctionApplicationExpression (Expression t p i) [Expression t p i] t p 
-                      | Annotation (Expression t p i) t p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
+                      | Annotation (Expression t p i) t p 
+                        deriving (Show, Eq, Read, Ord, Functor, Foldable, Traversable, Typeable)
 
 
 data Tinydoc t p i = Tinydoc Text p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
-data LowercaseIdentifier t p i = LowercaseIdentifier i p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
-data UppercaseIdentifier t p i = UppercaseIdentifier i p deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
-
+data LowercaseIdentifier t p i = LowercaseIdentifier { getIdentifier :: i, getIdentifierSourcePos :: p } deriving (Show, Read, Eq, Ord, Functor, Foldable, Traversable, Typeable)
 
 
 data Untyped = Untyped deriving (Show, Read, Eq, Ord)
@@ -34,7 +33,6 @@ data Untyped = Untyped deriving (Show, Read, Eq, Ord)
 makeBaseFunctor ''Expression
 
 instance Representational (LowercaseIdentifier t p) where rep Coercion = Coercion
-instance Representational (UppercaseIdentifier t p) where rep Coercion = Coercion
 instance Representational (Tinydoc t p) where rep Coercion = Coercion
 instance Representational (Expression t p) where rep Coercion = Coercion
 instance Representational (Declaration t p) where rep Coercion = Coercion

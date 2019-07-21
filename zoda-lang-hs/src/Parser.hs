@@ -128,13 +128,6 @@ tinydocP = sourcePosWrapper $ do
   pure . Tinydoc . fromString $ doc
 
 
-uppercaseIdentifierP :: ASTParser UppercaseIdentifier
-uppercaseIdentifierP = sourcePosWrapper $ do
-  c    <- upperChar
-  rest <- many identifierCharacter
-  pure . UppercaseIdentifier . fromString $ (c : rest)
-
-
 lowercaseIdentifierP :: ASTParser LowercaseIdentifier
 lowercaseIdentifierP =
   sourcePosWrapper

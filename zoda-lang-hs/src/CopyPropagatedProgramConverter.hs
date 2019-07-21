@@ -34,7 +34,7 @@ check context expression against = do
    
 
 
-data IdentifierMeaning t p i = Ref (Expression t p i) | Free | NotAReference deriving (Eq, Ord, Read, Show)
+data IdentifierMeaning t p i = Ref (Expression t p i) | LambdaVar | NotAReference deriving (Eq, Ord, Read, Show)
 
 listLookup toLookup [] = Nothing
 listLookup toLookup ((k, v):xs)
@@ -61,17 +61,26 @@ checkNamesDefined = copyPropagate
           propagatedExpression :: Expression t p (i, Maybe (IdentifierMeaning t p i))
           propagatedExpression = propagateExpression context expression
 
-    propagateExpression :: [(i, IdentifierMeaning t p i)] -> Expression t p i -> Expression t p (i, Maybe (IdentifierMeaning t p i))
-    propagateExpression context (ParenthesizedExpression e p t) = ParenthesizedExpression (propagateExpression context e) p t
-    propagateExpression context (NumberLiteral rational t p) = NumberLiteral rational t p
-    propagateExpression context e@(IdentifierExpression identifier@(LowercaseIdentifier i p) t p2) = 
-      IdentifierExpression (LowercaseIdentifier (i, i `listLookup` context) p) t p2
-    propagateExpression context (FunctionLiteralExpression parameters expr t p) = FunctionLiteralExpression newParameters (propagateExpression newContext expr) t p
-      where newParameters = (map (\case LowercaseIdentifier i p -> LowercaseIdentifier (i, Just NotAReference) p) parameters)
-            newContext    = (map (\case LowercaseIdentifier i _ -> (i, Free)) parameters) <> context 
-    propagateExpression context (FunctionApplicationExpression e v t p) = FunctionApplicationExpression (propagateExpression context e) (map (propagateExpression context) v) t p
-    propagateExpression context (Annotation e t p) = Annotation (propagateExpression context e) t p
+propagateExpression :: forall t i p. (Eq i) => [(i, IdentifierMeaning t p i)] -> Expression t p i -> Expression t p (i, Maybe (IdentifierMeaning t p i))
+propagateExpression context (ParenthesizedExpression e p t) = ParenthesizedExpression (propagateExpression context e) p t
+propagateExpression context (NumberLiteral rational t p) = NumberLiteral rational t p
+propagateExpression context e@(IdentifierExpression identifier@(LowercaseIdentifier i p) t p2) = 
+  IdentifierExpression (LowercaseIdentifier (i, i `listLookup` context) p) t p2
+propagateExpression context (FunctionLiteralExpression parameters expr t p) = FunctionLiteralExpression newParameters (propagateExpression newContext expr) t p
+  where newParameters = (map (\case LowercaseIdentifier i p -> LowercaseIdentifier (i, Just NotAReference) p) parameters)
+        newContext    = (map (\case LowercaseIdentifier i _ -> (i, LambdaVar)) parameters) <> context 
+propagateExpression context (FunctionApplicationExpression e v t p) = FunctionApplicationExpression (propagateExpression context e) (map (propagateExpression context) v) t p
+propagateExpression context (Annotation e t p) = Annotation (propagateExpression context e) t p
 
+depropagateExpression :: Expression t p (i, Maybe (IdentifierMeaning t p i)) -> Expression t p i
+depropagateExpression (ParenthesizedExpression e p t) = ParenthesizedExpression (depropagateExpression e) p t
+depropagateExpression (NumberLiteral rational t p) = NumberLiteral rational t p
+depropagateExpression e@(IdentifierExpression (LowercaseIdentifier (i, _) p) t p2) = 
+  IdentifierExpression (LowercaseIdentifier i p) t p2
+depropagateExpression (FunctionLiteralExpression parameters expr t p) = FunctionLiteralExpression newParameters (depropagateExpression expr) t p
+  where newParameters = (map (\case LowercaseIdentifier (i, _) p -> LowercaseIdentifier i p) parameters)
+depropagateExpression (FunctionApplicationExpression e v t p) = FunctionApplicationExpression (depropagateExpression e) (map depropagateExpression v) t p
+depropagateExpression (Annotation e t p) = Annotation (depropagateExpression e) t p
 
 
 getMainFunc :: forall t p i. (IsString i, Ord i, Ord t, Eq p) => Module t p (i, Maybe (IdentifierMeaning t p i)) -> Maybe (Expression t p (i, Maybe (IdentifierMeaning t p i)))
@@ -100,19 +109,46 @@ evaluateMain identValMap mainFunc =  fullyReduce mainFunc
 
 -- runM (parseModule example >>= produceProgram)
 -}
-produceProgram moduleAST = do 
+produceProgram :: forall t p i m. (IsString i, Ord i, Ord t, Eq p, HasThrow "perr" (ProductionError t p i) m) => Module t p i -> m (Expression t p (i, Maybe (IdentifierMeaning t p i)))
+produceProgram moduleAST = 
   let propagated = checkNamesDefined moduleAST
       mainfunc = getMainFunc propagated
-  case mainfunc of 
+  in case mainfunc of 
     Nothing -> throw @"perr" (NoMain moduleAST)
-    Just e -> evaluate e
+    Just e -> fullyReduce e
   where 
-    evaluate e = pure e
+
+    reduceExpression :: Expression t p (i, Maybe (IdentifierMeaning t p i)) -> m (Expression t p (i, Maybe (IdentifierMeaning t p i)))
+    reduceExpression (ParenthesizedExpression e _ _ ) = pure e
+    reduceExpression e@(FunctionApplicationExpression func' args' _ _) = do
+        func <- fullyReduce func'
+        args <- mapM fullyReduce args'
+        applyFunction func args
+      where
+        getIdentifierName = fst . getIdentifier
+        applyFunction (FunctionLiteralExpression argNames expression _ _) args = 
+          if length idents /= length args
+            then throw @"perr" $ IncorrectNumArgumentsProvided (depropagateExpression e)
+            else undefined
+          where
+            idents = map getIdentifierName argNames
+            
+        
+    reduceExpression x = pure x
+
+    fullyReduce e = do 
+      reduced <- reduceExpression e
+      if reduced == e
+        then pure e
+        else fullyReduce (reduced)
+
 
 
 
 example :: String
 example = "module i `test module`\n\
           \test = (-3.6)\n\
-          \main = test.(|a| a)\n\
+          \main = ( test.(|a| a))\n\
           \"
+
+
