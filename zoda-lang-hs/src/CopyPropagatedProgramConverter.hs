@@ -5,7 +5,7 @@ import Data.Maybe
 import Ast
 import qualified CopyPropagatedProgram as CPP
 import Capability.Error
-
+import qualified Data.Set as Set
 
 data Metavariable = TypechecksOkay{-MetavariableApplication Int [Metavariable] 
                   | Metavariable Int 
@@ -142,9 +142,18 @@ produceProgram moduleAST =
               | otherwise   = e 
             substitute (FunctionLiteralExpression identifiers e t p) before after 
               | before `elem` (map getIdentifierName identifiers) = e 
+              | any (\(LowercaseIdentifier (i, _) _) -> i `Set.member` (fv after)) identifiers = undefined "Not implemented yet"
               | otherwise                                         = FunctionLiteralExpression identifiers (substitute e before after) t p
             substitute (FunctionApplicationExpression funcToLookIn argsToLookIn t p) before after = FunctionApplicationExpression (substitute funcToLookIn before after) (map (\argToLookIn -> substitute argToLookIn before after) argsToLookIn) t p
             substitute (Annotation e t p) before after = Annotation (substitute e before after) t p
+            
+            fv (ParenthesizedExpression e t p) = fv e
+            fv (NumberLiteral _ _ _) = Set.empty 
+            fv (IdentifierExpression (LowercaseIdentifier (i, _) _) t p ) = Set.singleton i
+            fv (FunctionLiteralExpression idents e t p ) = foldr (flip Set.difference) (fv e) (map (Set.singleton . getIdentifierName) idents)
+            fv (FunctionApplicationExpression f as t p ) = foldr Set.union (fv f) (map fv as)
+
+    
     reduceExpression (FunctionLiteralExpression args func' t p) = do
       func <- fullyReduce func'
       pure $ FunctionLiteralExpression args func t p
@@ -166,9 +175,9 @@ produceProgram moduleAST =
 
 example :: String
 example = "module i `test module`\n\
-          \test = (-3.5)\n\
-          \func = |a| a\n\
-          \main = test.func\n\
+          \z = (-3.5)     \n\
+          \func = |x| x   \n\
+          \main = z.func  \n\
           \"
 
 
