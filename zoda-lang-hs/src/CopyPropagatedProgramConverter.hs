@@ -34,7 +34,7 @@ check context expression against = do
    
 
 
-data IdentifierMeaning t p i = Ref (Expression t p i) | LambdaVar | NotAReference deriving (Eq, Ord, Read, Show)
+data IdentifierMeaning t p i = Ref (Expression t p (i, Maybe (IdentifierMeaning t p i))) | LambdaVar | NotAReference deriving (Eq, Ord, Read, Show)
 
 listLookup toLookup [] = Nothing
 listLookup toLookup ((k, v):xs)
@@ -49,17 +49,17 @@ checkNamesDefined = copyPropagate
     copyPropagate ::  Module t p i -> (Module t p (i, Maybe (IdentifierMeaning t p i)))
     copyPropagate (Module (ModuleHeader (LowercaseIdentifier i1 p1) (Tinydoc text p2) p3) declarations p4) = Module (ModuleHeader (LowercaseIdentifier (i1, Just NotAReference) p1) (Tinydoc text p2) p3) propagatedDeclarations p4
       where 
-        allTopLevelValues = map (\case Declaration (LowercaseIdentifier i _) e _ -> (i, Ref e)) declarations
+        allTopLevelValues = map (\case d@(Declaration (LowercaseIdentifier i _) e _) -> (i, Ref (propagateExpression allTopLevelValues e))) declarations
 
         propagatedDeclarations ::  [Declaration t p (i, Maybe (IdentifierMeaning t p i))]
         propagatedDeclarations = map (propagateDeclaration allTopLevelValues) declarations
         
-    propagateDeclaration :: [(i, IdentifierMeaning t p i)] -> Declaration t p i -> Declaration t p (i, Maybe (IdentifierMeaning t p i))
-    propagateDeclaration context (Declaration (LowercaseIdentifier i p1) expression p2) = 
-      Declaration (LowercaseIdentifier (i, Just NotAReference) p1) propagatedExpression p2
-        where 
-          propagatedExpression :: Expression t p (i, Maybe (IdentifierMeaning t p i))
-          propagatedExpression = propagateExpression context expression
+        propagateDeclaration :: [(i, IdentifierMeaning t p i)] -> Declaration t p i -> Declaration t p (i, Maybe (IdentifierMeaning t p i))
+        propagateDeclaration context (Declaration (LowercaseIdentifier i p1) expression p2) = 
+          Declaration (LowercaseIdentifier (i, Just NotAReference) p1) propagatedExpression p2
+            where 
+              propagatedExpression :: Expression t p (i, Maybe (IdentifierMeaning t p i))
+              propagatedExpression = propagateExpression context expression
 
 propagateExpression :: forall t i p. (Eq i) => [(i, IdentifierMeaning t p i)] -> Expression t p i -> Expression t p (i, Maybe (IdentifierMeaning t p i))
 propagateExpression context (ParenthesizedExpression e p t) = ParenthesizedExpression (propagateExpression context e) p t
@@ -126,15 +126,34 @@ produceProgram moduleAST =
         applyFunction func args
       where
         getIdentifierName = fst . getIdentifier
-        applyFunction (FunctionLiteralExpression argNames expression _ _) args = 
+        applyFunction :: (Expression t p (i, Maybe (IdentifierMeaning t p i))) -> [Expression t p (i, Maybe (IdentifierMeaning t p i))] -> m (Expression t p (i, Maybe (IdentifierMeaning t p i)))
+        applyFunction (FunctionLiteralExpression argNames expression _ _) args = -- TODO: Make this capture-avoidant by adding renaming
           if length idents /= length args
             then throw @"perr" $ IncorrectNumArgumentsProvided (depropagateExpression e)
-            else undefined
+            else pure $ foldr (\(b, a) e -> substitute e b a) expression zippedArgs
           where
+            zippedArgs = zip (map getIdentifierName argNames) args
             idents = map getIdentifierName argNames
-            
-        
-    reduceExpression x = pure x
+            substitute :: Expression t p (i, Maybe (IdentifierMeaning t p i)) -> i -> Expression t p (i, Maybe (IdentifierMeaning t p i)) -> Expression t p (i, Maybe (IdentifierMeaning t p i)) 
+            substitute (ParenthesizedExpression e t p) before after = ParenthesizedExpression (substitute e before after) t p 
+            substitute e@(NumberLiteral _ _ _) _ _ = e
+            substitute e@(IdentifierExpression (LowercaseIdentifier (i, Just LambdaVar) p) t2 p2) before after 
+              | i == before = after
+              | otherwise   = e 
+            substitute (FunctionLiteralExpression identifiers e t p) before after 
+              | before `elem` (map getIdentifierName identifiers) = e 
+              | otherwise                                         = FunctionLiteralExpression identifiers (substitute e before after) t p
+            substitute (FunctionApplicationExpression funcToLookIn argsToLookIn t p) before after = FunctionApplicationExpression (substitute funcToLookIn before after) (map (\argToLookIn -> substitute argToLookIn before after) argsToLookIn) t p
+            substitute (Annotation e t p) before after = Annotation (substitute e before after) t p
+    reduceExpression (FunctionLiteralExpression args func' t p) = do
+      func <- fullyReduce func'
+      pure $ FunctionLiteralExpression args func t p
+    reduceExpression (Annotation e t p) = do
+      reduced <- reduceExpression e
+      pure $ Annotation reduced t p
+    reduceExpression   (IdentifierExpression (LowercaseIdentifier (i, Just (Ref e)) _) t p) = pure e 
+    reduceExpression e@(IdentifierExpression (LowercaseIdentifier (i, _)            _) t p) = pure e 
+    reduceExpression n@(NumberLiteral _ _ _) = pure n
 
     fullyReduce e = do 
       reduced <- reduceExpression e
@@ -147,8 +166,9 @@ produceProgram moduleAST =
 
 example :: String
 example = "module i `test module`\n\
-          \test = (-3.6)\n\
-          \main = ( test.(|a| a))\n\
+          \test = (-3.5)\n\
+          \func = |a| a\n\
+          \main = test.func\n\
           \"
 
 
