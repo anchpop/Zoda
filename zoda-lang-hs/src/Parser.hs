@@ -158,7 +158,7 @@ sourcePosWrapper f = do
   pure $ toApply (SourcePosition n (unPos l1) (unPos c1) (unPos l2) (unPos c2))
 
 sourcePosWrapperWithNewlines :: Parser (SourcePosition -> a) -> Parser a
-sourcePosWrapperWithNewlines f = sourcePosWrapper f <* (some newline *> pure () <|> (lookAhead eof))
+sourcePosWrapperWithNewlines f = sourcePosWrapper f <* (many separatorChar *> some newline *> pure () <|> (lookAhead eof))
 
 
 some' :: Parser a -> Parser (NonEmpty.NonEmpty a)

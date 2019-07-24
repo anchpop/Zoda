@@ -174,10 +174,10 @@ produceProgram moduleAST =
 
 
 example :: String
-example = "module i `test module`\n\
-          \z = (-3.5)     \n\
-          \func = |x| x   \n\
-          \main = z.func  \n\
+example = "module i `test module` \n\
+          \z    = (-3.5)          \n\
+          \func = |x| x           \n\
+          \main = z.func          \n\
           \"
 
 
