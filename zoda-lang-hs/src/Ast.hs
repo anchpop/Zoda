@@ -20,7 +20,8 @@ data Expression t p i = ParenthesizedExpression (Expression t p i) t p
                       | IdentifierExpression (LowercaseIdentifier t p i) t p 
                       | FunctionLiteralExpression [LowercaseIdentifier t p i] (Expression t p i) t p 
                       | FunctionApplicationExpression (Expression t p i) [Expression t p i] t p 
-                      | Annotation (Expression t p i) t p 
+                      | TArrow (Expression t p i) (Expression t p i) t p 
+                      | Annotation (Expression t p i) (Expression t p i) t p 
                         deriving (Show, Eq, Read, Ord, Functor, Foldable, Traversable, Typeable)
 
 

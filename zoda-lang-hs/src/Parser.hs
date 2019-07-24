@@ -50,19 +50,31 @@ declarationP = sourcePosWrapperWithNewlines $ do
 
 
 expressionP :: ASTParser Expression
-expressionP = funcAppOnParenthesized <|> funcAppOnNum <|> funcAppOnFliteral <|> funcAppOnIdent <|> parenthesizedExpression <|> numb <|> ident <|> fliteral
+expressionP = allWithModifier annotationWrapper <|> allWithModifier funcAppWrapper <|> allWithModifier tarrowWrapper <|> parenthesizedExpression <|> numb <|> ident <|> fliteral
  where
-  funcAppOnParenthesized = funcAppWrapper parenthesizedExpression
-  funcAppOnFliteral      = funcAppWrapper fliteral
-  funcAppOnIdent         = funcAppWrapper ident
-  funcAppOnNum           = funcAppWrapper numb
+  allWithModifier f = foldr (<|>) (f parenthesizedExpression) (map f [fliteral, ident, numb])
+  annotationWrapper expType = sourcePosWrapper . try $ do
+    expr1 <- expType
+    many separatorChar
+    string ":"
+    many separatorChar
+    expr2 <- expressionP
+    pure (Annotation expr1 expr2 Untyped) 
+  tarrowWrapper expType = sourcePosWrapper . try $ do
+    expr1 <- expType
+    many separatorChar
+    string "->"
+    many separatorChar
+    expr2 <- expressionP
+    pure (TArrow expr1 expr2 Untyped)
   funcAppWrapper expType = sourcePosWrapper . try . (fmap (\(f, applicants) -> FunctionApplicationExpression f applicants Untyped)) $ typedotexp
-   where
-    typedotexp = do
-      applicant <- expType
-      string "."
-      f <- expressionP
-      pure (f, [applicant])
+    where
+      typedotexp = do
+        applicant <- expType
+        string "."
+        f <- expressionP
+        pure (f, [applicant])
+
   parenthesizedExpression = sourcePosWrapper . try $ do
     char '('
     many separatorChar
@@ -80,6 +92,7 @@ expressionP = funcAppOnParenthesized <|> funcAppOnNum <|> funcAppOnFliteral <|> 
   fliteral = sourcePosWrapper . try $ do
     flit <- functionLiteralP
     pure ((uncurry FunctionLiteralExpression) flit Untyped)
+  
 
 numberLiteralP :: Parser Rational
 numberLiteralP = try
@@ -119,6 +132,7 @@ functionLiteralP = do
   exp <- expressionP
   pure $ (identifiers, exp)
 
+  
 
 tinydocP :: ASTParser Tinydoc
 tinydocP = sourcePosWrapper $ do
@@ -171,6 +185,8 @@ some' p = do
 getRight :: Either (ParseErrorBundle String Void) b -> b
 getRight (Right b  ) = b
 getRight (Left  err) = error $ errorBundlePretty err
+getRightZSE (Right b  ) = b
+getRightZSE (Left  (ZodaSyntaxError err)) = error $ errorBundlePretty err
 
 justUnsafe (Just a) = a
 

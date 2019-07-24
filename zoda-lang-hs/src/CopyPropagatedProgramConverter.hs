@@ -16,25 +16,37 @@ newtype Evaluatable t p i = Evaluatable ((Text, Expression t p i), [Evaluatable 
 data Types = Number | Bool | Arr Types Types deriving (Eq, Show, Read)
 
 
-synth context (NumberLiteral e t _) = pure Number
-synth context (Annotation e t _) = check context e t *> pure t
-synth context (IdentifierExpression (LowercaseIdentifier x _) _ _) = case lookup x context of 
+data IdentifierMeaning t p i = Ref (Expression t p (i, Maybe (IdentifierMeaning t p i))) | LambdaVar | NotAReference deriving (Eq, Ord, Read, Show)
+
+--synth :: (Eq a1, IsString a2) => [(a1, Types)] -> Expression Types p (a1, Maybe (IdentifierMeaning Types p a1)) -> Either a2 Types
+synth context (NumberLiteral _ _ _) = pure Number
+synth context (Annotation e (IdentifierExpression (LowercaseIdentifier ("Number", _) _) _ _) _ _) = check context e Number *> pure Number -- check context e t *> pure t
+synth context (Annotation e (IdentifierExpression (LowercaseIdentifier ("Bool",   _) _) _ _) _ _) = check context e Bool *> pure Bool -- check context e t *> pure t
+synth context (Annotation e (TArrow e1 e2 _ _) _ _) = do
+  t1 <- synth context e1
+  t2 <- synth context e2
+  let t = t1 `Arr` t2
+  check context e t 
+  pure t
+synth context (IdentifierExpression (LowercaseIdentifier (x, Just LambdaVar) _) _ _) = case lookup x context of 
   Just t  -> pure t 
   Nothing -> Left "Type synthesis error bruh"
+synth context (IdentifierExpression (LowercaseIdentifier (_, Just (Ref x)) _) _ _) = synth [] x
 synth context (FunctionApplicationExpression fun [arg] _ _) = do
   functionType <- synth context fun
   case functionType of 
     Arr t1 t2 -> check context arg t1 *> pure t2
     _         -> Left "Type synthesis error bruh"
-check context (FunctionLiteralExpression [LowercaseIdentifier x _] (body) _ _) (Arr t1 t2) = check ((x, t1):context) body t2
-check context (FunctionLiteralExpression [LowercaseIdentifier x _] (body) _ _) _ = Left "Type checking error bruh"
+synth context (ParenthesizedExpression e t p) = synth context e
+synth _ x = error (show x)
+check context (FunctionLiteralExpression [LowercaseIdentifier (x, _) _] (body) _ _) (Arr t1 t2) = check ((x, t1):context) body t2
+check context (FunctionLiteralExpression [LowercaseIdentifier (x, _) _] (body) _ _) _ = Left "Type checking error bruh"
 check context expression against = do
   t <- synth context expression
   pure $ t == against
+
    
 
-
-data IdentifierMeaning t p i = Ref (Expression t p (i, Maybe (IdentifierMeaning t p i))) | LambdaVar | NotAReference deriving (Eq, Ord, Read, Show)
 
 listLookup toLookup [] = Nothing
 listLookup toLookup ((k, v):xs)
@@ -42,14 +54,15 @@ listLookup toLookup ((k, v):xs)
     | otherwise = listLookup toLookup xs
 
 
-checkNamesDefined :: forall t p i. Ord i => Module t p i -> Module t p (i, Maybe (IdentifierMeaning t p i))
+checkNamesDefined :: forall t p i. (Ord i, IsString i, Show i, Show t, Show p) => Module t p i -> Module t p (i, Maybe (IdentifierMeaning t p i))
 checkNamesDefined = copyPropagate
   where
 
     copyPropagate ::  Module t p i -> (Module t p (i, Maybe (IdentifierMeaning t p i)))
-    copyPropagate (Module (ModuleHeader (LowercaseIdentifier i1 p1) (Tinydoc text p2) p3) declarations p4) = Module (ModuleHeader (LowercaseIdentifier (i1, Just NotAReference) p1) (Tinydoc text p2) p3) propagatedDeclarations p4
+    copyPropagate (Module (ModuleHeader (LowercaseIdentifier i1 p1) (Tinydoc text p2) p3) declarations p4) = traceShow allTopLevelTypechecks $ Module (ModuleHeader (LowercaseIdentifier (i1, Just NotAReference) p1) (Tinydoc text p2) p3) propagatedDeclarations p4
       where 
         allTopLevelValues = map (\case d@(Declaration (LowercaseIdentifier i _) e _) -> (i, Ref (propagateExpression allTopLevelValues e))) declarations
+        allTopLevelTypechecks = map ((synth []) . \case (_, Ref x) -> x) allTopLevelValues
 
         propagatedDeclarations ::  [Declaration t p (i, Maybe (IdentifierMeaning t p i))]
         propagatedDeclarations = map (propagateDeclaration allTopLevelValues) declarations
@@ -70,7 +83,7 @@ propagateExpression context (FunctionLiteralExpression parameters expr t p) = Fu
   where newParameters = (map (\case LowercaseIdentifier i p -> LowercaseIdentifier (i, Just NotAReference) p) parameters)
         newContext    = (map (\case LowercaseIdentifier i _ -> (i, LambdaVar)) parameters) <> context 
 propagateExpression context (FunctionApplicationExpression e v t p) = FunctionApplicationExpression (propagateExpression context e) (map (propagateExpression context) v) t p
-propagateExpression context (Annotation e t p) = Annotation (propagateExpression context e) t p
+propagateExpression context (Annotation e1 e2 t p) = Annotation (propagateExpression context e1) (propagateExpression context e2) t p
 
 depropagateExpression :: Expression t p (i, Maybe (IdentifierMeaning t p i)) -> Expression t p i
 depropagateExpression (ParenthesizedExpression e p t) = ParenthesizedExpression (depropagateExpression e) p t
@@ -80,7 +93,7 @@ depropagateExpression e@(IdentifierExpression (LowercaseIdentifier (i, _) p) t p
 depropagateExpression (FunctionLiteralExpression parameters expr t p) = FunctionLiteralExpression newParameters (depropagateExpression expr) t p
   where newParameters = (map (\case LowercaseIdentifier (i, _) p -> LowercaseIdentifier i p) parameters)
 depropagateExpression (FunctionApplicationExpression e v t p) = FunctionApplicationExpression (depropagateExpression e) (map depropagateExpression v) t p
-depropagateExpression (Annotation e t p) = Annotation (depropagateExpression e) t p
+depropagateExpression (Annotation e1 e2 t p) = Annotation (depropagateExpression e1) (depropagateExpression e2) t p
 
 
 getMainFunc :: forall t p i. (IsString i, Ord i, Ord t, Eq p) => Module t p (i, Maybe (IdentifierMeaning t p i)) -> Maybe (Expression t p (i, Maybe (IdentifierMeaning t p i)))
@@ -109,7 +122,7 @@ evaluateMain identValMap mainFunc =  fullyReduce mainFunc
 
 -- runM (parseModule example >>= produceProgram)
 -}
-produceProgram :: forall t p i m. (IsString i, Ord i, Ord t, Eq p, HasThrow "perr" (ProductionError t p i) m) => Module t p i -> m (Expression t p (i, Maybe (IdentifierMeaning t p i)))
+produceProgram :: forall t p i m. (IsString i, Ord i, Ord t, Eq p, Show i, Show t, Show p, HasThrow "perr" (ProductionError t p i) m) => Module t p i -> m (Expression t p (i, Maybe (IdentifierMeaning t p i)))
 produceProgram moduleAST = 
   let propagated = checkNamesDefined moduleAST
       mainfunc = getMainFunc propagated
@@ -145,7 +158,7 @@ produceProgram moduleAST =
               | any (\(LowercaseIdentifier (i, _) _) -> i `Set.member` (fv after)) identifiers = undefined "Not implemented yet"
               | otherwise                                         = FunctionLiteralExpression identifiers (substitute e before after) t p
             substitute (FunctionApplicationExpression funcToLookIn argsToLookIn t p) before after = FunctionApplicationExpression (substitute funcToLookIn before after) (map (\argToLookIn -> substitute argToLookIn before after) argsToLookIn) t p
-            substitute (Annotation e t p) before after = Annotation (substitute e before after) t p
+            substitute (Annotation e1 e2 t p) before after = Annotation (substitute e1 before after) (substitute e2 before after) t p
             
             fv (ParenthesizedExpression e t p) = fv e
             fv (NumberLiteral _ _ _) = Set.empty 
@@ -157,9 +170,7 @@ produceProgram moduleAST =
     reduceExpression (FunctionLiteralExpression args func' t p) = do
       func <- fullyReduce func'
       pure $ FunctionLiteralExpression args func t p
-    reduceExpression (Annotation e t p) = do
-      reduced <- reduceExpression e
-      pure $ Annotation reduced t p
+    reduceExpression (Annotation e _ t p) = reduceExpression e
     reduceExpression   (IdentifierExpression (LowercaseIdentifier (i, Just (Ref e)) _) t p) = pure e 
     reduceExpression e@(IdentifierExpression (LowercaseIdentifier (i, _)            _) t p) = pure e 
     reduceExpression n@(NumberLiteral _ _ _) = pure n
@@ -176,7 +187,7 @@ produceProgram moduleAST =
 example :: String
 example = "module i `test module` \n\
           \z    = (-3.5)          \n\
-          \func = |x| x           \n\
+          \func = (|x| x) : Number -> Number    \n\
           \main = z.func          \n\
           \"
 
