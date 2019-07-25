@@ -19,14 +19,18 @@ data Types = Number | Bool | Arr Types Types deriving (Eq, Show, Read)
 data IdentifierMeaning t p i = Ref (Expression t p (i, Maybe (IdentifierMeaning t p i))) | LambdaVar | NotAReference deriving (Eq, Ord, Read, Show)
 
 --synth :: (Eq a1, IsString a2) => [(a1, Types)] -> Expression Types p (a1, Maybe (IdentifierMeaning Types p a1)) -> Either a2 Types
-synth context (NumberLiteral _ _ _) = pure Number
-synth context (Annotation e (IdentifierExpression (LowercaseIdentifier ("Number", _) _) _ _) _ _) = check context e Number *> pure Number -- check context e t *> pure t
-synth context (Annotation e (IdentifierExpression (LowercaseIdentifier ("Bool",   _) _) _ _) _ _) = check context e Bool *> pure Bool -- check context e t *> pure t
-synth context (Annotation e (TArrow e1 e2 _ _) _ _) = do
-  t1 <- synth context e1
-  t2 <- synth context e2
+annotationToType (IdentifierExpression (LowercaseIdentifier ("Number", _) _) _ _) = pure Number
+annotationToType (IdentifierExpression (LowercaseIdentifier ("Bool", _) _) _ _)   = pure Bool
+annotationToType (TArrow e1 e2 _ _) = do
+  t1 <- annotationToType e1
+  t2 <- annotationToType e2
   let t = t1 `Arr` t2
-  check context e t 
+  pure t
+
+synth context (NumberLiteral _ _ _) = pure Number
+synth context (Annotation e1 e2 _ _) = do
+  t <- annotationToType e2
+  check context e1 t 
   pure t
 synth context (IdentifierExpression (LowercaseIdentifier (x, Just LambdaVar) _) _ _) = case lookup x context of 
   Just t  -> pure t 
@@ -39,6 +43,7 @@ synth context (FunctionApplicationExpression fun [arg] _ _) = do
     _         -> Left "Type synthesis error bruh"
 synth context (ParenthesizedExpression e t p) = synth context e
 synth _ x = error (show x)
+check context (ParenthesizedExpression e _ _) t = check context e t
 check context (FunctionLiteralExpression [LowercaseIdentifier (x, _) _] (body) _ _) (Arr t1 t2) = check ((x, t1):context) body t2
 check context (FunctionLiteralExpression [LowercaseIdentifier (x, _) _] (body) _ _) _ = Left "Type checking error bruh"
 check context expression against = do
@@ -84,7 +89,8 @@ propagateExpression context (FunctionLiteralExpression parameters expr t p) = Fu
         newContext    = (map (\case LowercaseIdentifier i _ -> (i, LambdaVar)) parameters) <> context 
 propagateExpression context (FunctionApplicationExpression e v t p) = FunctionApplicationExpression (propagateExpression context e) (map (propagateExpression context) v) t p
 propagateExpression context (Annotation e1 e2 t p) = Annotation (propagateExpression context e1) (propagateExpression context e2) t p
-
+propagateExpression context e@(TArrow e1 e2 t p) = TArrow (propagateExpression context e1) (propagateExpression context e2) t p
+ 
 depropagateExpression :: Expression t p (i, Maybe (IdentifierMeaning t p i)) -> Expression t p i
 depropagateExpression (ParenthesizedExpression e p t) = ParenthesizedExpression (depropagateExpression e) p t
 depropagateExpression (NumberLiteral rational t p) = NumberLiteral rational t p
@@ -94,7 +100,7 @@ depropagateExpression (FunctionLiteralExpression parameters expr t p) = Function
   where newParameters = (map (\case LowercaseIdentifier (i, _) p -> LowercaseIdentifier i p) parameters)
 depropagateExpression (FunctionApplicationExpression e v t p) = FunctionApplicationExpression (depropagateExpression e) (map depropagateExpression v) t p
 depropagateExpression (Annotation e1 e2 t p) = Annotation (depropagateExpression e1) (depropagateExpression e2) t p
-
+depropagateExpression e@(TArrow e1 e2 t p) = TArrow (depropagateExpression e1) (depropagateExpression e2) t p
 
 getMainFunc :: forall t p i. (IsString i, Ord i, Ord t, Eq p) => Module t p (i, Maybe (IdentifierMeaning t p i)) -> Maybe (Expression t p (i, Maybe (IdentifierMeaning t p i)))
 getMainFunc m@(Module _ declarations _) = map (\(Ref (e)) -> e) (lookup ("main", Just NotAReference) allTopLevelValues)

@@ -50,14 +50,15 @@ declarationP = sourcePosWrapperWithNewlines $ do
 
 
 expressionP :: ASTParser Expression
-expressionP = allWithModifier annotationWrapper <|> allWithModifier funcAppWrapper <|> allWithModifier tarrowWrapper <|> parenthesizedExpression <|> numb <|> ident <|> fliteral
+expressionP = allWithModifier annotationWrapper [allWithModifier tarrowWrapper []] <|> allWithModifier funcAppWrapper [] <|> allWithModifier tarrowWrapper [] <|> parenthesizedExpression <|> numb <|> ident <|> fliteral
  where
-  allWithModifier f = foldr (<|>) (f parenthesizedExpression) (map f [fliteral, ident, numb])
+  allWithModifier f xs = foldr (<|>) (f parenthesizedExpression) (map f $ [fliteral, ident, numb] <> xs)
   annotationWrapper expType = sourcePosWrapper . try $ do
     expr1 <- expType
     many separatorChar
     string ":"
     many separatorChar
+    
     expr2 <- expressionP
     pure (Annotation expr1 expr2 Untyped) 
   tarrowWrapper expType = sourcePosWrapper . try $ do
@@ -146,7 +147,7 @@ lowercaseIdentifierP :: ASTParser LowercaseIdentifier
 lowercaseIdentifierP =
   sourcePosWrapper
     $ ( do
-        c    <- lowerChar
+        c    <- letterChar 
         rest <- many identifierCharacter
         pure . LowercaseIdentifier . fromString $ (c : rest)
       )
