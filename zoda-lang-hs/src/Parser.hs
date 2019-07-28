@@ -33,7 +33,7 @@ moduleHeaderP :: ASTParser ModuleHeader
 moduleHeaderP = sourcePosWrapperWithNewlines $ do
   string "module"
   some separatorChar
-  ident <- lowercaseIdentifierP
+  ident <- identifierP
   some separatorChar
   doc <- tinydocP
   pure (ModuleHeader ident doc)
@@ -41,7 +41,7 @@ moduleHeaderP = sourcePosWrapperWithNewlines $ do
 
 declarationP :: ASTParser Declaration
 declarationP = sourcePosWrapperWithNewlines $ do
-  ident <- lowercaseIdentifierP
+  ident <- identifierP
   some separatorChar
   char '='
   some separatorChar
@@ -50,7 +50,7 @@ declarationP = sourcePosWrapperWithNewlines $ do
 
 
 expressionP :: ASTParser Expression
-expressionP = allWithModifier annotationWrapper [allWithModifier tarrowWrapper []] <|> allWithModifier funcAppWrapper [] <|> allWithModifier tarrowWrapper [] <|> parenthesizedExpression <|> numb <|> ident <|> fliteral
+expressionP = allWithModifier annotationWrapper [allWithModifier tarrowWrapper1 [],  allWithModifier tarrowWrapper2 []] <|> allWithModifier funcAppWrapper [] <|> allWithModifier tarrowWrapper1 [] <|> allWithModifier tarrowWrapper2 [] <|> parenthesizedExpression <|> numb <|> ident <|> fliteral
  where
   allWithModifier f xs = foldr (<|>) (f parenthesizedExpression) (map f $ [fliteral, ident, numb] <> xs)
   annotationWrapper expType = sourcePosWrapper . try $ do
@@ -58,16 +58,28 @@ expressionP = allWithModifier annotationWrapper [allWithModifier tarrowWrapper [
     many separatorChar
     string ":"
     many separatorChar
-    
     expr2 <- expressionP
     pure (Annotation expr1 expr2 Untyped) 
-  tarrowWrapper expType = sourcePosWrapper . try $ do
+  tarrowWrapper1 expType = sourcePosWrapper . try $ do
     expr1 <- expType
     many separatorChar
     string "->"
     many separatorChar
     expr2 <- expressionP
-    pure (TArrow expr1 expr2 Untyped)
+    pure (TArrow Nothing expr1 expr2 Untyped)
+  tarrowWrapper2 expType = sourcePosWrapper . try $ do
+    expr1 <- expType
+    many separatorChar
+    string "("
+    many separatorChar
+    ident <- ident
+    many separatorChar
+    string ")"
+    many separatorChar
+    string "->"
+    many separatorChar
+    expr2 <- expressionP
+    pure (TArrow (Just ident) expr1 expr2 Untyped)
   funcAppWrapper expType = sourcePosWrapper . try . (fmap (\(f, applicants) -> FunctionApplicationExpression f applicants Untyped)) $ typedotexp
     where
       typedotexp = do
@@ -88,7 +100,7 @@ expressionP = allWithModifier annotationWrapper [allWithModifier tarrowWrapper [
     numb <- numberLiteralP
     pure (NumberLiteral numb Untyped)
   ident = sourcePosWrapper . try $ do
-    ident <- lowercaseIdentifierP
+    ident <- identifierP
     pure (IdentifierExpression ident Untyped)
   fliteral = sourcePosWrapper . try $ do
     flit <- functionLiteralP
@@ -122,10 +134,10 @@ numberLiteralP = try
         )
   where justUnsafe (Just x) = x
 
-functionLiteralP :: Parser ([LowercaseIdentifier Untyped SourcePosition Text], Expression Untyped SourcePosition Text)
+functionLiteralP :: Parser ([Identifier Untyped SourcePosition Text], Expression Untyped SourcePosition Text)
 functionLiteralP = do
   char '|'
-  identifiers <- lowercaseIdentifierP `sepBy1` (char ',' *> some separatorChar)
+  identifiers <- identifierP `sepBy1` (char ',' *> some separatorChar)
   char '|'
   some separatorChar
   -- string "->"
@@ -143,13 +155,13 @@ tinydocP = sourcePosWrapper $ do
   pure . Tinydoc . fromString $ doc
 
 
-lowercaseIdentifierP :: ASTParser LowercaseIdentifier
-lowercaseIdentifierP =
+identifierP :: ASTParser Identifier
+identifierP =
   sourcePosWrapper
     $ ( do
         c    <- letterChar 
         rest <- many identifierCharacter
-        pure . LowercaseIdentifier . fromString $ (c : rest)
+        pure . Identifier . fromString $ (c : rest)
       )
 
 
@@ -200,4 +212,4 @@ noNewlineOrChars :: (MonadParsec e s m, Token s ~ Char) => [Char] -> m (Token s)
 noNewlineOrChars c = noneOf ('\n' : c)
 
 
-testAST = Module (ModuleHeader (LowercaseIdentifier "i" (SourcePosition "module" 1 8 1 9)) (Tinydoc "test module" (SourcePosition "module" 1 10 1 23)) (SourcePosition "module" 1 1 1 23)) [Declaration (LowercaseIdentifier "test" (SourcePosition "module" 2 1 2 5)) (NumberLiteral ((-18) % 5) Untyped (SourcePosition "module" 2 8 2 12)) (SourcePosition "module" 2 1 2 12),Declaration (LowercaseIdentifier "main" (SourcePosition "module" 3 1 3 5)) (IdentifierExpression (LowercaseIdentifier "test" (SourcePosition "module" 3 8 3 12)) Untyped (SourcePosition "module" 3 8 3 12)) (SourcePosition "module" 3 1 3 12)] (SourcePosition "module" 1 1 4 1)
+testAST = Module (ModuleHeader (Identifier "i" (SourcePosition "module" 1 8 1 9)) (Tinydoc "test module" (SourcePosition "module" 1 10 1 23)) (SourcePosition "module" 1 1 1 23)) [Declaration (Identifier "test" (SourcePosition "module" 2 1 2 5)) (NumberLiteral ((-18) % 5) Untyped (SourcePosition "module" 2 8 2 12)) (SourcePosition "module" 2 1 2 12),Declaration (Identifier "main" (SourcePosition "module" 3 1 3 5)) (IdentifierExpression (Identifier "test" (SourcePosition "module" 3 8 3 12)) Untyped (SourcePosition "module" 3 8 3 12)) (SourcePosition "module" 3 1 3 12)] (SourcePosition "module" 1 1 4 1)
