@@ -26,26 +26,28 @@ annotationToType (TArrow e1 e2 _ _) = do
   t2 <- annotationToType e2
   let t = t1 `Arr` t2
   pure t
-
+synth :: (Eq i, IsString i, Show t, Show p, Show i, Ord i, Ord t, Eq p,  HasThrow "perr" (ProductionError t p i) m) => [(i, Types)] -> Expression t p (i, Maybe (IdentifierMeaning t p i)) -> m Types
 synth context (NumberLiteral _ _ _) = pure Number
 synth context (Annotation e1 e2 _ _) = do
-  t <- annotationToType e2
+  e2' <- fullyReduce e2
+  t <- annotationToType (e2')
   check context e1 t 
   pure t
 synth context (IdentifierExpression (LowercaseIdentifier (x, Just LambdaVar) _) _ _) = case lookup x context of 
   Just t  -> pure t 
-  Nothing -> Left "Type synthesis error bruh"
+  Nothing -> throw @"perr" TypeErr
 synth context (IdentifierExpression (LowercaseIdentifier (_, Just (Ref x)) _) _ _) = synth [] x
 synth context (FunctionApplicationExpression fun [arg] _ _) = do
   functionType <- synth context fun
   case functionType of 
     Arr t1 t2 -> check context arg t1 *> pure t2
-    _         -> Left "Type synthesis error bruh"
+    _         -> throw @"perr" TypeErr
 synth context (ParenthesizedExpression e t p) = synth context e
 synth _ x = error (show x)
+check :: (Eq i, IsString i, Show t, Show p, Show i, Ord i, Ord t, Eq p, HasThrow "perr" (ProductionError t p i) m) => [(i, Types)] -> Expression t p (i, Maybe (IdentifierMeaning t p i)) -> Types -> m Bool
 check context (ParenthesizedExpression e _ _) t = check context e t
 check context (FunctionLiteralExpression [LowercaseIdentifier (x, _) _] (body) _ _) (Arr t1 t2) = check ((x, t1):context) body t2
-check context (FunctionLiteralExpression [LowercaseIdentifier (x, _) _] (body) _ _) _ = Left "Type checking error bruh"
+check context (FunctionLiteralExpression [LowercaseIdentifier (x, _) _] (body) _ _) _ = throw @"perr" TypeErr
 check context expression against = do
   t <- synth context expression
   pure $ t == against
@@ -59,15 +61,17 @@ listLookup toLookup ((k, v):xs)
     | otherwise = listLookup toLookup xs
 
 
-checkNamesDefined :: forall t p i. (Ord i, IsString i, Show i, Show t, Show p) => Module t p i -> Module t p (i, Maybe (IdentifierMeaning t p i))
+checkNamesDefined :: forall t p i m. (Ord i, IsString i, Show i, Show t, Ord t, Show p, Eq p, HasThrow "perr" (ProductionError t p i) m) => Module t p i -> m (Module t p (i, Maybe (IdentifierMeaning t p i)))
 checkNamesDefined = copyPropagate
   where
 
-    copyPropagate ::  Module t p i -> (Module t p (i, Maybe (IdentifierMeaning t p i)))
-    copyPropagate (Module (ModuleHeader (LowercaseIdentifier i1 p1) (Tinydoc text p2) p3) declarations p4) = traceShow allTopLevelTypechecks $ Module (ModuleHeader (LowercaseIdentifier (i1, Just NotAReference) p1) (Tinydoc text p2) p3) propagatedDeclarations p4
+    copyPropagate ::  Module t p i -> m (Module t p (i, Maybe (IdentifierMeaning t p i)))
+    copyPropagate (Module (ModuleHeader (LowercaseIdentifier i1 p1) (Tinydoc text p2) p3) declarations p4) = do
+      allTopLevelTypechecks <- mapM ((synth []) . \case (_, Ref x) -> x) allTopLevelValues
+      pure $ traceShow allTopLevelTypechecks $ Module (ModuleHeader (LowercaseIdentifier (i1, Just NotAReference) p1) (Tinydoc text p2) p3) propagatedDeclarations p4
       where 
         allTopLevelValues = map (\case d@(Declaration (LowercaseIdentifier i _) e _) -> (i, Ref (propagateExpression allTopLevelValues e))) declarations
-        allTopLevelTypechecks = map ((synth []) . \case (_, Ref x) -> x) allTopLevelValues
+        
 
         propagatedDeclarations ::  [Declaration t p (i, Maybe (IdentifierMeaning t p i))]
         propagatedDeclarations = map (propagateDeclaration allTopLevelValues) declarations
@@ -107,85 +111,66 @@ getMainFunc m@(Module _ declarations _) = map (\(Ref (e)) -> e) (lookup ("main",
   where
     allTopLevelValues = map (\case Declaration (LowercaseIdentifier i p) e _ -> (i, Ref e)) declarations
 
-{-
-
---typeCheck :: (Ord k, IsString k, HasThrow "perr" (ProductionError t p i) f) => Map.Map ph k (Module u p i) -> m (Map.Map ph k (Module Metavariable p i))
-{-typeCheck m = (flip mapM) m $ \case 
-  FunctionLiteralExpression (FunctionLiteral t p i) t p -> pure TypechecksOkay
-_ -> pure TypechecksOkay-}
-
-evaluateMain :: (Ord k, Eq t, Eq p) => Map.Map ph k (Expression t p (Map.Key ph k)) -> Ast.Expression t p (Map.Key ph k) -> Ast.Expression t p (Map.Key ph k)
-evaluateMain identValMap mainFunc =  fullyReduce mainFunc
-  where
-    reduceExpression e@(NumberLiteral _ _ _) = e
-    reduceExpression (IdentifierExpression (LowercaseIdentifier ident _) _ _) = Map.lookup ident identValMap
-    reduceExpression (FunctionLiteralExpression (FunctionLiteral idents expr p1) t p2) = FunctionLiteralExpression (FunctionLiteral idents expr p1) t p2
-    reduceExpression e = e
-    fullyReduce e = if reduceExpression e == e
-                      then e
-                      else fullyReduce (reduceExpression e)
-
-
--- runM (parseModule example >>= produceProgram)
--}
 produceProgram :: forall t p i m. (IsString i, Ord i, Ord t, Eq p, Show i, Show t, Show p, HasThrow "perr" (ProductionError t p i) m) => Module t p i -> m (Expression t p (i, Maybe (IdentifierMeaning t p i)))
-produceProgram moduleAST = 
-  let propagated = checkNamesDefined moduleAST
-      mainfunc = getMainFunc propagated
-  in case mainfunc of 
+produceProgram moduleAST = do
+  propagated <- checkNamesDefined moduleAST
+  let mainfunc = getMainFunc propagated
+  case mainfunc of 
     Nothing -> throw @"perr" (NoMain moduleAST)
     Just e -> fullyReduce e
-  where 
+  
 
-    reduceExpression :: Expression t p (i, Maybe (IdentifierMeaning t p i)) -> m (Expression t p (i, Maybe (IdentifierMeaning t p i)))
-    reduceExpression (ParenthesizedExpression e _ _ ) = pure e
-    reduceExpression e@(FunctionApplicationExpression func' args' _ _) = do
-        func <- fullyReduce func'
-        args <- mapM fullyReduce args'
-        applyFunction func args
+reduceExpression :: forall t p i m. (IsString i, Ord i, Ord t, Eq p, Show i, Show t, Show p, HasThrow "perr" (ProductionError t p i) m) => Expression t p (i, Maybe (IdentifierMeaning t p i)) -> m (Expression t p (i, Maybe (IdentifierMeaning t p i)))
+reduceExpression (ParenthesizedExpression e _ _ ) = pure e
+reduceExpression e@(FunctionApplicationExpression func' args' _ _) = do
+    func <- fullyReduce func'
+    args <- mapM fullyReduce args'
+    applyFunction func args
+  where
+    getIdentifierName = fst . getIdentifier
+    applyFunction :: (Expression t p (i, Maybe (IdentifierMeaning t p i))) -> [Expression t p (i, Maybe (IdentifierMeaning t p i))] -> m (Expression t p (i, Maybe (IdentifierMeaning t p i)))
+    applyFunction (FunctionLiteralExpression argNames expression _ _) args = -- TODO: Make this capture-avoidant by adding renaming
+      if length idents /= length args
+        then throw @"perr" $ IncorrectNumArgumentsProvided (depropagateExpression e)
+        else pure $ foldr (\(b, a) e -> substitute e b a) expression zippedArgs
       where
-        getIdentifierName = fst . getIdentifier
-        applyFunction :: (Expression t p (i, Maybe (IdentifierMeaning t p i))) -> [Expression t p (i, Maybe (IdentifierMeaning t p i))] -> m (Expression t p (i, Maybe (IdentifierMeaning t p i)))
-        applyFunction (FunctionLiteralExpression argNames expression _ _) args = -- TODO: Make this capture-avoidant by adding renaming
-          if length idents /= length args
-            then throw @"perr" $ IncorrectNumArgumentsProvided (depropagateExpression e)
-            else pure $ foldr (\(b, a) e -> substitute e b a) expression zippedArgs
-          where
-            zippedArgs = zip (map getIdentifierName argNames) args
-            idents = map getIdentifierName argNames
-            substitute :: Expression t p (i, Maybe (IdentifierMeaning t p i)) -> i -> Expression t p (i, Maybe (IdentifierMeaning t p i)) -> Expression t p (i, Maybe (IdentifierMeaning t p i)) 
-            substitute (ParenthesizedExpression e t p) before after = ParenthesizedExpression (substitute e before after) t p 
-            substitute e@(NumberLiteral _ _ _) _ _ = e
-            substitute e@(IdentifierExpression (LowercaseIdentifier (i, Just LambdaVar) p) t2 p2) before after 
-              | i == before = after
-              | otherwise   = e 
-            substitute (FunctionLiteralExpression identifiers e t p) before after 
-              | before `elem` (map getIdentifierName identifiers) = e 
-              | any (\(LowercaseIdentifier (i, _) _) -> i `Set.member` (fv after)) identifiers = undefined "Not implemented yet"
-              | otherwise                                         = FunctionLiteralExpression identifiers (substitute e before after) t p
-            substitute (FunctionApplicationExpression funcToLookIn argsToLookIn t p) before after = FunctionApplicationExpression (substitute funcToLookIn before after) (map (\argToLookIn -> substitute argToLookIn before after) argsToLookIn) t p
-            substitute (Annotation e1 e2 t p) before after = Annotation (substitute e1 before after) (substitute e2 before after) t p
-            
-            fv (ParenthesizedExpression e t p) = fv e
-            fv (NumberLiteral _ _ _) = Set.empty 
-            fv (IdentifierExpression (LowercaseIdentifier (i, _) _) t p ) = Set.singleton i
-            fv (FunctionLiteralExpression idents e t p ) = foldr (flip Set.difference) (fv e) (map (Set.singleton . getIdentifierName) idents)
-            fv (FunctionApplicationExpression f as t p ) = foldr Set.union (fv f) (map fv as)
+        zippedArgs = zip (map getIdentifierName argNames) args
+        idents = map getIdentifierName argNames
+        substitute :: Expression t p (i, Maybe (IdentifierMeaning t p i)) -> i -> Expression t p (i, Maybe (IdentifierMeaning t p i)) -> Expression t p (i, Maybe (IdentifierMeaning t p i)) 
+        substitute (ParenthesizedExpression e t p) before after = ParenthesizedExpression (substitute e before after) t p 
+        substitute e@(NumberLiteral _ _ _) _ _ = e
+        substitute e@(IdentifierExpression (LowercaseIdentifier (i, Just LambdaVar) p) t2 p2) before after 
+          | i == before = after
+          | otherwise   = e 
+        substitute (FunctionLiteralExpression identifiers e t p) before after 
+          | before `elem` (map getIdentifierName identifiers) = e 
+          | any (\(LowercaseIdentifier (i, _) _) -> i `Set.member` (fv after)) identifiers = undefined "Not implemented yet"
+          | otherwise                                         = FunctionLiteralExpression identifiers (substitute e before after) t p
+        substitute (FunctionApplicationExpression funcToLookIn argsToLookIn t p) before after = FunctionApplicationExpression (substitute funcToLookIn before after) (map (\argToLookIn -> substitute argToLookIn before after) argsToLookIn) t p
+        substitute (Annotation e1 e2 t p) before after = Annotation (substitute e1 before after) (substitute e2 before after) t p
+        
+        fv (ParenthesizedExpression e t p) = fv e
+        fv (NumberLiteral _ _ _) = Set.empty 
+        fv (IdentifierExpression (LowercaseIdentifier (i, _) _) t p ) = Set.singleton i
+        fv (FunctionLiteralExpression idents e t p ) = foldr (flip Set.difference) (fv e) (map (Set.singleton . getIdentifierName) idents)
+        fv (FunctionApplicationExpression f as t p ) = foldr Set.union (fv f) (map fv as)
+reduceExpression (FunctionLiteralExpression args func' t p) = do
+  func <- fullyReduce func'
+  pure $ FunctionLiteralExpression args func t p
+reduceExpression   (Annotation e _ t p) = reduceExpression e
+reduceExpression   (IdentifierExpression (LowercaseIdentifier (i, Just (Ref e)) _) t p) = pure e 
+reduceExpression e@(IdentifierExpression (LowercaseIdentifier (i, _)            _) t p) = pure e 
+reduceExpression   (TArrow e1 e2 t p) = do
+  e1' <- fullyReduce e1
+  e2' <- fullyReduce e2
+  pure $ TArrow e1' e2' t p
+reduceExpression n@(NumberLiteral _ _ _) = pure n
 
-    
-    reduceExpression (FunctionLiteralExpression args func' t p) = do
-      func <- fullyReduce func'
-      pure $ FunctionLiteralExpression args func t p
-    reduceExpression (Annotation e _ t p) = reduceExpression e
-    reduceExpression   (IdentifierExpression (LowercaseIdentifier (i, Just (Ref e)) _) t p) = pure e 
-    reduceExpression e@(IdentifierExpression (LowercaseIdentifier (i, _)            _) t p) = pure e 
-    reduceExpression n@(NumberLiteral _ _ _) = pure n
-
-    fullyReduce e = do 
-      reduced <- reduceExpression e
-      if reduced == e
-        then pure e
-        else fullyReduce (reduced)
+fullyReduce e = do 
+  reduced <- reduceExpression e
+  if reduced == e
+    then pure e
+    else fullyReduce reduced
 
 
 
@@ -193,7 +178,7 @@ produceProgram moduleAST =
 example :: String
 example = "module i `test module` \n\
           \z    = (-3.5)          \n\
-          \func = (|x| x) : Number -> Number    \n\
+          \func = (|x| x) : (Number -> Number)    \n\
           \main = z.func          \n\
           \"
 

@@ -16,6 +16,7 @@ data ProductionError t p i = ZodaSyntaxError (ParseErrorBundle String Void)
                            | NoMain (Module t p i) 
                            | MultipleValueUse [(i, Expression t p i)] 
                            | IncorrectNumArgumentsProvided (Expression t p i)
+                           | TypeErr
   deriving (Show, Eq)
   deriving anyclass Exception
 
