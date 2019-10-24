@@ -90,6 +90,10 @@ type SurfaceEnv = [Surface]
 
 type SemanticEnv = [Semantic]
 data Clos    = Clos {termClos :: Surface, envClos :: SemanticEnv}
+
+-- Semantic values contain terms which have evaluated to a constructor which does not need to be 
+-- reduced further. So for instance, Lam and Pair may contain computation further inside the term 
+-- but at least the outermost constructor is stable and fully evaluated. 
 data Semantic =
     LamSem Clos
   | NeutralSem {tpNeutral :: Semantic, termNeutral :: Ne}
@@ -101,11 +105,19 @@ data Semantic =
   | PairSem Semantic Semantic
   | UniSem UniLevel
 
+-- We also have to consider the case that something wants to reduce further before becoming a 
+-- value but cannot because its blocked on something. These are called neutral terms. The 
+-- canonical example of a neutral term is just a variable x. It's not yet a value but there's 
+-- no way to convert it to a value since we have no information on what x is yet. Similarly, if 
+-- we have some neutral term and we apply Fst to it it's clearly still not a value but we don't 
+-- have any way of reducing it further so what's there to do. 
 data Ne =
     VarSem DeBruijnIndex
   | ApSem Ne Nf
   | FstSem Ne
   | SndSem Ne
+-- nf, is a special class of values coming from the style of NbE we use. It associates a type 
+-- with a value so that later during quotation we can eta expand it appropriately
 data Nf =
     Normal {tpNf :: Semantic, termNf :: Semantic}
 
@@ -153,7 +165,7 @@ eval (FstSurf  t)        env = do_fst (eval t env)
 eval (SndSurf  t)        env = do_snd (eval t env)
 
 
-read_back_nf :: Int -> Nf       -> Surface
+read_back_nf :: Int -> Nf -> Surface
 read_back_nf size (Normal (PiSem src dest) f)                 = LamSurf (read_back_nf (size + 1) nf)
                                                                 where arg = mk_var src size 
                                                                       nf  = Normal (do_clos dest arg) (do_ap f arg)  
@@ -169,7 +181,6 @@ read_back_nf size (Normal (UniSem i) (PiSem src dest))        = PiSurf
                                                                 where var = mk_var src size
 read_back_nf size (Normal (NeutralSem _ _) (NeutralSem _ ne)) = read_back_ne size ne
 read_back_nf _    _                                           = error "Ill-typed read_back_nf"
-
 
 
 read_back_tp :: Int -> Semantic -> Surface
