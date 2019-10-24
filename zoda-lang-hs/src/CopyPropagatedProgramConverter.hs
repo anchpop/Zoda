@@ -59,58 +59,127 @@ check context expression against = do
 
 
 
+
+type UniLevel = Int
+type DeBruijnIndex = Int
+data Surface = 
+    VarSurf DeBruijnIndex
+
+  -- nats
+  | NatSurf
+  | ZeroSurf
+  | SuccSurf Surface
+  -- nrec goes here
   
+  -- functions 
+  | PiSurf Surface Surface
+  | LamSurf Surface
+  | ApSurf Surface Surface
 
-data Ty = BasicType String | ArrowType Ty Ty | ProdType Ty Ty
-  deriving (NominalSupport, NominalShow, Show, Generic, Nominal)
-data Tm = Var Atom | Lam (Bind Atom Tm) | App Tm Tm | Pair Tm Tm | Fst Tm | Snd Tm
-  deriving (NominalSupport, NominalShow, Show, Generic, Nominal)
-data Sem = LAM (Sem -> Sem) | PAIR Sem Sem | SYN Tm
-  deriving (Generic, Nominal)
+  -- pairs 
+  | SigSurf Surface Surface
+  | PairSurf Surface Surface
+  | FstSurf Surface 
+  | SndSurf Surface
+  
+  -- universes 
+  | UniSurf UniLevel
 
-reflect :: Ty -> Tm -> Sem
-reflect (ArrowType a b) t = LAM (\s -> reflect b (App t (reify a s)))
-reflect (ProdType a b) t = PAIR (reflect a (Fst t)) (reflect b (Snd t))
-reflect (BasicType _) t = SYN t
-
-reify  :: Ty -> Sem -> Tm
-reify (ArrowType a b) (LAM s) = with_fresh (\x -> Lam (x :. reify b (s (reflect a (Var x)))))
---reify (ArrowType a b) (LAM s) = Lam x (reify b (s (reflect a (Var x))))
---  where x = fresh_var ()
-reify (ProdType a b) (PAIR s t) = Pair (reify a s) (reify b t)
-reify (BasicType _) (SYN t) = t
-reify _ _ = error "incorrect usage of reify!!"
-
-meaning :: [(Atom, Sem)] -> Tm -> Sem 
-meaning gamma (Var x) = 
-  case (lookup x gamma) of 
-    Just r -> r
-meaning gamma (Lam (x :. s)) = 
-  LAM (\s' -> meaning (gamma <> pure (x, s')) s) -- might be better to do pure (x, s') <> gamma, I'm really not sure 
-meaning gamma (App s t) = 
-  case meaning gamma s of
-    LAM s' -> s' (meaning gamma t)
-meaning gamma (Pair s t) = 
-  PAIR (meaning gamma s) (meaning gamma t)
-meaning gamma (Fst s) = 
-  case meaning gamma s of
-    PAIR s' t -> s'
-meaning gamma (Snd t) = 
-  case meaning gamma t of
-    PAIR s t' -> t'
-
-nbe :: Ty -> Tm -> Tm
-nbe a t = reify a (meaning empty t)
+type SurfaceEnv = [Surface]
 
 
-k = Lam (with_fresh_named "x" (\x -> x :. Lam (with_fresh_named "y" (\y -> y :. Var x)))) 
-s = Lam (with_fresh_named "x" (\x -> x :. Lam (with_fresh_named "y" (\y -> y :. Lam (with_fresh_named "z" (\z -> z :. App (App (Var x) (Var z)) (App (Var y) (Var z))))))))
-skk = App (App s k) k
+type SemanticEnv = [Semantic]
+data Clos    = Clos {termClos :: Surface, envClos :: SemanticEnv}
+data Semantic =
+    LamSem Clos
+  | NeutralSem {tpNeutral :: Semantic, termNeutral :: Ne}
+  | NatSem
+  | ZeroSem
+  | SuccSem Semantic
+  | PiSem Semantic Clos
+  | SigSem Semantic Clos 
+  | PairSem Semantic Semantic
+  | UniSem UniLevel
 
-res = nbe (ArrowType (BasicType "a") (BasicType "a")) skk
--- val S = lam ("x", lam ("y", lam ("z", app (app (var "x", var "z"), app (var "y", var "z")))))
--- val SKK = app (app (S, K), K)
--- k = lam ("x", lam ("y", var "x")) 
+data Ne =
+    VarSem DeBruijnIndex
+  | ApSem Ne Nf
+  | FstSem Ne
+  | SndSem Ne
+data Nf =
+    Normal {tpNf :: Semantic, termNf :: Semantic}
+
+do_fst :: Semantic -> Semantic
+do_fst (PairSem p1 _)                  = p1
+do_fst (NeutralSem (SigSem t _) ne) = NeutralSem t (FstSem ne)
+do_fst _                               = error "Couldn't fst argument in do_fst"
+
+do_snd :: Semantic -> Semantic
+do_snd (PairSem _ p2)                    = p2
+do_snd (NeutralSem p@(SigSem _ clo) ne) = NeutralSem (do_clos clo (do_fst p)) (SndSem ne)
+do_snd _                                 = error "Couldn't snd argument in do_snd"
+
+do_ap   :: Semantic -> Semantic -> Semantic
+do_ap (LamSem clos)                  a = do_clos clos a
+do_ap (NeutralSem (PiSem src dst) e) a =
+  NeutralSem (do_clos dst a) (ApSem e (Normal src a))
+do_ap (NeutralSem _ e) a = error "Not a Pi in do_ap"
+do_ap _                a = error "Not a function in do_ap"
+
+
+do_clos :: Clos -> Semantic -> Semantic
+do_clos (Clos term env) a = eval term (a : env)
+
+
+mk_var :: Semantic -> DeBruijnIndex -> Semantic
+mk_var tp lev = NeutralSem tp (VarSem lev)
+
+
+eval :: Surface -> SemanticEnv -> Semantic
+eval (VarSurf i) env =
+  case env `index` i of
+    Just x -> x 
+    _      -> error ("index " <> show i <> " not found") 
+eval  NatSurf            env = NatSem
+eval  ZeroSurf           env = ZeroSem
+eval (SuccSurf i)        env = SuccSem (eval i env)
+eval (PiSurf   src dest) env = PiSem (eval src env) (Clos dest env)
+eval (LamSurf  t)        env = LamSem (Clos t env)
+eval (ApSurf   t1  t2)   env = do_ap (eval t1 env) (eval t2 env)
+eval (UniSurf  i)        env = UniSem i
+eval (SigSurf  t1  t2)   env = SigSem (eval t1 env) (Clos t2 env)
+eval (PairSurf t1  t2)   env = PairSem (eval t1 env) (eval t2 env)
+eval (FstSurf  t)        env = do_fst (eval t env)
+eval (SndSurf  t)        env = do_snd (eval t env)
+
+
+read_back_nf :: Int -> Nf       -> Surface
+read_back_nf size (Normal (PiSem src dest) f)                 = LamSurf (read_back_nf (size + 1) nf)
+                                                                where arg = mk_var src size 
+                                                                      nf  = Normal (do_clos dest arg) (do_ap f arg)  
+read_back_nf size (Normal (SigSem fst snd) p)                 = PairSurf
+                                                                  (read_back_nf size (Normal fst                      (do_fst p)))
+                                                                  (read_back_nf size (Normal (do_clos snd (do_fst p)) (do_snd p)))
+read_back_nf size (Normal NatSem  ZeroSem)                    = ZeroSurf
+read_back_nf size (Normal NatSem (SuccSem nf))                = SuccSurf (read_back_nf size (Normal NatSem nf))
+read_back_nf size (Normal NatSem (NeutralSem _ ne))           = read_back_ne size ne
+read_back_nf size (Normal (UniSem i) (PiSem src dest))        = PiSurf
+                                                                  (read_back_nf size (Normal (UniSem i) src))
+                                                                  (read_back_nf (size + 1) (Normal (UniSem i) (do_clos dest var)))
+                                                                where var = mk_var src size
+read_back_nf size (Normal (NeutralSem _ _) (NeutralSem _ ne)) = read_back_ne size ne
+read_back_nf _    _                                           = error "Ill-typed read_back_nf"
+
+
+
+read_back_tp :: Int -> Semantic -> Surface
+read_back_tp = error "Not implemented yet"
+read_back_ne :: Int -> Ne       -> Surface
+read_back_ne = error "Not implemented yet"
+
+
+
+
 
 
 listLookup toLookup [] = Nothing
