@@ -123,20 +123,19 @@ data Nf =
 
 do_fst :: Semantic -> Semantic
 do_fst (PairSem p1 _)                  = p1
-do_fst (NeutralSem (SigSem t _) ne) = NeutralSem t (FstSem ne)
+do_fst (NeutralSem (SigSem t _) ne)    = NeutralSem t (FstSem ne)
 do_fst _                               = error "Couldn't fst argument in do_fst"
 
 do_snd :: Semantic -> Semantic
 do_snd (PairSem _ p2)                    = p2
-do_snd (NeutralSem p@(SigSem _ clo) ne) = NeutralSem (do_clos clo (do_fst p)) (SndSem ne)
+do_snd (NeutralSem p@(SigSem _ clo) ne)  = NeutralSem (do_clos clo (do_fst p)) (SndSem ne)
 do_snd _                                 = error "Couldn't snd argument in do_snd"
 
 do_ap   :: Semantic -> Semantic -> Semantic
 do_ap (LamSem clos)                  a = do_clos clos a
-do_ap (NeutralSem (PiSem src dst) e) a =
-  NeutralSem (do_clos dst a) (ApSem e (Normal src a))
-do_ap (NeutralSem _ e) a = error "Not a Pi in do_ap"
-do_ap _                a = error "Not a function in do_ap"
+do_ap (NeutralSem (PiSem src dst) e) a = NeutralSem (do_clos dst a) (ApSem e (Normal src a))
+do_ap (NeutralSem _ e) a               = error "Not a Pi in do_ap"
+do_ap _                a               = error "Not a function in do_ap"
 
 
 do_clos :: Clos -> Semantic -> Semantic
@@ -147,6 +146,7 @@ mk_var :: Semantic -> DeBruijnIndex -> Semantic
 mk_var tp lev = NeutralSem tp (VarSem lev)
 
 
+-- This converts the surface syntax into a semantic term with no beda redexes.
 eval :: Surface -> SemanticEnv -> Semantic
 eval (VarSurf i) env =
   case env `index` i of
@@ -164,6 +164,12 @@ eval (PairSurf t1  t2)   env = PairSem (eval t1 env) (eval t2 env)
 eval (FstSurf  t)        env = do_fst (eval t env)
 eval (SndSurf  t)        env = do_snd (eval t env)
 
+-- This is the "quotation" side of the algorithm. 
+-- It is a function converting semantic terms back to syntactic ones.
+-- These functions are the "read back" functions. We define 3 free forms of read back: 
+--   - one for normal forms
+--   - one for neutral terms
+--   - one for types. 
 
 read_back_nf :: Int -> Nf -> Surface
 read_back_nf size (Normal (PiSem src dest) f)                 = LamSurf (read_back_nf (size + 1) nf)
@@ -182,11 +188,28 @@ read_back_nf size (Normal (UniSem i) (PiSem src dest))        = PiSurf
 read_back_nf size (Normal (NeutralSem _ _) (NeutralSem _ ne)) = read_back_ne size ne
 read_back_nf _    _                                           = error "Ill-typed read_back_nf"
 
-
+-- This is almost like the read back for normal forms but deals directly with D.t 
+-- so there is no annotation tell us what type we're reading back at. 
+-- The function itself just assumes that d is some term of type Uni i for some i. 
+-- This, however, means that the cases are almost identical to the type cases in read_back_nf. 
 read_back_tp :: Int -> Semantic -> Surface
-read_back_tp = error "Not implemented yet"
-read_back_ne :: Int -> Ne       -> Surface
-read_back_ne = error "Not implemented yet"
+read_back_tp size (NeutralSem _ term) = read_back_ne size term
+read_back_tp _     NatSem             = NatSurf
+read_back_tp size (PiSem src dest)    = PiSurf (read_back_tp size src) (read_back_tp (size + 1) (do_clos dest var))
+    where var = mk_var src size
+read_back_tp size (SigSem f s)        = SigSurf (read_back_tp size f) (read_back_tp (size + 1) (do_clos s var))
+    where var = mk_var f size 
+read_back_tp _    (UniSem k)          = UniSurf k
+read_back_tp _     _                  = error "Nbe_failed - Not a type in read_back_tp"
+
+
+read_back_ne :: Int -> Ne -> Surface
+read_back_ne size (VarSem x)     = VarSurf (size - (x + 1)) -- Convert DeBruijn levels back to indices
+                                                            -- If these are some DeBruijn levels:        0 1 2 3 4 5
+                                                            -- Then here are the corresponding indecies: 6 5 4 3 2 1
+read_back_ne size (ApSem ne arg) = ApSurf (read_back_ne size ne) (read_back_nf size arg)
+read_back_ne size (FstSem ne)    = FstSurf (read_back_ne size ne)
+read_back_ne size (SndSem ne)    = SndSurf (read_back_ne size ne)
 
 
 
