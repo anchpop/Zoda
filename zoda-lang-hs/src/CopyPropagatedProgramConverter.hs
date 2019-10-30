@@ -84,12 +84,14 @@ data Surface =
   
   -- universes 
   | UniSurf UniLevel
+  deriving (Show, Read, Eq, Ord)
 
 type SurfaceEnv = [Surface]
 
 
 type SemanticEnv = [Semantic]
 data Clos    = Clos {termClos :: Surface, envClos :: SemanticEnv}
+  deriving (Show, Read, Eq, Ord)
 
 -- Semantic values contain terms which have evaluated to a constructor which does not need to be 
 -- reduced further. So for instance, Lam and Pair may contain computation further inside the term 
@@ -104,6 +106,7 @@ data Semantic =
   | SigSem Semantic Clos 
   | PairSem Semantic Semantic
   | UniSem UniLevel
+  deriving (Show, Read, Eq, Ord)
 
 -- We also have to consider the case that something wants to reduce further before becoming a 
 -- value but cannot because its blocked on something. These are called neutral terms. The 
@@ -116,10 +119,13 @@ data Ne =
   | ApSem Ne Nf
   | FstSem Ne
   | SndSem Ne
+  deriving (Show, Read, Eq, Ord)
+
 -- nf, is a special class of values coming from the style of NbE we use. It associates a type 
 -- with a value so that later during quotation we can eta expand it appropriately
 data Nf =
     Normal {tpNf :: Semantic, termNf :: Semantic}
+    deriving (Show, Read, Eq, Ord)
 
 do_fst :: Semantic -> Semantic
 do_fst (PairSem p1 _)                  = p1
@@ -151,7 +157,7 @@ eval :: Surface -> SemanticEnv -> Semantic
 eval (VarSurf i) env =
   case env `index` i of
     Just x -> x 
-    _      -> error ("index " <> show i <> " not found") 
+    _      -> error ("index " <> show i <> " outide of range of environment: " <> show env) 
 eval  NatSurf            env = NatSem
 eval  ZeroSurf           env = ZeroSem
 eval (SuccSurf i)        env = SuccSem (eval i env)
@@ -202,7 +208,6 @@ read_back_tp size (SigSem f s)        = SigSurf (read_back_tp size f) (read_back
 read_back_tp _    (UniSem k)          = UniSurf k
 read_back_tp _     _                  = error "Nbe_failed - Not a type in read_back_tp"
 
-
 read_back_ne :: Int -> Ne -> Surface
 read_back_ne size (VarSem x)     = VarSurf (size - (x + 1)) -- Convert DeBruijn levels back to indices
                                                             -- If these are some DeBruijn levels:        0 1 2 3 4 5
@@ -211,9 +216,22 @@ read_back_ne size (ApSem ne arg) = ApSurf (read_back_ne size ne) (read_back_nf s
 read_back_ne size (FstSem ne)    = FstSurf (read_back_ne size ne)
 read_back_ne size (SndSem ne)    = SndSurf (read_back_ne size ne)
 
+initial_env [] = []
+initial_env (t:env) = d:env'
+  where
+    env' = initial_env env 
+    d    = NeutralSem (eval t env') (VarSem (length env))
 
-
-
+normalize :: [Surface] -> Surface -> Surface -> Surface
+normalize env term tp = read_back_nf (length env') (Normal tp' term')
+  where env'  = initial_env env 
+        tp'   = eval tp env' 
+        term' = eval term env' 
+  
+testterm = ApSurf (LamSurf (SuccSurf (VarSurf 0))) ZeroSurf  
+testtype = NatSurf 
+testenv  = []
+normalized = normalize testenv testterm testtype
 
 
 listLookup toLookup [] = Nothing
