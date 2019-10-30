@@ -204,9 +204,18 @@ Finally, we can give a description of the cause of the error in backticks, and i
 
 These show up when the condition is *not* satisfied for whatever reason. The message in the backtics is used to give a more human-friendly explanation of the error and why it exists than that which can be generated automatically.
 
+This is also where you put trait constraints. Here's an example of using a trait constraint to make our `get-index` function work with any type of container:
+
+    get-index : @(e : Type) -> @(c : Type) -> (l : c(e)) -> (index : Int) -> e 
+        precondition
+            c has Collection(e)
+            length(l) > n, index-out-of-bounds, {length: length(l), index: n}, `You cannot access index {n} of {l} because 
+                                                    it is only {length(l)} long.`
+            n > 0        , negative-index   , {index: n}, `You cannot access the negative index {n} of {l}.`
+
 (Trait constraints don't get an error-doc or the ability to add an error type)
 
-For any function where you *don't* want to bother making sure the constraints are satisfied, you can just add a `?` to the end of the function name. This makes a function that returns a result type that indicates if the constraints were not found to hold at runtime, or contains the result otherwise. For result types that support it, it can also contain some more detailed information inside a `DebugInfo`, containing the interpolated tiny-doc, the stack trace, all the arguments to the function, etc. Obviously, this would only be done in development builds. This would seem impure, but since the contents of a `DebugInfo` can never affect the execution of a program it's probably okay.
+For any situation where you *don't* want to bother making sure a function's constraints are satisfied, you can just add a `?` to the end of the function name. This makes a function that returns a result type that indicates if the constraints were not found to hold at runtime, or contains the result otherwise. For result types that support it, it can also contain some more detailed information inside a `DebugInfo`, containing the interpolated tiny-doc, the stack trace, all the arguments to the function, etc. Obviously, this would only be done in development builds. This would seem impure, but since the contents of a `DebugInfo` can never affect the execution of a program it's probably okay.
 
 Names bound in type signatures can only be used "after" they're bound. 
 
@@ -726,25 +735,25 @@ These are just useful when you want to give a possibly more descriptive name to 
 
 ## Trait and instance declarations
 
-Unlike in default haskell, type classes can have multiple parameters. In this case, we're relating two types by saying one is a collection
-and another is an element. We also say that `Eq` is a supertrait for `e`, so the elements of any collection are required to have the `Eq` trait.
-We probably wouldn't do that in real life though because it's useful sometimes to have collections of functions and it's not possible to give
-functions an `Eq` instance. Also, we've added a functional dependency `c -> e`, by saying that the type of the element is soley determined by the type
-of the collection. This just means that for any `c : Type given Collection(c)`, there should be a unique type `e` known at compile time.  
+Unlike in default haskell, type classes can have multiple parameters. In this case, we're relating two types by saying one is a collection and another is an element. We also say that `Eq` is a supertrait for `e`, so the elements of any collection are required to have the `Eq` trait. We probably wouldn't do that in real life though because it's useful sometimes to have collections of functions and it's not possible to give functions an `Eq` instance. Also, we've added a functional dependency `c -> e`, by saying that the type of the element is soley determined by the type of the collection. This just means that for any `c : Type given Collection(c)`, there should be a unique type `e` known at compile time.  
 
-    new-trait Collection(c, e) given Eq(e) | c -> e where
-        insert: c -> e -> c
-        member: c -> e -> Bool
+    new-trait Collection(e) for c | c -> e 
+        precondition 
+            Eq(e) 
+        where
+            insert: c -> e -> c
+            member: c -> e -> Bool
 
-    has-trait Collection(List(a), a) given Eq(a) where
-        insert(collection, element) = element.Cons(collection)
-        member(collection, element) = match collection:
-            EmptyList  ->: False
-            x.Cons(xs) ->:
-                if x == element then:
-                    True 
-                else
-                    xs.recurse(element)
+    has-trait List(a) has Collection(a) given Eq(a) 
+        where
+            insert(collection, element) = element.Cons(collection) -- prepend the element
+            member(collection, element) = match collection:
+                EmptyList  ->: False
+                x.Cons(xs) ->:
+                    if x == element then:
+                        True 
+                    else
+                        xs.and-recurse(element)
 
 ## Tuples
 
