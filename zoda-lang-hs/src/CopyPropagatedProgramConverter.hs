@@ -221,27 +221,31 @@ read_back_ne (ApSem ne arg) = ApSurf (read_back_ne ne) (read_back_nf arg)
 read_back_ne (FstSem ne)    = FstSurf (read_back_ne ne)
 read_back_ne (SndSem ne)    = SndSurf (read_back_ne ne)
 
-initial_env [] = []
---initial_env ((atom, t):env) = (atom, d):env'
---  where
---    env' = initial_env env 
---    d    = NeutralSem (eval t env') (VarSem (length env))
+-- The environment is a list of types associated with variables which are supposed to be a member of that type.
+-- For each entry we use eval to convert it to a semantic type, tp and then add a neutral term Var i at 
+-- type tp where i is the variable at that type. 
+-- Notice that we don't need to worry about eta expanding them; all of that will be handled in read back.
+make_initial_env [] = []
+make_initial_env ((atom, t):env) = (atom, d):env'
+  where
+    env' = make_initial_env env 
+    d    = NeutralSem (eval t env') (VarSem atom)
 
 
 m @@ n = ApSurf m n
-
 infixl 9 @@
+
 make_lam         f = with_fresh         (\x -> LamSurf (x :. f (VarSurf x)))
 make_lam_named n f = with_fresh_named n (\x -> LamSurf (x :. f (VarSurf x)))
 
 normalize :: SurfaceEnv -> Surface -> Surface -> Surface
 normalize env term tp = read_back_nf (Normal tp' term')
-  where env'  = initial_env env 
+  where env'  = make_initial_env env 
         tp'   = eval tp env' 
         term' = eval term env' 
   
 
-testterm = (make_lam $ \x -> SuccSurf x) @@ ((make_lam $ \x -> SuccSurf x) @@ ZeroSurf) 
+testterm = (make_lam $ \x -> (make_lam $ \y -> y @@ x)) @@ ((make_lam $ \x -> SuccSurf x) @@ ZeroSurf) @@ (make_lam $ \x -> SuccSurf x)
 testtype = NatSurf 
 testenv  = []
 normalized = normalize testenv testterm testtype
