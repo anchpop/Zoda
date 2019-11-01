@@ -61,9 +61,8 @@ check context expression against = do
 
 
 type UniLevel = Int
-type DeBruijnIndex = Int
 data Surface = 
-    VarSurf DeBruijnIndex
+    VarSurf Atom
 
   -- nats
   | NatSurf
@@ -72,26 +71,26 @@ data Surface =
   -- nrec goes here
   
   -- functions 
-  | PiSurf Surface Surface
-  | LamSurf Surface
+  | PiSurf Surface (Bind Atom Surface)
+  | LamSurf (Bind Atom Surface)
   | ApSurf Surface Surface
 
   -- pairs 
-  | SigSurf Surface Surface
+  | SigSurf Surface (Bind Atom Surface)
   | PairSurf Surface Surface
   | FstSurf Surface 
   | SndSurf Surface
   
   -- universes 
   | UniSurf UniLevel
-  deriving (Show, Read, Eq, Ord)
+  deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
-type SurfaceEnv = [Surface]
+type SurfaceEnv = [(Atom, Surface)]
 
 
-type SemanticEnv = [Semantic]
-data Clos    = Clos {termClos :: Surface, envClos :: SemanticEnv}
-  deriving (Show, Read, Eq, Ord)
+type SemanticEnv = [(Atom, Semantic)]
+data Clos    = Clos {termClos :: (Bind Atom Surface), envClos :: SemanticEnv}
+  deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
 -- Semantic values contain terms which have evaluated to a constructor which does not need to be 
 -- reduced further. So for instance, Lam and Pair may contain computation further inside the term 
@@ -106,7 +105,7 @@ data Semantic =
   | SigSem Semantic Clos 
   | PairSem Semantic Semantic
   | UniSem UniLevel
-  deriving (Show, Read, Eq, Ord)
+  deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
 -- We also have to consider the case that something wants to reduce further before becoming a 
 -- value but cannot because its blocked on something. These are called neutral terms. The 
@@ -115,17 +114,17 @@ data Semantic =
 -- we have some neutral term and we apply Fst to it it's clearly still not a value but we don't 
 -- have any way of reducing it further so what's there to do. 
 data Ne =
-    VarSem DeBruijnIndex
+    VarSem Atom
   | ApSem Ne Nf
   | FstSem Ne
   | SndSem Ne
-  deriving (Show, Read, Eq, Ord)
+  deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
 -- nf, is a special class of values coming from the style of NbE we use. It associates a type 
 -- with a value so that later during quotation we can eta expand it appropriately
 data Nf =
     Normal {tpNf :: Semantic, termNf :: Semantic}
-    deriving (Show, Read, Eq, Ord)
+    deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
 do_fst :: Semantic -> Semantic
 do_fst (PairSem p1 _)                  = p1
@@ -145,19 +144,22 @@ do_ap _                a               = error "Not a function in do_ap"
 
 
 do_clos :: Clos -> Semantic -> Semantic
-do_clos (Clos term env) a = eval term (a : env)
+do_clos (Clos ((atom :. term)) env) bound = eval term ((atom, bound) : env)
 
 
-mk_var :: Semantic -> DeBruijnIndex -> Semantic
-mk_var tp lev = NeutralSem tp (VarSem lev)
+mk_var :: Semantic -> Atom -> Semantic
+mk_var tp atom = NeutralSem tp (VarSem atom)
 
 
 -- This converts the surface syntax into a semantic term with no beda redexes.
 eval :: Surface -> SemanticEnv -> Semantic
 eval (VarSurf i) env =
-  case env `index` i of
+  case i `lookup` env  of
+    Just x -> x
+    _      -> error ("index " <> show i <> " outide of range of environment: " <> show env)
+{-case env `index` i of
     Just x -> x 
-    _      -> error ("index " <> show i <> " outide of range of environment: " <> show env) 
+    _      -> error ("index " <> show i <> " outide of range of environment: " <> show env) -}
 eval  NatSurf            env = NatSem
 eval  ZeroSurf           env = ZeroSem
 eval (SuccSurf i)        env = SuccSem (eval i env)
@@ -177,58 +179,69 @@ eval (SndSurf  t)        env = do_snd (eval t env)
 --   - one for neutral terms
 --   - one for types. 
 
-read_back_nf :: Int -> Nf -> Surface
-read_back_nf size (Normal (PiSem src dest) f)                 = LamSurf (read_back_nf (size + 1) nf)
-                                                                where arg = mk_var src size 
-                                                                      nf  = Normal (do_clos dest arg) (do_ap f arg)  
-read_back_nf size (Normal (SigSem fst snd) p)                 = PairSurf
-                                                                  (read_back_nf size (Normal fst                      (do_fst p)))
-                                                                  (read_back_nf size (Normal (do_clos snd (do_fst p)) (do_snd p)))
-read_back_nf size (Normal NatSem  ZeroSem)                    = ZeroSurf
-read_back_nf size (Normal NatSem (SuccSem nf))                = SuccSurf (read_back_nf size (Normal NatSem nf))
-read_back_nf size (Normal NatSem (NeutralSem _ ne))           = read_back_ne size ne
-read_back_nf size (Normal (UniSem i) (PiSem src dest))        = PiSurf
-                                                                  (read_back_nf size (Normal (UniSem i) src))
-                                                                  (read_back_nf (size + 1) (Normal (UniSem i) (do_clos dest var)))
-                                                                where var = mk_var src size
-read_back_nf size (Normal (NeutralSem _ _) (NeutralSem _ ne)) = read_back_ne size ne
-read_back_nf _    _                                           = error "Ill-typed read_back_nf"
+read_back_nf :: Nf -> Surface
+read_back_nf (Normal (PiSem src dest) f)                 = LamSurf (atom :. (read_back_nf nf))
+                                                            where 
+                                                                  Clos (atom :. _) _ = dest
+                                                                  arg = mk_var src atom 
+                                                                  nf  = Normal (do_clos dest arg) (do_ap f arg)  
+read_back_nf (Normal (SigSem fst snd) p)                 = PairSurf
+                                                                  (read_back_nf (Normal fst                      (do_fst p)))
+                                                                  (read_back_nf (Normal (do_clos snd (do_fst p)) (do_snd p)))
+read_back_nf (Normal NatSem  ZeroSem)                    = ZeroSurf
+read_back_nf (Normal NatSem (SuccSem nf))                = SuccSurf (read_back_nf (Normal NatSem nf))
+read_back_nf (Normal NatSem (NeutralSem _ ne))           = read_back_ne ne
+read_back_nf (Normal (UniSem i) (PiSem src dest))        = PiSurf
+                                                              (read_back_nf (Normal (UniSem i) src))
+                                                              (atom :. (read_back_nf (Normal (UniSem i) (do_clos dest var))))
+                                                            where Clos (atom :. _) _ = dest
+                                                                  var = mk_var src atom
+read_back_nf (Normal (NeutralSem _ _) (NeutralSem _ ne)) = read_back_ne ne
+read_back_nf  _                                          = error "Ill-typed read_back_nf"
 
 -- This is almost like the read back for normal forms but deals directly with D.t 
 -- so there is no annotation tell us what type we're reading back at. 
 -- The function itself just assumes that d is some term of type Uni i for some i. 
 -- This, however, means that the cases are almost identical to the type cases in read_back_nf. 
-read_back_tp :: Int -> Semantic -> Surface
-read_back_tp size (NeutralSem _ term) = read_back_ne size term
-read_back_tp _     NatSem             = NatSurf
-read_back_tp size (PiSem src dest)    = PiSurf (read_back_tp size src) (read_back_tp (size + 1) (do_clos dest var))
-    where var = mk_var src size
-read_back_tp size (SigSem f s)        = SigSurf (read_back_tp size f) (read_back_tp (size + 1) (do_clos s var))
-    where var = mk_var f size 
-read_back_tp _    (UniSem k)          = UniSurf k
-read_back_tp _     _                  = error "Nbe_failed - Not a type in read_back_tp"
+read_back_tp :: Semantic -> Surface
+read_back_tp (NeutralSem _ term) = read_back_ne term
+read_back_tp  NatSem             = NatSurf
+read_back_tp (PiSem src dest)    = PiSurf (read_back_tp src) (atom :. (read_back_tp (do_clos dest var)))
+    where Clos (atom :. _) _ = dest
+          var = mk_var src atom
+read_back_tp (SigSem f s)        = SigSurf (read_back_tp f) (atom :. (read_back_tp (do_clos s var)))
+    where Clos (atom :. _) _ = s
+          var = mk_var f atom 
+read_back_tp (UniSem k)          = UniSurf k
+read_back_tp  _                  = error "Nbe_failed - Not a type in read_back_tp"
 
-read_back_ne :: Int -> Ne -> Surface
-read_back_ne size (VarSem x)     = VarSurf (size - (x + 1)) -- Convert DeBruijn levels back to indices
-                                                            -- If these are some DeBruijn levels:        0 1 2 3 4 5
-                                                            -- Then here are the corresponding indecies: 6 5 4 3 2 1
-read_back_ne size (ApSem ne arg) = ApSurf (read_back_ne size ne) (read_back_nf size arg)
-read_back_ne size (FstSem ne)    = FstSurf (read_back_ne size ne)
-read_back_ne size (SndSem ne)    = SndSurf (read_back_ne size ne)
+read_back_ne :: Ne -> Surface
+read_back_ne (VarSem x)     = VarSurf x
+read_back_ne (ApSem ne arg) = ApSurf (read_back_ne ne) (read_back_nf arg)
+read_back_ne (FstSem ne)    = FstSurf (read_back_ne ne)
+read_back_ne (SndSem ne)    = SndSurf (read_back_ne ne)
 
 initial_env [] = []
-initial_env (t:env) = d:env'
-  where
-    env' = initial_env env 
-    d    = NeutralSem (eval t env') (VarSem (length env))
+--initial_env ((atom, t):env) = (atom, d):env'
+--  where
+--    env' = initial_env env 
+--    d    = NeutralSem (eval t env') (VarSem (length env))
 
-normalize :: [Surface] -> Surface -> Surface -> Surface
-normalize env term tp = read_back_nf (length env') (Normal tp' term')
+
+m @@ n = ApSurf m n
+
+infixl 9 @@
+make_lam         f = with_fresh         (\x -> LamSurf (x :. f (VarSurf x)))
+make_lam_named n f = with_fresh_named n (\x -> LamSurf (x :. f (VarSurf x)))
+
+normalize :: SurfaceEnv -> Surface -> Surface -> Surface
+normalize env term tp = read_back_nf (Normal tp' term')
   where env'  = initial_env env 
         tp'   = eval tp env' 
         term' = eval term env' 
   
-testterm = ApSurf (LamSurf (SuccSurf (VarSurf 0))) ZeroSurf  
+
+testterm = (make_lam $ \x -> SuccSurf x) @@ ((make_lam $ \x -> SuccSurf x) @@ ZeroSurf) 
 testtype = NatSurf 
 testenv  = []
 normalized = normalize testenv testterm testtype
