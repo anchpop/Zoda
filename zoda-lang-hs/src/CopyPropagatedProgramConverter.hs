@@ -92,12 +92,13 @@ type SemanticEnv = [(Atom, Semantic)]
 data Clos    = Clos {termClos :: (Bind Atom Surface), envClos :: SemanticEnv}
   deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
--- Semantic values contain terms which have evaluated to a constructor which does not need to be 
+-- |Semantic values contain terms which have evaluated to a constructor which does not need to be 
 -- reduced further. So for instance, Lam and Pair may contain computation further inside the term 
 -- but at least the outermost constructor is stable and fully evaluated. 
 data Semantic =
     LamSem Clos
-  | NeutralSem {tpNeutral :: Semantic, termNeutral :: Ne}
+  | NeutralSem {tpNeutral :: Semantic,  -- ^This should be the type of the neutral term
+                termNeutral :: Ne}      -- ^This should be the neutral term iteslf
   | NatSem
   | ZeroSem
   | SuccSem Semantic
@@ -107,7 +108,7 @@ data Semantic =
   | UniSem UniLevel
   deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
--- We also have to consider the case that something wants to reduce further before becoming a 
+-- |We also have to consider the case that something wants to reduce further before becoming a 
 -- value but cannot because its blocked on something. These are called neutral terms. The 
 -- canonical example of a neutral term is just a variable x. It's not yet a value but there's 
 -- no way to convert it to a value since we have no information on what x is yet. Similarly, if 
@@ -120,7 +121,7 @@ data Ne =
   | SndSem Ne
   deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
--- nf, is a special class of values coming from the style of NbE we use. It associates a type 
+-- |nf is a special class of values coming from the style of NbE we use. It associates a type 
 -- with a value so that later during quotation we can eta expand it appropriately
 data Nf =
     Normal {tpNf :: Semantic, termNf :: Semantic}
@@ -139,50 +140,47 @@ do_snd _                                 = error "Couldn't snd argument in do_sn
 do_ap   :: Semantic -> Semantic -> Semantic
 do_ap (LamSem clos)                  a = do_clos clos a
 do_ap (NeutralSem (PiSem src dst) e) a = NeutralSem (do_clos dst a) (ApSem e (Normal src a))
-do_ap (NeutralSem _ e) a               = error "Not a Pi in do_ap"
-do_ap _                a               = error "Not a function in do_ap"
+do_ap (NeutralSem _ e)               a = error "Not a Pi in do_ap"
+do_ap _                              a = error "Not a function in do_ap"
 
 
-do_clos :: Clos -> Semantic -> Semantic
-do_clos (Clos ((atom :. term)) env) bound = eval term ((atom, bound) : env)
+do_clos :: Clos     -- ^ The closure to evaluate
+        -> Semantic -- ^ What to pass to the closure (will be added to the environment)
+        -> Semantic -- ^ The evaluated closure
+do_clos (Clos (atom :. term) env) bound = eval term ((atom, bound) : env)
 
 
 mk_var :: Semantic -> Atom -> Semantic
 mk_var tp atom = NeutralSem tp (VarSem atom)
 
 
--- This converts the surface syntax into a semantic term with no beda redexes.
+-- |This converts the surface syntax into a semantic term with no beda redexes.
 eval :: Surface -> SemanticEnv -> Semantic
 eval (VarSurf i) env =
   case i `lookup` env  of
     Just x -> x
     _      -> error ("index " <> show i <> " outide of range of environment: " <> show env)
-{-case env `index` i of
-    Just x -> x 
-    _      -> error ("index " <> show i <> " outide of range of environment: " <> show env) -}
-eval  NatSurf            env = NatSem
-eval  ZeroSurf           env = ZeroSem
+eval  NatSurf            _   = NatSem
+eval  ZeroSurf           _   = ZeroSem
 eval (SuccSurf i)        env = SuccSem (eval i env)
 eval (PiSurf   src dest) env = PiSem (eval src env) (Clos dest env)
 eval (LamSurf  t)        env = LamSem (Clos t env)
 eval (ApSurf   t1  t2)   env = do_ap (eval t1 env) (eval t2 env)
-eval (UniSurf  i)        env = UniSem i
+eval (UniSurf  i)        _   = UniSem i
 eval (SigSurf  t1  t2)   env = SigSem (eval t1 env) (Clos t2 env)
 eval (PairSurf t1  t2)   env = PairSem (eval t1 env) (eval t2 env)
 eval (FstSurf  t)        env = do_fst (eval t env)
 eval (SndSurf  t)        env = do_snd (eval t env)
 
--- This is the "quotation" side of the algorithm. 
+-- |This is the "quotation" side of the algorithm. 
 -- It is a function converting semantic terms back to syntactic ones.
 -- These functions are the "read back" functions. We define 3 free forms of read back: 
 --   - one for normal forms
 --   - one for neutral terms
 --   - one for types. 
-
 read_back_nf :: Nf -> Surface
 read_back_nf (Normal (PiSem src dest) f)                 = LamSurf (atom :. (read_back_nf nf))
-                                                            where 
-                                                                  Clos (atom :. _) _ = dest
+                                                            where Clos (atom :. _) _ = dest
                                                                   arg = mk_var src atom 
                                                                   nf  = Normal (do_clos dest arg) (do_ap f arg)  
 read_back_nf (Normal (SigSem fst snd) p)                 = PairSurf
@@ -199,7 +197,7 @@ read_back_nf (Normal (UniSem i) (PiSem src dest))        = PiSurf
 read_back_nf (Normal (NeutralSem _ _) (NeutralSem _ ne)) = read_back_ne ne
 read_back_nf  _                                          = error "Ill-typed read_back_nf"
 
--- This is almost like the read back for normal forms but deals directly with D.t 
+-- |This is almost like the read back for normal forms but deals directly with D.t 
 -- so there is no annotation tell us what type we're reading back at. 
 -- The function itself just assumes that d is some term of type Uni i for some i. 
 -- This, however, means that the cases are almost identical to the type cases in read_back_nf. 
@@ -221,7 +219,7 @@ read_back_ne (ApSem ne arg) = ApSurf (read_back_ne ne) (read_back_nf arg)
 read_back_ne (FstSem ne)    = FstSurf (read_back_ne ne)
 read_back_ne (SndSem ne)    = SndSurf (read_back_ne ne)
 
--- The environment is a list of types associated with variables which are supposed to be a member of that type.
+-- |The environment is a list of types associated with variables which are supposed to be a member of that type.
 -- For each entry we use eval to convert it to a semantic type, tp and then add a neutral term Var i at 
 -- type tp where i is the variable at that type. 
 -- Notice that we don't need to worry about eta expanding them; all of that will be handled in read back.
