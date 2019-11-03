@@ -14,8 +14,9 @@ import Data.Ratio
 import qualified Data.Bifunctor as Data.Bifunctor
 
 import Text.Megaparsec.Debug
+import Nominal hiding ((.))
 
-parseModule :: (HasThrow "perr" (ProductionError Untyped p Text) m) => String -> m (Module Untyped SourcePosition Text)
+parseModule :: (HasThrow "perr" (ProductionError Untyped p () Text) m) => String -> m (Module Untyped SourcePosition () Text)
 parseModule text = handleResult result
  where
   result = Data.Bifunctor.first (ZodaSyntaxError) (runParser (evalStateT moduleP (ParserState 0)) "module" text)
@@ -98,13 +99,11 @@ expressionP = allWithModifier annotationWrapper [allWithModifier tarrowWrapper1 
 
   numb = sourcePosWrapper . try $ do
     numb <- numberLiteralP
-    pure (NumberLiteral numb Untyped)
-  ident = sourcePosWrapper . try $ do
-    ident <- identifierP
-    pure (IdentifierExpression ident Untyped)
+    pure (NumberLiteral (numerator numb) (denominator numb) Untyped)
+  ident = identifierP
   fliteral = sourcePosWrapper . try $ do
     flit <- functionLiteralP
-    pure ((uncurry FunctionLiteralExpression) flit Untyped)
+    pure (FunctionLiteralExpression flit Untyped)
   
 
 numberLiteralP :: Parser Rational
@@ -134,7 +133,7 @@ numberLiteralP = try
         )
   where justUnsafe (Just x) = x
 
-functionLiteralP :: Parser ([Identifier Untyped SourcePosition Text], Expression Untyped SourcePosition Text)
+functionLiteralP :: Parser (Bind [(Atom, i, p)] (Expression t p m i))
 functionLiteralP = do
   char '|'
   identifiers <- identifierP `sepBy1` (char ',' *> some separatorChar)
@@ -144,6 +143,7 @@ functionLiteralP = do
   -- some separatorChar
   exp <- expressionP
   pure $ (identifiers, exp)
+  undefined
 
   
 
@@ -155,14 +155,14 @@ tinydocP = sourcePosWrapper $ do
   pure . Tinydoc . fromString $ doc
 
 
-identifierP :: ASTParser Identifier
-identifierP =
-  sourcePosWrapper
+identifierP :: a --Parser (Text, SourcePosition)
+identifierP = undefined
+  {-sourcePosWrapper
     $ ( do
         c    <- letterChar 
         rest <- many identifierCharacter
         pure . Identifier . fromString $ (c : rest)
-      )
+      )-}
 
 
 identifierCharacter :: Parser Char
@@ -171,7 +171,7 @@ identifierCharacter = try letterChar <|> try alphaNumChar <|> try (char '\'') <|
 
 data ParserState = ParserState Int deriving (Show, Read, Eq, Ord)
 type Parser a = StateT ParserState (Parsec Void String) a
-type ASTParser a = Parser (a Untyped SourcePosition Text)
+type ASTParser a = Parser (a Untyped SourcePosition () Text)
 data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} deriving (Read, Eq, Ord)
 instance Show SourcePosition where
   show (SourcePosition f l1 c1 l2 c2) = "(SourcePosition \"" <> f <> "\" " <> (show l1) <> " " <> (show c1) <> " " <> (show l2) <> " " <> (show c2) <> ")"
@@ -210,6 +210,3 @@ parseSomething text parser = (runParser (evalStateT (parser <* eof) (ParserState
 
 noNewlineOrChars :: (MonadParsec e s m, Token s ~ Char) => [Char] -> m (Token s)
 noNewlineOrChars c = noneOf ('\n' : c)
-
-
-testAST = Module (ModuleHeader (Identifier "i" (SourcePosition "module" 1 8 1 9)) (Tinydoc "test module" (SourcePosition "module" 1 10 1 23)) (SourcePosition "module" 1 1 1 23)) [Declaration (Identifier "test" (SourcePosition "module" 2 1 2 5)) (NumberLiteral ((-18) % 5) Untyped (SourcePosition "module" 2 8 2 12)) (SourcePosition "module" 2 1 2 12),Declaration (Identifier "main" (SourcePosition "module" 3 1 3 5)) (IdentifierExpression (Identifier "test" (SourcePosition "module" 3 8 3 12)) Untyped (SourcePosition "module" 3 8 3 12)) (SourcePosition "module" 3 1 3 12)] (SourcePosition "module" 1 1 4 1)
