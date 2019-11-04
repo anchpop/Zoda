@@ -12,12 +12,19 @@ packages:
   original:
     hackage: capability-0.2.0.0
 - completed:
-    hackage: nominal-0.2.0.0@sha256:1d6153134ecfe386c255d1da6466c5fa3e635d5db435d6c69d21643a6c65a27a,2896
+    cabal-file:
+      size: 2990
+      sha256: 70d0d54f7374d19503ea95f0e22e324b51bc4ce9d0c67ae1dbe57358975d81f9
+    name: nominal
+    version: 0.2.0.0
+    git: https://github.com/anchpop/Nominal.git
     pantry-tree:
-      size: 1114
-      sha256: 0dfcf035435fa1462d66594f8ed439f97bbddac450b6ed76cf657a7f5ced26a4
+      size: 1272
+      sha256: ce390ce972e8df445d0f0d383bfa043b73840c9ac817b066bfa0fd3ed1ee43dc
+    commit: 7cc5ff870b43b431232cb9666779d2e89622f3af
   original:
-    hackage: nominal-0.2.0.0@sha256:1d6153134ecfe386c255d1da6466c5fa3e635d5db435d6c69d21643a6c65a27a
+    git: https://github.com/anchpop/Nominal.git
+    commit: 7cc5ff870b43b431232cb9666779d2e89622f3af
 snapshots:
 - completed:
     size: 523700

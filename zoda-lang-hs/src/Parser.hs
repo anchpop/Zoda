@@ -3,7 +3,6 @@ import ClassyPrelude hiding (try, many)
 import Ast
 import Basic
 
-import Data.Void
 import Text.Megaparsec hiding (State, some)
 import Text.Megaparsec.Char
 import Control.Monad.State
@@ -12,6 +11,8 @@ import Capability.Error
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Ratio
 import qualified Data.Bifunctor as Data.Bifunctor
+import qualified Data.Set as Set
+import qualified Data.List as List
 
 import Text.Megaparsec.Debug
 import Nominal hiding ((.))
@@ -19,7 +20,7 @@ import Nominal hiding ((.))
 parseModule :: (HasThrow "perr" (ProductionError Untyped p () Text) m) => String -> m (Module Untyped SourcePosition () Text)
 parseModule text = handleResult result
  where
-  result = Data.Bifunctor.first (ZodaSyntaxError) (runParser (evalStateT moduleP (ParserState 0)) "module" text)
+  result = undefined --Data.Bifunctor.first ZodaSyntaxError (runParser (evalStateT moduleP []) "module" text)
   handleResult (Left  e) = throw @"perr" e
   handleResult (Right r) = pure r
 
@@ -103,7 +104,7 @@ expressionP = allWithModifier annotationWrapper [allWithModifier tarrowWrapper1 
   ident = identifierP
   fliteral = sourcePosWrapper . try $ do
     flit <- functionLiteralP
-    pure (FunctionLiteralExpression flit Untyped)
+    pure undefined --(FunctionLiteralExpression flit Untyped)
   
 
 numberLiteralP :: Parser Rational
@@ -133,19 +134,30 @@ numberLiteralP = try
         )
   where justUnsafe (Just x) = x
 
-functionLiteralP :: Parser (Bind [(Atom, i, p)] (Expression t p m i))
+functionLiteralP :: Parser (Bind [(String, Atom)] (Expression Untyped SourcePosition () Text))
 functionLiteralP = do
   char '|'
   identifiers <- identifierP `sepBy1` (char ',' *> some separatorChar)
   char '|'
+  let duplicates = List.length (Set.fromList identifiers) < List.length identifiers
+  when duplicates (customFailure DuplicateFunctionArgumentNames)
+  let binders = map (\name -> with_fresh_named name (\(x :: Atom) -> (name, x))) identifiers
   some separatorChar
+
+
   -- string "->"
   -- some separatorChar
-  exp <- expressionP
-  pure $ (identifiers, exp)
-  undefined
+  exp <- withEnvInState binders expressionP
+  pure $ binders :. exp
 
-  
+
+withEnvInState e a = do
+  s <- get
+  put (e:s) 
+  val <- a
+  put s
+  pure val
+
 
 tinydocP :: ASTParser Tinydoc
 tinydocP = sourcePosWrapper $ do
@@ -168,11 +180,11 @@ identifierP = undefined
 identifierCharacter :: Parser Char
 identifierCharacter = try letterChar <|> try alphaNumChar <|> try (char '\'') <|> try (char '-')
 
-
-data ParserState = ParserState Int deriving (Show, Read, Eq, Ord)
-type Parser a = StateT ParserState (Parsec Void String) a
+data Errors = DuplicateFunctionArgumentNames deriving (Show, Read, Ord, Eq, NominalSupport, NominalShow, Generic, Nominal)
+type ParserState = [[(String, Atom)]]
+type Parser a = StateT ParserState (Parsec Errors String) a
 type ASTParser a = Parser (a Untyped SourcePosition () Text)
-data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} deriving (Read, Eq, Ord)
+data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
 instance Show SourcePosition where
   show (SourcePosition f l1 c1 l2 c2) = "(SourcePosition \"" <> f <> "\" " <> (show l1) <> " " <> (show c1) <> " " <> (show l2) <> " " <> (show c2) <> ")"
 
@@ -195,17 +207,17 @@ some' p = do
   pure $ first NonEmpty.:| rest
 
 
-getRight :: Either (ParseErrorBundle String Void) b -> b
+getRight :: Either (ParseErrorBundle String a) b -> b
 getRight (Right b  ) = b
-getRight (Left  err) = error $ errorBundlePretty err
+getRight (Left  err) = error $ undefined --errorBundlePretty err
 getRightZSE (Right b  ) = b
-getRightZSE (Left  (ZodaSyntaxError err)) = error $ errorBundlePretty err
+getRightZSE (Left  (ZodaSyntaxError err)) = error $ undefined --errorBundlePretty err
 
 justUnsafe (Just a) = a
 
 --parseSomething :: Stream s => s -> StateT ParserState (Parsec e s) a -> Either (ParseErrorBundle s e) a
 
-parseSomething text parser = (runParser (evalStateT (parser <* eof) (ParserState 0)) "no_file" text)
+parseSomething text parser = (runParser (evalStateT (parser <* eof) []) "no_file" text)
 
 
 noNewlineOrChars :: (MonadParsec e s m, Token s ~ Char) => [Char] -> m (Token s)
