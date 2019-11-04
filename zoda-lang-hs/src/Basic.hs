@@ -8,9 +8,11 @@ import Capability.Error
 import Capability.Writer
 import qualified CopyPropagatedProgram as CPP
 import Control.Monad.Except (ExceptT (..), Except)
+import Nominal hiding ((.))
 
 
-data ProductionError t p m i = ZodaSyntaxError (ParseErrorBundle String Void) 
+data ZodaParseError = DuplicateFunctionArgumentNames deriving (Show, Read, Ord, Eq, NominalSupport, NominalShow, Generic, Nominal)
+data ProductionError t p m i = ZodaSyntaxError (ParseErrorBundle String ZodaParseError) 
                              | ValueRedeclaration (Declaration t p m i) 
                              | UndeclaredValuesReferenced [(i, p)] 
                              | NoMain (Module t p m i) 
@@ -28,4 +30,5 @@ newtype M t p m i r = M { runM :: Either (ProductionError t p m i) r }
   --deriving (HasThrow "perr" (ProductionError p)) via
     --MonadError (Except (ProductionError p))
 
-    
+instance ShowErrorComponent ZodaParseError where 
+  showErrorComponent = show

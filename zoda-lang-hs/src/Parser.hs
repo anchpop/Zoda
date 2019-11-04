@@ -20,7 +20,7 @@ import Nominal hiding ((.))
 parseModule :: (HasThrow "perr" (ProductionError Untyped p () Text) m) => String -> m (Module Untyped SourcePosition () Text)
 parseModule text = handleResult result
  where
-  result = undefined --Data.Bifunctor.first ZodaSyntaxError (runParser (evalStateT moduleP []) "module" text)
+  result = Data.Bifunctor.first ZodaSyntaxError (runParser (evalStateT moduleP []) "module" text)
   handleResult (Left  e) = throw @"perr" e
   handleResult (Right r) = pure r
 
@@ -35,7 +35,7 @@ moduleHeaderP :: ASTParser ModuleHeader
 moduleHeaderP = sourcePosWrapperWithNewlines $ do
   string "module"
   some separatorChar
-  ident <- identifierP
+  (ident, _) <- identifierP
   some separatorChar
   doc <- tinydocP
   pure (ModuleHeader ident doc)
@@ -43,7 +43,7 @@ moduleHeaderP = sourcePosWrapperWithNewlines $ do
 
 declarationP :: ASTParser Declaration
 declarationP = sourcePosWrapperWithNewlines $ do
-  ident <- identifierP
+  (ident, _) <- identifierP
   some separatorChar
   char '='
   some separatorChar
@@ -52,7 +52,49 @@ declarationP = sourcePosWrapperWithNewlines $ do
 
 
 expressionP :: ASTParser Expression
-expressionP = allWithModifier annotationWrapper [allWithModifier tarrowWrapper1 [],  allWithModifier tarrowWrapper2 []] <|> allWithModifier funcAppWrapper [] <|> allWithModifier tarrowWrapper1 [] <|> allWithModifier tarrowWrapper2 [] <|> parenthesizedExpression <|> numb <|> ident <|> fliteral
+expressionP = tarrowWrapper2 basicP <|> tarrowWrapper1 basicP <|> annotation basicP <|> basicP
+  where 
+    basicP = foldl' (<|>) empty basicParsers
+    basicParsers = [parenthesizedExpression, identifierExpP]
+    parenthesizedExpression = sourcePosWrapper . try $ do
+      char '('
+      many separatorChar
+      expression <- expressionP
+      many separatorChar
+      char ')'
+      pure (ParenthesizedExpression expression Untyped)
+
+    -- these parsers are left recursive, meaning they start with trying to return an expression and return an expression
+    annotation expType = sourcePosWrapper . try $ do
+      expr1 <- expType
+      many separatorChar
+      string ":"
+      many separatorChar
+      expr2 <- expressionP
+      pure (Annotation expr1 expr2 Untyped) 
+    tarrowWrapper1 expType = sourcePosWrapper . try $ do
+      expr1 <- expType
+      many separatorChar
+      string "->"
+      many separatorChar
+      expr2 <- expressionP
+      pure (TArrowNonbinding expr1 expr2 Untyped)
+    tarrowWrapper2 expType = sourcePosWrapper . try $ do
+      name <- identifierP
+      let atom = with_fresh_named (unpack $ fst name) $ \(x :: Atom) -> (name, x)
+      many separatorChar
+      string ":"
+      many separatorChar
+      ident <- expType
+      many separatorChar
+      string "->"
+      many separatorChar
+      expr2 <- withEnvInState [] expressionP
+      pure undefined--(TArrow (Just ident) expr1 expr2 Untyped) 
+
+    
+
+ {-allWithModifier annotationWrapper [allWithModifier tarrowWrapper1 [],  allWithModifier tarrowWrapper2 []] <|> allWithModifier funcAppWrapper [] <|> allWithModifier tarrowWrapper1 [] <|> allWithModifier tarrowWrapper2 [] <|> parenthesizedExpression <|> numb <|> ident <|> fliteral
  where
   allWithModifier f xs = foldr (<|>) (f parenthesizedExpression) (map f $ [fliteral, ident, numb] <> xs)
   annotationWrapper expType = sourcePosWrapper . try $ do
@@ -81,7 +123,7 @@ expressionP = allWithModifier annotationWrapper [allWithModifier tarrowWrapper1 
     string "->"
     many separatorChar
     expr2 <- expressionP
-    pure (TArrow (Just ident) expr1 expr2 Untyped)
+    pure undefined--(TArrow (Just ident) expr1 expr2 Untyped)
   funcAppWrapper expType = sourcePosWrapper . try . (fmap (\(f, applicants) -> FunctionApplicationExpression f applicants Untyped)) $ typedotexp
     where
       typedotexp = do
@@ -104,7 +146,7 @@ expressionP = allWithModifier annotationWrapper [allWithModifier tarrowWrapper1 
   ident = identifierP
   fliteral = sourcePosWrapper . try $ do
     flit <- functionLiteralP
-    pure undefined --(FunctionLiteralExpression flit Untyped)
+    pure undefined --(FunctionLiteralExpression flit Untyped)-}
   
 
 numberLiteralP :: Parser Rational
@@ -134,14 +176,15 @@ numberLiteralP = try
         )
   where justUnsafe (Just x) = x
 
-functionLiteralP :: Parser (Bind [(String, Atom)] (Expression Untyped SourcePosition () Text))
+functionLiteralP :: Parser (Bind [(Text, (Atom, SourcePosition))] (Expression Untyped SourcePosition () Text))
 functionLiteralP = do
   char '|'
-  identifiers <- identifierP `sepBy1` (char ',' *> some separatorChar)
+  identifierInfo <- identifierP `sepBy1` (char ',' *> some separatorChar)
   char '|'
-  let duplicates = List.length (Set.fromList identifiers) < List.length identifiers
+  let identifiers = map fst identifierInfo
+      duplicates = List.length (Set.fromList identifiers) < List.length identifiers
   when duplicates (customFailure DuplicateFunctionArgumentNames)
-  let binders = map (\name -> with_fresh_named name (\(x :: Atom) -> (name, x))) identifiers
+  let binders = map (\(name, pos) -> with_fresh_named (unpack name) (\(x :: Atom) -> (name, (x, pos)))) identifierInfo
   some separatorChar
 
 
@@ -150,6 +193,10 @@ functionLiteralP = do
   exp <- withEnvInState binders expressionP
   pure $ binders :. exp
 
+
+getEnv = do
+  s <- get
+  pure (join s)
 
 withEnvInState e a = do
   s <- get
@@ -167,22 +214,30 @@ tinydocP = sourcePosWrapper $ do
   pure . Tinydoc . fromString $ doc
 
 
-identifierP :: a --Parser (Text, SourcePosition)
-identifierP = undefined
-  {-sourcePosWrapper
-    $ ( do
-        c    <- letterChar 
-        rest <- many identifierCharacter
-        pure . Identifier . fromString $ (c : rest)
-      )-}
+identifierP :: Parser (Text, SourcePosition) 
+identifierP = sourcePosWrapper $ do
+                c    <- letterChar 
+                rest <- many identifierCharacter
+                let ident = c:rest
+                pure $ (\x -> (fromString ident, x))
+
+identifierExpP :: ASTParser Expression
+identifierExpP = sourcePosWrapper
+              ( do
+                  (ident, _) <- identifierP
+
+                  env  <- getEnv
+                  case ident `lookup` env of
+                    Just (fresh_name, _) -> pure $ LambdaVariable (ident, fresh_name) Untyped 
+                    Nothing         -> pure $ ReferenceVariable ident () Untyped
+                )
 
 
 identifierCharacter :: Parser Char
 identifierCharacter = try letterChar <|> try alphaNumChar <|> try (char '\'') <|> try (char '-')
 
-data Errors = DuplicateFunctionArgumentNames deriving (Show, Read, Ord, Eq, NominalSupport, NominalShow, Generic, Nominal)
-type ParserState = [[(String, Atom)]]
-type Parser a = StateT ParserState (Parsec Errors String) a
+type ParserState = [[(Text, (Atom, SourcePosition))]]
+type Parser a = StateT ParserState (Parsec ZodaParseError String) a
 type ASTParser a = Parser (a Untyped SourcePosition () Text)
 data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
 instance Show SourcePosition where
@@ -207,11 +262,11 @@ some' p = do
   pure $ first NonEmpty.:| rest
 
 
-getRight :: Either (ParseErrorBundle String a) b -> b
+getRight :: Either (ParseErrorBundle String ZodaParseError) b -> b
 getRight (Right b  ) = b
-getRight (Left  err) = error $ undefined --errorBundlePretty err
+getRight (Left  err) = error $ errorBundlePretty err
 getRightZSE (Right b  ) = b
-getRightZSE (Left  (ZodaSyntaxError err)) = error $ undefined --errorBundlePretty err
+getRightZSE (Left  (ZodaSyntaxError err)) = error $ errorBundlePretty err
 
 justUnsafe (Just a) = a
 
