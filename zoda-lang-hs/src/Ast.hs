@@ -18,7 +18,7 @@ data Declaration t p m i = Declaration i (Expression t p m i) p deriving (Show, 
 
 data Expression t p m i = ParenthesizedExpression (Expression t p m i)                                     t p 
                         | NumberLiteral Integer Integer                                                    t p 
-                        | Add (Expression t p m i) (Expression t p m i)                                    t p 
+                        | AddExpression (Expression t p m i) (Expression t p m i)                                    t p 
                         | ReferenceVariable i m                                                            t p 
                         | LambdaVariable (Text, Atom)                                                      t p 
                         | FunctionLiteralExpression (Bind [(i, (Atom, p))] (Expression t p m i))           t p 

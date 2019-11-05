@@ -52,6 +52,9 @@ declarationP = sourcePosWrapperWithNewlines $ do
   pure (Declaration ident expression)
 
 
+padded s = many separatorChar *> s <* many separatorChar
+
+
 
 
 expressionP :: Parser (Expression Untyped SourcePosition () Text)
@@ -59,22 +62,27 @@ expressionP = expParser --addition basicP <|> funcApp basicP <|> tarrow2 basicP 
   where 
     expParser = try $ makeExprParser (leftRec basicP leftRecP) 
                         [
-                          [InfixR $ do 
-                            many separatorChar
-                            string "+"
-                            many separatorChar
-                            pure (\expr1 expr2 -> Add expr1 expr2 Untyped (combineSourcePos expr1 expr2))
+                          [InfixL . try $ do 
+                            padded $ string "."
+                            pure (\expr1 expr2 -> FunctionApplicationExpression expr2 [expr1] Untyped (combineSourcePos expr1 expr2))
+                          ],
+                          [InfixR . try $ do 
+                            padded $ string "+"
+                            pure (\expr1 expr2 -> AddExpression expr1 expr2 Untyped (combineSourcePos expr1 expr2))
+                          ],
+                          [InfixR . try $ do
+                            padded $ string "->"
+                            pure (\expr1 expr2 -> TArrowNonbinding expr1 expr2 Untyped (combineSourcePos expr1 expr2))
                           ]
                         ]
+                        
     basicP = foldl' (<|>) empty basicParsers
     leftRecP = foldl' (<|>) empty leftRecParsers
     basicParsers = [functionLiteralP, numbP, parenthesizedExpression, identifierExpP, tarrow2]
-    leftRecParsers = [funcApp, annotation, tarrow1]
+    leftRecParsers = [funcApp, annotation]
     parenthesizedExpression = try $ do
       char '('
-      many separatorChar
-      expression <- expressionP
-      many separatorChar
+      expression <- padded expressionP
       char ')'
       pure (ParenthesizedExpression expression Untyped)
     numbP = try $ do
@@ -85,45 +93,32 @@ expressionP = expParser --addition basicP <|> funcApp basicP <|> tarrow2 basicP 
       let atom = with_fresh_named (unpack name) $ \(x :: Atom) -> x
       many separatorChar
       string ":"
-      many separatorChar
-      expr1 <- expressionP
-      many separatorChar
-      string "->"
-      many separatorChar
+      expr1 <- padded expressionP
+      padded $ string "->"
       expr2 <- (withEnvInState [(name, (atom, namepos))] expressionP)
       pure (TArrowBinding expr1 ((name, (atom, namepos)) :. expr2) Untyped) 
     
 
     -- these parsers are left recursive, meaning they start with trying to return an expression and return an expression
     annotation = try $ do
-      many separatorChar
-      string ":"
-      many separatorChar
+      padded $ string ":"
       expr2 <- expressionP
       pure (\expr1 -> Annotation expr1 expr2 Untyped) 
     tarrow1 = try $ do
-      many separatorChar
-      string "->"
-      many separatorChar
+      padded $ string "->"
       expr2 <- expressionP
       pure (\expr1 -> TArrowNonbinding expr1 expr2 Untyped)
     funcApp = try $ typedotexp
       where
         typedotexp = do
-          many separatorChar
-          string "."
-          many separatorChar
-          f <- (sourcePosWrapper basicP) --expressionP
-          many separatorChar
-          moreApplicants <- (try $ do 
-            string "("
-            many separatorChar
-            furtherArgs <- expressionP `sepBy` (many separatorChar *> string "," *> many separatorChar ) 
-            many separatorChar
-            string ")"
-            pure furtherArgs
-            ) <|> pure []
-          pure $ \applicant -> FunctionApplicationExpression f (applicant:moreApplicants) Untyped  
+          padded $ string "."
+          f <- padded $ sourcePosWrapper basicP --expressionP
+           
+          string "("
+          furtherArgs <- padded $ expressionP `sepBy` (many separatorChar *> string "," *> many separatorChar )
+          string ")"
+
+          pure $ \applicant -> FunctionApplicationExpression f (applicant:furtherArgs) Untyped  
   
 
 numberLiteralP :: Parser Rational
@@ -156,17 +151,12 @@ numberLiteralP = try
 functionLiteralP :: ASTParser Expression
 functionLiteralP = do
   char '|'
-  identifierInfo <- (sourcePosWrapper identifierP) `sepBy1` (many separatorChar *> char ',' *> many separatorChar)
+  identifierInfo <- padded $ (sourcePosWrapper identifierP) `sepBy1` (padded $ char ',')
   char '|'
   let identifiers = map fst identifierInfo
       duplicates = List.length (Set.fromList identifiers) < List.length identifiers
   when duplicates (customFailure DuplicateFunctionArgumentNames)
   let binders = map (\(name, pos) -> with_fresh_named (unpack name) (\(x :: Atom) -> (name, (x, pos)))) identifierInfo
-  some separatorChar
-
-
-  -- string "->"
-  -- some separatorChar
   exp <- (withEnvInState binders expressionP)
   pure $ FunctionLiteralExpression (binders :. exp) Untyped
 
@@ -259,7 +249,7 @@ parseSomething text parser = (runParser (evalStateT (parser <* eof) []) "no_file
 
 getSourcePosFromExpression (ParenthesizedExpression _ _ p ) = p  
 getSourcePosFromExpression (NumberLiteral _ _ _ p ) = p 
-getSourcePosFromExpression (Add _ _ _ p ) = p 
+getSourcePosFromExpression (AddExpression _ _ _ p ) = p 
 getSourcePosFromExpression (ReferenceVariable _ _ _ p ) = p 
 getSourcePosFromExpression (LambdaVariable _ _ p ) = p 
 getSourcePosFromExpression (FunctionLiteralExpression _ _ p ) = p 
