@@ -13,8 +13,9 @@ import Data.Ratio
 import qualified Data.Bifunctor as Data.Bifunctor
 import qualified Data.Set as Set
 import qualified Data.List as List
-
 import Text.Megaparsec.Debug
+import Control.Monad.Combinators.Expr
+
 import Nominal hiding ((.))
 
 parseModule :: (HasThrow "perr" (ProductionError Untyped p () Text) m) => String -> m (Module Untyped SourcePosition () Text)
@@ -54,12 +55,21 @@ declarationP = sourcePosWrapperWithNewlines $ do
 
 
 expressionP :: Parser (Expression Untyped SourcePosition () Text)
-expressionP = (leftRec basicP leftRecP) --addition basicP <|> funcApp basicP <|> tarrow2 basicP <|> tarrow1 basicP <|> annotation basicP <|> basicP
+expressionP = expParser --addition basicP <|> funcApp basicP <|> tarrow2 basicP <|> tarrow1 basicP <|> annotation basicP <|> basicP
   where 
+    expParser = try $ makeExprParser (leftRec basicP leftRecP) 
+                        [
+                          [InfixR $ do 
+                            many separatorChar
+                            string "+"
+                            many separatorChar
+                            pure (\expr1 expr2 -> Add expr1 expr2 Untyped (combineSourcePos expr1 expr2))
+                          ]
+                        ]
     basicP = foldl' (<|>) empty basicParsers
-    leftRecP = addition <|> funcApp -- foldl' (<|>) empty leftRecParsers
+    leftRecP = foldl' (<|>) empty leftRecParsers
     basicParsers = [functionLiteralP, numbP, parenthesizedExpression, identifierExpP, tarrow2]
-    leftRecParsers = [funcApp, annotation, tarrow1, addition]
+    leftRecParsers = [funcApp, annotation, tarrow1]
     parenthesizedExpression = try $ do
       char '('
       many separatorChar
@@ -85,13 +95,6 @@ expressionP = (leftRec basicP leftRecP) --addition basicP <|> funcApp basicP <|>
     
 
     -- these parsers are left recursive, meaning they start with trying to return an expression and return an expression
-    addition :: Parser ((Expression Untyped SourcePosition () Text) -> (SourcePosition -> Expression Untyped SourcePosition () Text))
-    addition = try $ do
-      many separatorChar
-      string "+"
-      many separatorChar
-      expr2 <- expressionP
-      pure (\expr1 -> Add expr1 expr2 Untyped)
     annotation = try $ do
       many separatorChar
       string ":"
@@ -254,6 +257,21 @@ justUnsafe (Just a) = a
 
 parseSomething text parser = (runParser (evalStateT (parser <* eof) []) "no_file" text)
 
+getSourcePosFromExpression (ParenthesizedExpression _ _ p ) = p  
+getSourcePosFromExpression (NumberLiteral _ _ _ p ) = p 
+getSourcePosFromExpression (Add _ _ _ p ) = p 
+getSourcePosFromExpression (ReferenceVariable _ _ _ p ) = p 
+getSourcePosFromExpression (LambdaVariable _ _ p ) = p 
+getSourcePosFromExpression (FunctionLiteralExpression _ _ p ) = p 
+getSourcePosFromExpression (FunctionApplicationExpression _ _ _ p ) = p 
+getSourcePosFromExpression (TArrowNonbinding _ _ _ p ) = p 
+getSourcePosFromExpression (TArrowBinding _ _ _ p ) = p 
+getSourcePosFromExpression (Annotation _ _ _ p ) = p 
+
+combineSourcePos expr1 expr2 = SourcePosition filePath sourceLineStart sourceColumnStart sourceLineEnd sourceColumnEnd
+  where 
+    SourcePosition filePath sourceLineStart sourceColumnStart _ _ = getSourcePosFromExpression expr1
+    SourcePosition _ _ _ sourceLineEnd sourceColumnEnd     = getSourcePosFromExpression expr1
 
 noNewlineOrChars :: (MonadParsec e s m, Token s ~ Char) => [Char] -> m (Token s)
 noNewlineOrChars c = noneOf ('\n' : c)
