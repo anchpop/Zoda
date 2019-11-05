@@ -23,7 +23,7 @@ data Expression t p m i = ParenthesizedExpression (Expression t p m i)          
                         | FunctionLiteralExpression (Bind [(i, (Atom, p))] (Expression t p m i))           t p 
                         | FunctionApplicationExpression (Expression t p m i) [Expression t p m i]        t p 
                         | TArrowNonbinding (Expression t p m i)                    (Expression t p m i)  t p 
-                        | TArrowBinding    (Expression t p m i) (Bind (Atom, i, p) (Expression t p m i)) t p
+                        | TArrowBinding    (Expression t p m i) (Bind (i, (Atom, p)) (Expression t p m i)) t p
                         | Annotation (Expression t p m i) (Expression t p m i)                           t p 
                         deriving (Show, Eq, Typeable, NominalSupport, NominalShow, Generic, Nominal)
 

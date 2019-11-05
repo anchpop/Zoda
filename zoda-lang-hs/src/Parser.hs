@@ -52,10 +52,10 @@ declarationP = sourcePosWrapperWithNewlines $ do
 
 
 expressionP :: ASTParser Expression
-expressionP = tarrowWrapper2 basicP <|> tarrowWrapper1 basicP <|> annotation basicP <|> basicP
+expressionP = funcApp basicP <|> tarrow2 basicP <|> tarrow1 basicP <|> annotation basicP <|> basicP
   where 
     basicP = foldl' (<|>) empty basicParsers
-    basicParsers = [parenthesizedExpression, identifierExpP]
+    basicParsers = [functionLiteralP, numbP, parenthesizedExpression, identifierExpP]
     parenthesizedExpression = sourcePosWrapper . try $ do
       char '('
       many separatorChar
@@ -63,6 +63,9 @@ expressionP = tarrowWrapper2 basicP <|> tarrowWrapper1 basicP <|> annotation bas
       many separatorChar
       char ')'
       pure (ParenthesizedExpression expression Untyped)
+    numbP = sourcePosWrapper . try $ do
+      numb <- numberLiteralP
+      pure (NumberLiteral (numerator numb) (denominator numb) Untyped)
 
     -- these parsers are left recursive, meaning they start with trying to return an expression and return an expression
     annotation expType = sourcePosWrapper . try $ do
@@ -72,81 +75,43 @@ expressionP = tarrowWrapper2 basicP <|> tarrowWrapper1 basicP <|> annotation bas
       many separatorChar
       expr2 <- expressionP
       pure (Annotation expr1 expr2 Untyped) 
-    tarrowWrapper1 expType = sourcePosWrapper . try $ do
+    tarrow1 expType = sourcePosWrapper . try $ do
       expr1 <- expType
       many separatorChar
       string "->"
       many separatorChar
       expr2 <- expressionP
       pure (TArrowNonbinding expr1 expr2 Untyped)
-    tarrowWrapper2 expType = sourcePosWrapper . try $ do
-      name <- identifierP
-      let atom = with_fresh_named (unpack $ fst name) $ \(x :: Atom) -> (name, x)
+    tarrow2 expType = sourcePosWrapper . try $ do
+      (name, namepos) <- identifierP
+      let atom = with_fresh_named (unpack name) $ \(x :: Atom) -> x
       many separatorChar
       string ":"
       many separatorChar
-      ident <- expType
+      expr1 <- expType
       many separatorChar
       string "->"
       many separatorChar
       expr2 <- withEnvInState [] expressionP
-      pure undefined--(TArrow (Just ident) expr1 expr2 Untyped) 
-
-    
-
- {-allWithModifier annotationWrapper [allWithModifier tarrowWrapper1 [],  allWithModifier tarrowWrapper2 []] <|> allWithModifier funcAppWrapper [] <|> allWithModifier tarrowWrapper1 [] <|> allWithModifier tarrowWrapper2 [] <|> parenthesizedExpression <|> numb <|> ident <|> fliteral
- where
-  allWithModifier f xs = foldr (<|>) (f parenthesizedExpression) (map f $ [fliteral, ident, numb] <> xs)
-  annotationWrapper expType = sourcePosWrapper . try $ do
-    expr1 <- expType
-    many separatorChar
-    string ":"
-    many separatorChar
-    expr2 <- expressionP
-    pure (Annotation expr1 expr2 Untyped) 
-  tarrowWrapper1 expType = sourcePosWrapper . try $ do
-    expr1 <- expType
-    many separatorChar
-    string "->"
-    many separatorChar
-    expr2 <- expressionP
-    pure (TArrow Nothing expr1 expr2 Untyped)
-  tarrowWrapper2 expType = sourcePosWrapper . try $ do
-    expr1 <- expType
-    many separatorChar
-    string "("
-    many separatorChar
-    ident <- ident
-    many separatorChar
-    string ")"
-    many separatorChar
-    string "->"
-    many separatorChar
-    expr2 <- expressionP
-    pure undefined--(TArrow (Just ident) expr1 expr2 Untyped)
-  funcAppWrapper expType = sourcePosWrapper . try . (fmap (\(f, applicants) -> FunctionApplicationExpression f applicants Untyped)) $ typedotexp
-    where
-      typedotexp = do
-        applicant <- expType
-        string "."
-        f <- expressionP
-        pure (f, [applicant])
-
-  parenthesizedExpression = sourcePosWrapper . try $ do
-    char '('
-    many separatorChar
-    exp <- expressionP
-    many separatorChar
-    char ')'
-    pure (ParenthesizedExpression exp Untyped)
-
-  numb = sourcePosWrapper . try $ do
-    numb <- numberLiteralP
-    pure (NumberLiteral (numerator numb) (denominator numb) Untyped)
-  ident = identifierP
-  fliteral = sourcePosWrapper . try $ do
-    flit <- functionLiteralP
-    pure undefined --(FunctionLiteralExpression flit Untyped)-}
+      pure (TArrowBinding expr1 ((name, (atom, namepos)) :. expr2) Untyped) 
+    funcApp expType = sourcePosWrapper . try $ typedotexp
+      where
+        typedotexp = do
+          applicant <- expType
+          many separatorChar
+          string "."
+          many separatorChar
+          f <- expressionP
+          many separatorChar
+          moreApplicants <- (try $ do 
+            string "("
+            many separatorChar
+            furtherArgs <- expressionP `sepBy` (many separatorChar *> string "," *> many separatorChar ) 
+            many separatorChar
+            string ")"
+            pure furtherArgs
+            ) <|> pure []
+          pure $ FunctionApplicationExpression f (applicant:moreApplicants) Untyped  
   
 
 numberLiteralP :: Parser Rational
@@ -176,10 +141,10 @@ numberLiteralP = try
         )
   where justUnsafe (Just x) = x
 
-functionLiteralP :: Parser (Bind [(Text, (Atom, SourcePosition))] (Expression Untyped SourcePosition () Text))
-functionLiteralP = do
+functionLiteralP :: ASTParser Expression
+functionLiteralP = sourcePosWrapper $ do
   char '|'
-  identifierInfo <- identifierP `sepBy1` (char ',' *> some separatorChar)
+  identifierInfo <- identifierP `sepBy1` (many separatorChar *> char ',' *> many separatorChar)
   char '|'
   let identifiers = map fst identifierInfo
       duplicates = List.length (Set.fromList identifiers) < List.length identifiers
@@ -191,7 +156,7 @@ functionLiteralP = do
   -- string "->"
   -- some separatorChar
   exp <- withEnvInState binders expressionP
-  pure $ binders :. exp
+  pure $ FunctionLiteralExpression (binders :. exp) Untyped
 
 
 getEnv = do
@@ -241,8 +206,7 @@ type Parser a = StateT ParserState (Parsec ZodaParseError String) a
 type ASTParser a = Parser (a Untyped SourcePosition () Text)
 data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
 instance Show SourcePosition where
-  show (SourcePosition f l1 c1 l2 c2) = "(SourcePosition \"" <> f <> "\" " <> (show l1) <> " " <> (show c1) <> " " <> (show l2) <> " " <> (show c2) <> ")"
-
+  show (SourcePosition f l1 c1 l2 c2) = ""--"(SourcePosition \"" <> f <> "\" " <> (show l1) <> " " <> (show c1) <> " " <> (show l2) <> " " <> (show c2) <> ")"
 
 sourcePosWrapper :: Parser (SourcePosition -> a) -> Parser a
 sourcePosWrapper f = do
