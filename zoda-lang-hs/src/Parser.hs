@@ -24,26 +24,26 @@ parseModule text = handleResult result
   handleResult (Left  e) = throw @"perr" e
   handleResult (Right r) = pure r
 
-moduleP :: ASTParser Module
-moduleP = sourcePosWrapper $ do
+moduleP :: Parser (Module Untyped SourcePosition () Text)
+moduleP = sourcePosWrapperWithNewlines $ do
   header       <- moduleHeaderP
   declarations <- many declarationP
   pure (Module header declarations)
 
 
-moduleHeaderP :: ASTParser ModuleHeader
+moduleHeaderP :: Parser (ModuleHeader Untyped SourcePosition () Text)
 moduleHeaderP = sourcePosWrapperWithNewlines $ do
   string "module"
   some separatorChar
-  (ident, _) <- identifierP
+  (ident, _) <- sourcePosWrapper identifierP
   some separatorChar
-  doc <- tinydocP
+  doc <- sourcePosWrapper tinydocP
   pure (ModuleHeader ident doc)
 
 
-declarationP :: ASTParser Declaration
+declarationP :: Parser (Declaration Untyped SourcePosition () Text)
 declarationP = sourcePosWrapperWithNewlines $ do
-  (ident, _) <- identifierP
+  (ident, _) <- sourcePosWrapper identifierP
   some separatorChar
   char '='
   some separatorChar
@@ -51,53 +51,62 @@ declarationP = sourcePosWrapperWithNewlines $ do
   pure (Declaration ident expression)
 
 
-expressionP :: ASTParser Expression
-expressionP = funcApp basicP <|> tarrow2 basicP <|> tarrow1 basicP <|> annotation basicP <|> basicP
+
+
+expressionP :: Parser (Expression Untyped SourcePosition () Text)
+expressionP = (leftRec basicP leftRecP) --addition basicP <|> funcApp basicP <|> tarrow2 basicP <|> tarrow1 basicP <|> annotation basicP <|> basicP
   where 
     basicP = foldl' (<|>) empty basicParsers
-    basicParsers = [functionLiteralP, numbP, parenthesizedExpression, identifierExpP]
-    parenthesizedExpression = sourcePosWrapper . try $ do
+    leftRecP = try $ foldl' (<|>) empty leftRecParsers
+    basicParsers = [functionLiteralP, numbP, parenthesizedExpression, identifierExpP, tarrow2]
+    leftRecParsers = [addition, annotation, tarrow1, funcApp]
+    parenthesizedExpression = try $ do
       char '('
       many separatorChar
       expression <- expressionP
       many separatorChar
       char ')'
       pure (ParenthesizedExpression expression Untyped)
-    numbP = sourcePosWrapper . try $ do
+    numbP = try $ do
       numb <- numberLiteralP
       pure (NumberLiteral (numerator numb) (denominator numb) Untyped)
-
-    -- these parsers are left recursive, meaning they start with trying to return an expression and return an expression
-    annotation expType = sourcePosWrapper . try $ do
-      expr1 <- expType
-      many separatorChar
-      string ":"
-      many separatorChar
-      expr2 <- expressionP
-      pure (Annotation expr1 expr2 Untyped) 
-    tarrow1 expType = sourcePosWrapper . try $ do
-      expr1 <- expType
-      many separatorChar
-      string "->"
-      many separatorChar
-      expr2 <- expressionP
-      pure (TArrowNonbinding expr1 expr2 Untyped)
-    tarrow2 expType = sourcePosWrapper . try $ do
-      (name, namepos) <- identifierP
+    tarrow2 = try $ do
+      (name, namepos) <- sourcePosWrapper identifierP
       let atom = with_fresh_named (unpack name) $ \(x :: Atom) -> x
       many separatorChar
       string ":"
       many separatorChar
-      expr1 <- expType
+      expr1 <- expressionP
       many separatorChar
       string "->"
       many separatorChar
-      expr2 <- withEnvInState [] expressionP
+      expr2 <- (withEnvInState [undefined] expressionP)
       pure (TArrowBinding expr1 ((name, (atom, namepos)) :. expr2) Untyped) 
-    funcApp expType = sourcePosWrapper . try $ typedotexp
+    
+
+    -- these parsers are left recursive, meaning they start with trying to return an expression and return an expression
+    addition :: Parser ((Expression Untyped SourcePosition () Text) -> (SourcePosition -> Expression Untyped SourcePosition () Text))
+    addition = try $ do
+      many separatorChar
+      string "+"
+      many separatorChar
+      expr2 <- expressionP
+      pure (\expr1 -> Add expr1 expr2 Untyped)
+    annotation = try $ do
+      many separatorChar
+      string ":"
+      many separatorChar
+      expr2 <- expressionP
+      pure (\expr1 -> Annotation expr1 expr2 Untyped) 
+    tarrow1 = try $ do
+      many separatorChar
+      string "->"
+      many separatorChar
+      expr2 <- expressionP
+      pure (\expr1 -> TArrowNonbinding expr1 expr2 Untyped)
+    funcApp = try $ typedotexp
       where
         typedotexp = do
-          applicant <- expType
           many separatorChar
           string "."
           many separatorChar
@@ -111,7 +120,7 @@ expressionP = funcApp basicP <|> tarrow2 basicP <|> tarrow1 basicP <|> annotatio
             string ")"
             pure furtherArgs
             ) <|> pure []
-          pure $ FunctionApplicationExpression f (applicant:moreApplicants) Untyped  
+          pure $ \applicant -> FunctionApplicationExpression f (applicant:moreApplicants) Untyped  
   
 
 numberLiteralP :: Parser Rational
@@ -142,9 +151,9 @@ numberLiteralP = try
   where justUnsafe (Just x) = x
 
 functionLiteralP :: ASTParser Expression
-functionLiteralP = sourcePosWrapper $ do
+functionLiteralP = do
   char '|'
-  identifierInfo <- identifierP `sepBy1` (many separatorChar *> char ',' *> many separatorChar)
+  identifierInfo <- (sourcePosWrapper identifierP) `sepBy1` (many separatorChar *> char ',' *> many separatorChar)
   char '|'
   let identifiers = map fst identifierInfo
       duplicates = List.length (Set.fromList identifiers) < List.length identifiers
@@ -155,7 +164,7 @@ functionLiteralP = sourcePosWrapper $ do
 
   -- string "->"
   -- some separatorChar
-  exp <- withEnvInState binders expressionP
+  exp <- (withEnvInState binders expressionP)
   pure $ FunctionLiteralExpression (binders :. exp) Untyped
 
 
@@ -172,30 +181,27 @@ withEnvInState e a = do
 
 
 tinydocP :: ASTParser Tinydoc
-tinydocP = sourcePosWrapper $ do
+tinydocP = do
   char '`'
   doc <- some (noNewlineOrChars "`")
   char '`'
   pure . Tinydoc . fromString $ doc
 
 
-identifierP :: Parser (Text, SourcePosition) 
-identifierP = sourcePosWrapper $ do
+identifierP :: Parser (SourcePosition -> (Text, SourcePosition)) 
+identifierP = do
                 c    <- letterChar 
                 rest <- many identifierCharacter
                 let ident = c:rest
                 pure $ (\x -> (fromString ident, x))
 
 identifierExpP :: ASTParser Expression
-identifierExpP = sourcePosWrapper
-              ( do
-                  (ident, _) <- identifierP
+identifierExpP = do (ident, _) <- sourcePosWrapper identifierP
 
-                  env  <- getEnv
-                  case ident `lookup` env of
-                    Just (fresh_name, _) -> pure $ LambdaVariable (ident, fresh_name) Untyped 
-                    Nothing         -> pure $ ReferenceVariable ident () Untyped
-                )
+                    env  <- getEnv
+                    case ident `lookup` env of
+                      Just (fresh_name, _) -> pure $ LambdaVariable (ident, fresh_name) Untyped 
+                      Nothing         -> pure $ ReferenceVariable ident () Untyped
 
 
 identifierCharacter :: Parser Char
@@ -203,7 +209,7 @@ identifierCharacter = try letterChar <|> try alphaNumChar <|> try (char '\'') <|
 
 type ParserState = [[(Text, (Atom, SourcePosition))]]
 type Parser a = StateT ParserState (Parsec ZodaParseError String) a
-type ASTParser a = Parser (a Untyped SourcePosition () Text)
+type ASTParser a = Parser (SourcePosition -> a Untyped SourcePosition () Text)
 data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
 instance Show SourcePosition where
   show (SourcePosition f l1 c1 l2 c2) = ""--"(SourcePosition \"" <> f <> "\" " <> (show l1) <> " " <> (show c1) <> " " <> (show l2) <> " " <> (show c2) <> ")"
@@ -225,6 +231,16 @@ some' p = do
   rest  <- many p
   pure $ first NonEmpty.:| rest
 
+leftRec :: forall a . Parser (SourcePosition -> a) -> Parser (a -> (SourcePosition -> a)) -> Parser a
+leftRec p op = do pos <- getSourcePos
+                  initial <- sourcePosWrapper p
+                  rest initial pos
+  where
+    rest :: a -> SourcePos -> Parser a
+    rest x (SourcePos n l1 c1) = do f <- op
+                                    (SourcePos _ l2 c2) <- getSourcePos
+                                    rest (f x (SourcePosition n (unPos l1) (unPos c1) (unPos l2) (unPos c2))) (SourcePos n l1 c1)
+          <|> pure x
 
 getRight :: Either (ParseErrorBundle String ZodaParseError) b -> b
 getRight (Right b  ) = b
