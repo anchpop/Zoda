@@ -57,9 +57,9 @@ expressionP :: Parser (Expression Untyped SourcePosition () Text)
 expressionP = (leftRec basicP leftRecP) --addition basicP <|> funcApp basicP <|> tarrow2 basicP <|> tarrow1 basicP <|> annotation basicP <|> basicP
   where 
     basicP = foldl' (<|>) empty basicParsers
-    leftRecP = try $ foldl' (<|>) empty leftRecParsers
+    leftRecP = addition <|> funcApp -- foldl' (<|>) empty leftRecParsers
     basicParsers = [functionLiteralP, numbP, parenthesizedExpression, identifierExpP, tarrow2]
-    leftRecParsers = [addition, annotation, tarrow1, funcApp]
+    leftRecParsers = [funcApp, annotation, tarrow1, addition]
     parenthesizedExpression = try $ do
       char '('
       many separatorChar
@@ -80,7 +80,7 @@ expressionP = (leftRec basicP leftRecP) --addition basicP <|> funcApp basicP <|>
       many separatorChar
       string "->"
       many separatorChar
-      expr2 <- (withEnvInState [undefined] expressionP)
+      expr2 <- (withEnvInState [(name, (atom, namepos))] expressionP)
       pure (TArrowBinding expr1 ((name, (atom, namepos)) :. expr2) Untyped) 
     
 
@@ -110,7 +110,7 @@ expressionP = (leftRec basicP leftRecP) --addition basicP <|> funcApp basicP <|>
           many separatorChar
           string "."
           many separatorChar
-          f <- expressionP
+          f <- (sourcePosWrapper basicP) --expressionP
           many separatorChar
           moreApplicants <- (try $ do 
             string "("
@@ -231,7 +231,7 @@ some' p = do
   rest  <- many p
   pure $ first NonEmpty.:| rest
 
-leftRec :: forall a . Parser (SourcePosition -> a) -> Parser (a -> (SourcePosition -> a)) -> Parser a
+leftRec :: forall a . Show a => Parser (SourcePosition -> a) -> Parser (a -> (SourcePosition -> a)) -> Parser a
 leftRec p op = do pos <- getSourcePos
                   initial <- sourcePosWrapper p
                   rest initial pos
