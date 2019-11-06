@@ -18,7 +18,7 @@ data Declaration t p m i = Declaration i (Expression t p m i) p deriving (Show, 
 
 data Expression t p m i = ParenthesizedExpression (Expression t p m i)                                     t p 
                         | NumberLiteral Integer Integer                                                    t p 
-                        | AddExpression (Expression t p m i) (Expression t p m i)                                    t p 
+                        | AddExpression (Expression t p m i) (Expression t p m i)                          t p 
                         | ReferenceVariable i m                                                            t p 
                         | LambdaVariable (Text, Atom)                                                      t p 
                         | FunctionLiteralExpression (Bind [(i, (Atom, p))] (Expression t p m i))           t p 
@@ -28,6 +28,10 @@ data Expression t p m i = ParenthesizedExpression (Expression t p m i)          
                         | Annotation (Expression t p m i) (Expression t p m i)                             t p 
                         deriving (Show, Eq, Typeable, NominalSupport, NominalShow, Generic, Nominal)
 
+data IdentifierMeaning t p i = Ref (Expression t p (IdentifierMeaning t p i) i) deriving (Eq, Show, Typeable, NominalSupport, NominalShow, Generic, Nominal)
+type CopyPropagatedModule t p i = Module t p (IdentifierMeaning t p i) i
+type CopyPropagatedDeclaration t p i = Declaration t p (IdentifierMeaning t p i) i
+type CopyPropagatedExpression t p i = Expression t p (IdentifierMeaning t p i) i
 
 
 

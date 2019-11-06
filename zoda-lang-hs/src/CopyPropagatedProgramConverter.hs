@@ -15,9 +15,6 @@ data Metavariable = TypechecksOkay{-MetavariableApplication Int [Metavariable]
 
 data Types i = Number | Bool | Arr (Maybe i) (Types i) (Types i) deriving (Eq, Show, Read)
 
-
---data IdentifierMeaning t p i = Ref (Expression t p (i, Maybe (IdentifierMeaning t p i))) | LambdaVar | NotAReference deriving (Eq, Ord, Read, Show)
-
 type UniLevel = Int
 data Surface = 
     VarSurf Atom
@@ -212,30 +209,54 @@ listLookup toLookup ((k, v):xs)
     | k == toLookup = Just v
     | otherwise = listLookup toLookup xs
 
+copyPropagated :: (Eq i, Bindable i, Bindable p, Nominal t, Nominal m) => Module t p m i -> Either (i, p) (Module t p (IdentifierMeaning t p i) i)
+copyPropagated (Module (ModuleHeader i (Tinydoc text p2) p3) declarations p) = do
+    let declarationMap = fmap (\(Declaration i e p) -> (i, e)) declarations
+    propedDecs <- (propagatedDeclarations declarationMap) 
+    pure $ Module (ModuleHeader i (Tinydoc text p2) p3) (propedDecs) p
+  where 
+    propagatedDeclarations dmap = for declarations (declarationMapper dmap) 
+    declarationMapper dmap (Declaration i e p) = do
+      e' <- expressionMapper dmap e
+      pure $ Declaration i e' p
+    expressionMapper dmap (ReferenceVariable i _ t p) = case i `lookup` dmap of
+      Just (mapping) -> do 
+        e <- expressionMapper dmap (mapping) 
+        pure $ ReferenceVariable i (Ref e) t p
+      _            -> Left (i, p)
+    expressionMapper dmap (ParenthesizedExpression e t p) = do 
+      e' <- expressionMapper dmap e 
+      pure $ ParenthesizedExpression e' t p
+    expressionMapper dmap (NumberLiteral n d t p) = pure $ (NumberLiteral n d t p)
+    expressionMapper dmap (AddExpression e1 e2 t p) = do
+      e1' <- expressionMapper dmap e1
+      e2' <- expressionMapper dmap e2
+      pure $ AddExpression e1' e2' t p
+    expressionMapper dmap (LambdaVariable a t p) = pure $ LambdaVariable a t p
+    expressionMapper dmap (FunctionLiteralExpression (b :. e) t p) = do
+      e' <- expressionMapper dmap e
+      pure $ FunctionLiteralExpression (b :. e') t p
+    expressionMapper dmap (FunctionApplicationExpression ecaller eargs t p) = do
+      ecaller' <- expressionMapper dmap ecaller
+      eargs'   <- for eargs (expressionMapper dmap)
+      pure $ FunctionApplicationExpression ecaller' eargs' t p
+    expressionMapper dmap (TArrowNonbinding e1 e2 t p) = do
+      e1' <- expressionMapper dmap e1
+      e2' <- expressionMapper dmap e2
+      pure $ TArrowNonbinding e1' e2' t p
+    expressionMapper dmap (TArrowBinding e1 (b :. e2) t p) = do
+      e1' <- expressionMapper dmap e1
+      e2' <- expressionMapper dmap e2
+      pure $ TArrowBinding e1' (b :. e2') t p
+    expressionMapper dmap (Annotation e1 e2 t p) = do
+      e1' <- expressionMapper dmap e1
+      e2' <- expressionMapper dmap e2
+      pure $ Annotation e1' e2' t p
 
-{-
-checkNamesDefined :: forall t p i m. (Ord i, IsString i, Show i, Show t, Ord t, Show p, Eq p, HasThrow "perr" (ProductionError t p i) m) => Module t p i -> m (Module t p (i, Maybe (IdentifierMeaning t p i)))
-checkNamesDefined = copyPropagate
-  where
 
-    copyPropagate ::  Module t p i -> m (Module t p (i, Maybe (IdentifierMeaning t p i)))
-    copyPropagate (Module (ModuleHeader (Identifier i1 p1) (Tinydoc text p2) p3) declarations p4) = do
-      allTopLevelTypechecks <- mapM ((synth []) . \case (_, Ref x) -> x) allTopLevelValues
-      pure $ traceShow allTopLevelTypechecks $ Module (ModuleHeader (Identifier (i1, Just NotAReference) p1) (Tinydoc text p2) p3) propagatedDeclarations p4
-      where 
-        allTopLevelValues = map (\case d@(Declaration (Identifier i _) e _) -> (i, Ref (propagateExpression allTopLevelValues e))) declarations
         
+       
 
-        propagatedDeclarations ::  [Declaration t p (i, Maybe (IdentifierMeaning t p i))]
-        propagatedDeclarations = map (propagateDeclaration allTopLevelValues) declarations
-        
-        propagateDeclaration :: [(i, IdentifierMeaning t p i)] -> Declaration t p i -> Declaration t p (i, Maybe (IdentifierMeaning t p i))
-        propagateDeclaration context (Declaration (Identifier i p1) expression p2) = 
-          Declaration (Identifier (i, Just NotAReference) p1) propagatedExpression p2
-            where 
-              propagatedExpression :: Expression t p (i, Maybe (IdentifierMeaning t p i))
-              propagatedExpression = propagateExpression context expression
--}
 
 
 
