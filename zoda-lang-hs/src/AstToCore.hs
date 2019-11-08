@@ -1,6 +1,5 @@
 module AstToCore where
 import ClassyPrelude
-import Capability.Error
 import Data.Functor.Foldable (cata, ListF(..))
 import qualified Data.Map.Justified as Map
 import qualified Data.Map as Unjustified.Map

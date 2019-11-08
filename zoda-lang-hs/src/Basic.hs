@@ -4,8 +4,6 @@ import Ast
 import Data.Void
 import Text.Megaparsec hiding (State)
 import Text.Megaparsec.Char
-import Capability.Error
-import Capability.Writer
 import qualified CopyPropagatedProgram as CPP
 import Control.Monad.Except (ExceptT (..), Except)
 import Nominal hiding ((.))
@@ -21,12 +19,7 @@ data ProductionError t p m i = ZodaSyntaxError (ParseErrorBundle String ZodaPars
                              | TypeErr
   deriving (Show, Eq)
   deriving anyclass Exception
-
-newtype M t p m i r = M { runM :: Either (ProductionError t p m i) r }
-  deriving (Functor, Applicative, Monad) via Either (ProductionError t p m i)
-  deriving (HasThrow "perr" (ProductionError t p m i)) via
-    MonadError (Except (ProductionError t p m i))
-    
+  
   --deriving (HasThrow "perr" (ProductionError p)) via
     --MonadError (Except (ProductionError p))
 

@@ -6,7 +6,6 @@ import Basic
 import Text.Megaparsec hiding (State, some)
 import Text.Megaparsec.Char
 import Control.Monad.State
-import Capability.Error
 
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Ratio
@@ -18,11 +17,11 @@ import Control.Monad.Combinators.Expr
 
 import Nominal hiding ((.))
 
-parseModule :: (HasThrow "perr" (ProductionError Untyped p () Text) m) => String -> m (Module Untyped SourcePosition () Text)
+parseModule :: String -> Either (ProductionError Untyped p () Text) (Module Untyped SourcePosition () Text)
 parseModule text = handleResult result
  where
   result = Data.Bifunctor.first ZodaSyntaxError (runParser (evalStateT moduleP []) "module" text)
-  handleResult (Left  e) = throw @"perr" e
+  handleResult (Left  e) = Left e
   handleResult (Right r) = pure r
 
 moduleP :: Parser (Module Untyped SourcePosition () Text)

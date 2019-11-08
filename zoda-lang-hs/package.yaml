@@ -20,7 +20,7 @@ extra-source-files:
 description:         Please see the README on GitHub at <https://github.com/anchpop/zoda-lang-hs#readme>
 
 dependencies:
-- base >= 4.7 && < 5
+- base >= 4.7 
 - classy-prelude
 - megaparsec
 - parser-combinators
@@ -30,7 +30,6 @@ dependencies:
 - free
 - justified-containers
 - containers
-- capability
 - recursion-schemes
 - roles
 - free
@@ -38,6 +37,8 @@ dependencies:
 - generic-lens
 - text
 - nominal
+- optics 
+- lens
 
 ghc-options:
 - -Wall

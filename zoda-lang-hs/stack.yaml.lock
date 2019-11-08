@@ -5,12 +5,19 @@
 
 packages:
 - completed:
-    hackage: capability-0.2.0.0@sha256:7049527e0bede44f8aeabdd0f41c50ec78da5835796e6a477615502665127a62,2424
+    hackage: optics-0.2@sha256:813ef6cc4d2e2b5ee00435831031f38917ba01d1e56dcb62dc18cd0315a9ccb7,6296
     pantry-tree:
-      size: 1700
-      sha256: 4fd1bb99e96335ff8ee0d1562c4bdcba8acfe6db6ddecfaa55dfdd549f7f542b
+      size: 1003
+      sha256: 8a74dbcd983fcc96b7b6c5c9fc6da7240dd2e5bdab7caa4927b8287a4cbe5c0f
   original:
-    hackage: capability-0.2.0.0
+    hackage: optics-0.2@sha256:813ef6cc4d2e2b5ee00435831031f38917ba01d1e56dcb62dc18cd0315a9ccb7,6296
+- completed:
+    hackage: optics-th-0.2@sha256:b4f6c5a3f134c697837190ed6da969dd284aefe79e43c3ef793093b607bb83b9,1929
+    pantry-tree:
+      size: 653
+      sha256: f6b5caed956d3761b35769ac518d3f0f407449dafe33154992386f02d9489bad
+  original:
+    hackage: optics-th-0.2@sha256:b4f6c5a3f134c697837190ed6da969dd284aefe79e43c3ef793093b607bb83b9,1929
 - completed:
     cabal-file:
       size: 2990
@@ -27,7 +34,7 @@ packages:
     commit: 7cc5ff870b43b431232cb9666779d2e89622f3af
 snapshots:
 - completed:
-    size: 523700
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/14/7.yaml
-    sha256: 8e3f3c894be74d71fa4bf085e0a8baae7e4d7622d07ea31a52736b80f8b9bb1a
-  original: lts-14.7
+    size: 414284
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/nightly/2019/11/7.yaml
+    sha256: 83a39c911b888c1ad92d854d6d43fdca2ece0574739634680762a9f315ff7630
+  original: nightly-2019-11-07

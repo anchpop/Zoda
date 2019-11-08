@@ -17,7 +17,7 @@
 #
 # resolver: ./custom-snapshot.yaml
 # resolver: https://example.com/snapshots/2018-01-01.yaml
-resolver: lts-14.7
+resolver: nightly-2019-11-07
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -38,7 +38,8 @@ packages:
 # using the same syntax as the packages field.
 # (e.g., acme-missiles-0.3)
 extra-deps:
-- capability-0.2.0.0
+- optics-0.2@sha256:813ef6cc4d2e2b5ee00435831031f38917ba01d1e56dcb62dc18cd0315a9ccb7,6296
+- optics-th-0.2@sha256:b4f6c5a3f134c697837190ed6da969dd284aefe79e43c3ef793093b607bb83b9,1929
 - git: https://github.com/anchpop/Nominal.git
   commit: 7cc5ff870b43b431232cb9666779d2e89622f3af
 # Override default flag values for local packages and extra-deps
