@@ -20,18 +20,18 @@ packages:
     hackage: optics-th-0.2@sha256:b4f6c5a3f134c697837190ed6da969dd284aefe79e43c3ef793093b607bb83b9,1929
 - completed:
     cabal-file:
-      size: 2990
-      sha256: 70d0d54f7374d19503ea95f0e22e324b51bc4ce9d0c67ae1dbe57358975d81f9
+      size: 3035
+      sha256: 7d0afed3fb3f39bc2eaf183ef3d2bf4838a8b813e11da30738b69c8eeb175e26
     name: nominal
     version: 0.2.0.0
     git: https://github.com/anchpop/Nominal.git
     pantry-tree:
-      size: 1272
-      sha256: ce390ce972e8df445d0f0d383bfa043b73840c9ac817b066bfa0fd3ed1ee43dc
-    commit: 7cc5ff870b43b431232cb9666779d2e89622f3af
+      size: 1378
+      sha256: bec42d784fa11c15e7fd2dcc6cb8d0fdde440680b1322e00cb4fb36cc1d6c56d
+    commit: 7a879ca226a039702a6baf9a9efd37f0209429bb
   original:
     git: https://github.com/anchpop/Nominal.git
-    commit: 7cc5ff870b43b431232cb9666779d2e89622f3af
+    commit: 7a879ca226a039702a6baf9a9efd37f0209429bb
 snapshots:
 - completed:
     size: 414284

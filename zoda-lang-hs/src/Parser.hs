@@ -260,7 +260,7 @@ getSourcePosFromExpression (Annotation _ _ _ p ) = p
 combineSourcePos expr1 expr2 = SourcePosition filePath sourceLineStart sourceColumnStart sourceLineEnd sourceColumnEnd
   where 
     SourcePosition filePath sourceLineStart sourceColumnStart _ _ = getSourcePosFromExpression expr1
-    SourcePosition _ _ _ sourceLineEnd sourceColumnEnd     = getSourcePosFromExpression expr1
+    SourcePosition _ _ _ sourceLineEnd sourceColumnEnd            = getSourcePosFromExpression expr2
 
 noNewlineOrChars :: (MonadParsec e s m, Token s ~ Char) => [Char] -> m (Token s)
 noNewlineOrChars c = noneOf ('\n' : c)

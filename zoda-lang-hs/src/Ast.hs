@@ -36,10 +36,6 @@ data Expression t p m i = ParenthesizedExpression (Expression t p m i)          
                         | NatTypeExpression                                                                t p 
                         deriving (Show, Eq, Typeable, NominalSupport, NominalShow, Generic, Nominal)
 
-data IdentifierMeaning t p i = Ref (Expression t p (IdentifierMeaning t p i) i) deriving (Eq, Show, Typeable, NominalSupport, NominalShow, Generic, Nominal)
-type CopyPropagatedModule t p i = Module t p (IdentifierMeaning t p i) i
-type CopyPropagatedDeclaration t p i = Declaration t p (IdentifierMeaning t p i) i
-type CopyPropagatedExpression t p i = Expression t p (IdentifierMeaning t p i) i
 
 data Tinydoc t p m i = Tinydoc Text p deriving (Show, Read, Eq, Ord, Generic, Typeable)
 --data Identifier t p i = Identifier { getIdentifier :: i, getIdentifierSourcePos :: p } deriving (Show, Read, Eq, Ord, NominalSupport, NominalShow, Generic, Nominal, Typeable)
@@ -53,12 +49,14 @@ instance Representational (Declaration t p) where rep Coercion = Coercion
 instance Representational (ModuleHeader t p) where rep Coercion = Coercion
 instance Representational (Module t p) where rep Coercion = Coercion
 
+type JustifiedModule     t p ph i = Map.Map ph i (Expression t p (Map.Key ph i) i)
+type JustifiedExpression t p ph i = Expression t p (Map.Key ph i) i
+
 
 makeLenses ''Module
 makeLenses ''ModuleHeader
 makeLenses ''Declaration
 makeLenses ''Expression
-makeLenses ''IdentifierMeaning
 makeLenses ''Tinydoc
 
 
@@ -99,6 +97,76 @@ mapExpr2 f (TArrowBinding e1 (a :. e2) t p)              = TArrowBinding (mapExp
 mapExpr2 f (Annotation e1 e2 t p)                        = Annotation (mapExpr2 f e1) (mapExpr2 f e2) t p
 mapExpr2 f (NatTypeExpression t p)                       = NatTypeExpression t p
 
+
+copyIdentifierOntoMetadata :: (Bindable t, Bindable p, Bindable i, Nominal m) => Expression t p m i -> Expression t p (i, p) i
+copyIdentifierOntoMetadata (ParenthesizedExpression e t p)               = ParenthesizedExpression (copyIdentifierOntoMetadata e) t p
+copyIdentifierOntoMetadata (FirstExpression e t p)                       = FirstExpression (copyIdentifierOntoMetadata e) t p
+copyIdentifierOntoMetadata (SecondExpression e t p)                      = SecondExpression (copyIdentifierOntoMetadata e) t p
+copyIdentifierOntoMetadata (PairExpression e1 e2 t p)                    = PairExpression (copyIdentifierOntoMetadata e1) (copyIdentifierOntoMetadata e2) t p
+copyIdentifierOntoMetadata (TSigmaBinding e1 (a :. e2) t p)              = TSigmaBinding (copyIdentifierOntoMetadata e1) (a :. (copyIdentifierOntoMetadata e2)) t p
+copyIdentifierOntoMetadata (UniverseExpression i t p)                    = UniverseExpression i t p
+copyIdentifierOntoMetadata (NumberLiteral i1 i2 t p)                     = NumberLiteral i1 i2 t p
+copyIdentifierOntoMetadata (AddExpression e1 e2 t p)                     = AddExpression (copyIdentifierOntoMetadata e1) (copyIdentifierOntoMetadata e2) t p
+copyIdentifierOntoMetadata (ReferenceVariable i m t p)                   = ReferenceVariable i (i, p) t p 
+copyIdentifierOntoMetadata (LambdaVariable i t p)                        = LambdaVariable i t p
+copyIdentifierOntoMetadata (FunctionLiteralExpression (a :. e) t p)      = FunctionLiteralExpression (a :. (copyIdentifierOntoMetadata e)) t p
+copyIdentifierOntoMetadata (FunctionApplicationExpression func args t p) = FunctionApplicationExpression (copyIdentifierOntoMetadata func) (fmap (copyIdentifierOntoMetadata) args) t p
+copyIdentifierOntoMetadata (TArrowNonbinding e1 e2 t p)                  = TArrowNonbinding (copyIdentifierOntoMetadata e1) (copyIdentifierOntoMetadata e2) t p
+copyIdentifierOntoMetadata (TArrowBinding e1 (a :. e2) t p)              = TArrowBinding (copyIdentifierOntoMetadata e1) (a :. (copyIdentifierOntoMetadata e2)) t p
+copyIdentifierOntoMetadata (Annotation e1 e2 t p)                        = Annotation (copyIdentifierOntoMetadata e1) (copyIdentifierOntoMetadata e2) t p
+copyIdentifierOntoMetadata (NatTypeExpression t p)                       = NatTypeExpression t p
+
+
+traverseExpr2 :: (Bindable t, Bindable p, Bindable i, Nominal m1, Nominal m2, Monad mo) => (m1 -> mo m2) -> Expression t p m1 i -> mo (Expression t p m2 i)
+traverseExpr2 f (ParenthesizedExpression e t p)               = do
+  e' <- traverseExpr2 f e
+  pure $ ParenthesizedExpression (e') t p
+traverseExpr2 f (FirstExpression e t p)                       = do
+  e' <- traverseExpr2 f e
+  pure $ FirstExpression e' t p
+traverseExpr2 f (SecondExpression e t p)                      = do 
+  e' <- traverseExpr2 f e
+  pure $ SecondExpression e' t p
+traverseExpr2 f (PairExpression e1 e2 t p)                    = do
+  e1' <- traverseExpr2 f e1
+  e2' <- traverseExpr2 f e2
+  pure $ PairExpression e1' e2' t p
+traverseExpr2 f (TSigmaBinding e1 (a :. e2) t p)              = do 
+  e1' <- traverseExpr2 f e1
+  e2' <- traverseExpr2 f e2
+  pure $ TSigmaBinding e1' (a :. e2') t p
+traverseExpr2 f (UniverseExpression i t p)                    = pure $ UniverseExpression i t p
+traverseExpr2 f (NumberLiteral i1 i2 t p)                     = pure $ NumberLiteral i1 i2 t p
+traverseExpr2 f (AddExpression e1 e2 t p)                     = do
+  e1' <- traverseExpr2 f e1
+  e2' <- traverseExpr2 f e2
+  pure $ AddExpression e1' e2' t p
+traverseExpr2 f (ReferenceVariable i m t p)                   = do
+  m' <- f m
+  pure $ ReferenceVariable i m' t p 
+traverseExpr2 f (LambdaVariable i t p)                        = pure $ LambdaVariable i t p
+traverseExpr2 f (FunctionLiteralExpression (a :. e) t p)      = do
+  e' <- traverseExpr2 f e
+  pure $ FunctionLiteralExpression (a :. e') t p
+traverseExpr2 f (FunctionApplicationExpression func args t p) = do
+  func' <- traverseExpr2 f func
+  args' <- traverse (traverseExpr2 f) args 
+  pure $ FunctionApplicationExpression func' args' t p
+traverseExpr2 f (TArrowNonbinding e1 e2 t p)                  = do
+  e1' <- traverseExpr2 f e1
+  e2' <- traverseExpr2 f e2
+  pure $ TArrowNonbinding e1' e2' t p
+traverseExpr2 f (TArrowBinding e1 (a :. e2) t p)              = do 
+  e1' <- traverseExpr2 f e1
+  e2' <- traverseExpr2 f e2
+  pure $ TArrowBinding e1' (a :. e2') t p
+traverseExpr2 f (Annotation e1 e2 t p)                        = do 
+  e1' <- traverseExpr2 f e1
+  e2' <- traverseExpr2 f e2
+  pure $ Annotation e1' e2' t p
+traverseExpr2 f (NatTypeExpression t p)                       = pure $ NatTypeExpression t p
+
+forExpr2 x y = traverseExpr2 y x
 
 mapExpr3 :: (Bindable t, Bindable p1, Bindable p2, Bindable i, Nominal m) => (p1 -> p2) -> Expression t p1 m i -> Expression t p2 m i
 mapExpr3 f (ParenthesizedExpression e t p)               = ParenthesizedExpression (mapExpr3 f e) t (f p)
