@@ -9,6 +9,7 @@ import qualified Data.Set as Set
 import qualified Data.Map.Justified as Map
 import qualified Data.Map.Lazy as UMap
 import Nominal hiding ((.))
+import Data.Void
 
 data Metavariable = TypechecksOkay{-MetavariableApplication Int [Metavariable] 
                   | Metavariable Int 
@@ -16,72 +17,31 @@ data Metavariable = TypechecksOkay{-MetavariableApplication Int [Metavariable]
 
 data Types i = Number | Bool | Arr (Maybe i) (Types i) (Types i) deriving (Eq, Show, Read)
 
-type UniLevel = Integer
-type Surface t p ph i = JustifiedExpression t p ph i 
-
-type SurfaceEnv t p ph i = [(Atom, Surface t p ph i)]
 
 
-type SemanticEnv t p ph i = [(Atom, Semantic t p ph i)]
-data Clos t p ph i = Clos {termClos :: (Bind (i, (Atom, p)) (Surface t p ph i)), envClos :: (SemanticEnv t p ph i)}
-  deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
--- |Semantic values contain terms which have evaluated to a constructor which does not need to be 
--- reduced further. So for instance, Lam and Pair may contain computation further inside the term 
--- but at least the outermost constructor is stable and fully evaluated. 
-data Semantic t p ph i =
-    LamSem (Clos t p ph i)
-  | NeutralSem {tpNeutral   :: Semantic t p ph i,  -- ^This should be the type of the neutral term
-                termNeutral :: Ne       t p ph i}  -- ^This should be the neutral term iteslf
-  | NatTypeSem
-  | NatValueSem Integer
-  | AddSem (Semantic t p ph i) (Semantic t p ph i)
-  | PiTypeSem (Semantic t p ph i) (Clos t p ph i)
-  | SigTypeSem (Semantic t p ph i) (Clos t p ph i) 
-  | PairSem (Semantic t p ph i) (Semantic t p ph i)
-  | UniSem UniLevel
-  deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
--- |We also have to consider the case that something wants to reduce further before becoming a 
--- value but cannot because its blocked on something. These are called neutral terms. The 
--- canonical example of a neutral term is just a variable x. It's not yet a value but there's 
--- no way to convert it to a value since we have no information on what x is yet. Similarly, if 
--- we have some neutral term and we apply Fst to it it's clearly still not a value but we don't 
--- have any way of reducing it further so what's there to do. 
-data Ne t p ph i =
-    VarSem Atom
-  | ApSem (Ne t p ph i) (Nf t p ph i)
-  | FstSem (Ne t p ph i)
-  | SndSem (Ne t p ph i)
-  deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
-
--- |nf is a special class of values coming from the style of NbE we use. It associates a type 
--- with a value so that later during quotation we can eta expand it appropriately
-data Nf t p ph i =
-    Normal {tpNf :: Semantic t p ph i, termNf :: Semantic t p ph i}
-    deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
-
-do_fst :: (Bindable t, Bindable p, Bindable i) => Semantic t p ph i -> Semantic t p ph i
+do_fst :: (Bindable t, Bindable p, Bindable i, Nominal m) => Semantic t p m i -> Semantic t p m i
 do_fst (PairSem p1 _)                   = p1
 do_fst (NeutralSem (SigTypeSem t _) ne) = NeutralSem t (FstSem ne)
 do_fst _                                = error "Couldn't fst argument in do_fst"
 
-do_snd :: (Bindable t, Bindable p, Bindable i) => Semantic t p ph i -> Semantic () () ph ()
-do_snd (PairSem _ p2)                       = undefined--p2
-do_snd (NeutralSem p@(SigTypeSem _ clo) ne) = undefined--NeutralSem (do_clos clo (do_fst p)) (SndSem ne)
+do_snd :: (Bindable t, Bindable p, Bindable i, Nominal m) => Semantic t p m i -> Semantic t p m i
+do_snd (PairSem _ p2)                       = p2
+do_snd (NeutralSem p@(SigTypeSem _ clo) ne) = NeutralSem (do_clos clo (do_fst p)) (SndSem ne)
 do_snd _                                    = error "Couldn't snd argument in do_snd"
 
-do_ap :: (Bindable t, Bindable p, Bindable i) => Semantic t p ph i -> Semantic t p ph i -> Semantic () () ph ()
+do_ap :: (Bindable t, Bindable p, Bindable i, Nominal m) => Semantic t p m i -> Semantic t p m i -> Semantic t p m i
 do_ap (LamSem clos)                      a = do_clos clos a
-do_ap (NeutralSem (PiTypeSem src dst) e) a = undefined--NeutralSem (do_clos dst a) (ApSem e (Normal src a))
+do_ap (NeutralSem (PiTypeSem src dst) e) a = NeutralSem (do_clos dst a) (ApSem e (Normal src a))
 do_ap (NeutralSem _ e)                   a = error "Not a Pi in do_ap"
 do_ap _                                  a = error "Not a function in do_ap"
 
 
-do_clos :: (Bindable t, Bindable p, Bindable i) => (Bindable i, Bindable t, Bindable p)
-        => Clos t p ph i     -- ^ The closure to evaluate
-        -> Semantic t p ph i -- ^ What to pass to the closure (will be added to the environment)
-        -> Semantic () () ph () -- ^ The evaluated closure
+do_clos :: (Bindable t, Bindable p, Bindable i, Nominal m) => (Bindable i, Bindable t, Bindable p)
+        => Clos t p m i     -- ^ The closure to evaluate
+        -> Semantic t p m i -- ^ What to pass to the closure (will be added to the environment)
+        -> Semantic t p m i -- ^ The evaluated closure
 do_clos (Clos ((_, (atom, _)) :. term) env) bound = undefined--eval term ((atom, bound) : env)
 
 
@@ -90,7 +50,7 @@ mk_var tp atom = NeutralSem tp (VarSem atom)
 
 
 -- |This converts the surface syntax into a semantic term with no beda redexes.
-eval :: (Bindable t, Bindable p, Bindable i, Show t, Show p, Show i) => Surface t p ph i -> SemanticEnv t p ph i -> Semantic () () ph ()
+eval :: (Bindable t, Bindable p, Bindable i, Show t, Show p, Show i, Nominal m) => JustifiedExpression t p m i -> SemanticEnv t p m i -> Semantic t p m i
 eval (LambdaVariable (_, i) _ _) env =
   case i `lookup` env  of
     Just x -> undefined --x
@@ -114,7 +74,7 @@ eval (SecondExpression t                        _ _) env = do_snd (eval t env)
 --   - one for normal forms
 --   - one for neutral terms
 --   - one for types. 
-read_back_nf :: (Bindable t, Bindable p, Bindable i) => Nf t p ph i -> Surface () () ph ()
+read_back_nf :: (Bindable t, Bindable p, Bindable i, Nominal m) => Nf t p m i -> Expression () () () ()
 read_back_nf (Normal (PiTypeSem src dest) f)                 = FunctionLiteralExpression ([((), (atom, ()))] :. (read_back_nf nf)) () ()
                                                             where Clos ((_, (atom, _)) :. _) _ = dest
                                                                   arg = mk_var src atom 
@@ -137,7 +97,7 @@ read_back_nf  _                                          = error "Ill-typed read
 -- so there is no annotation tell us what type we're reading back at. 
 -- The function itself just assumes that d is some term of type Uni i for some i. 
 -- This, however, means that the cases are almost identical to the type cases in read_back_nf. 
-read_back_tp :: (Bindable t, Bindable p, Bindable i) => Semantic t p ph i -> Surface () () ph ()
+read_back_tp :: (Bindable t, Bindable p, Bindable i, Nominal m) => Semantic t p m i -> Expression () () () ()
 read_back_tp (NeutralSem _ term) = read_back_ne term
 read_back_tp  NatTypeSem             = NatTypeExpression () ()
 read_back_tp (PiTypeSem src dest)    = TArrowBinding (read_back_tp src) (((), (atom, ())) :. (read_back_tp (do_clos dest var))) () ()
@@ -149,7 +109,7 @@ read_back_tp (SigTypeSem f s)        = TSigmaBinding (read_back_tp f) (((), (ato
 read_back_tp (UniSem k)          = UniverseExpression k () ()
 read_back_tp  _                  = error "Nbe_failed - Not a type in read_back_tp"
 
-read_back_ne :: (Bindable t, Bindable p, Bindable i) => Ne t p ph i -> Surface () () ph ()
+read_back_ne :: (Bindable t, Bindable p, Bindable i, Nominal m) => Ne t p m i -> Expression () () () ()
 read_back_ne (VarSem x)     = LambdaVariable ((), x) () ()
 read_back_ne (ApSem ne arg) = FunctionApplicationExpression (read_back_ne ne) [read_back_nf arg] () ()
 read_back_ne (FstSem ne)    = FirstExpression (read_back_ne ne) () ()
@@ -172,7 +132,7 @@ infixl 9 @@
 make_lam         f = with_fresh         (\x -> FunctionLiteralExpression ([((), (x, ()))] :. f (LambdaVariable ((), x))))
 make_lam_named n f = with_fresh_named n (\x -> FunctionLiteralExpression ([((), (x, ()))] :. f (LambdaVariable ((), x))))
 
-normalize :: (Bindable t, Bindable p, Bindable i) => SurfaceEnv t p ph i -> Surface t p ph i -> Surface t p ph i -> Surface () () ph ()
+normalize :: (Bindable t, Bindable p, Bindable i) => SurfaceEnv t p ph i -> JustifiedExpression t p ph i -> JustifiedExpression t p ph i -> JustifiedExpression () () ph ()
 normalize env term tp = undefined--read_back_nf (Normal tp' term')
   where env'  = undefined--make_initial_env env 
         tp'   = undefined--eval tp env' 
@@ -194,7 +154,7 @@ copyPropagated :: forall i p t m o. (Eq i, Ord i, Bindable i, Bindable p, Bindab
 copyPropagated (Module (ModuleHeader i (Tinydoc text p2) p3) declarations p) f = Map.withMap dUMap (\m -> f <$> dJmapToJustifiedModule m)
   where
     dUMap = UMap.fromList (fmap (\(Declaration i e _) -> (i, e)) declarations)
-    dJmapToJustifiedModule :: (Map.Map ph i (Expression t p m i)) -> Either (i, p) (Map.Map ph i (Expression t p (Map.Key ph i) i))
+    dJmapToJustifiedModule :: (Map.Map ph i (Expression t p m i)) -> Either (i, p) (Map.Map ph i (JustifiedExpression t p ph i))
     dJmapToJustifiedModule m = 
       for duped (\e -> forExpr2 e (justifyReferences m))
       where duped = fmap copyIdentifierOntoMetadata m

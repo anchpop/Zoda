@@ -721,9 +721,7 @@ Parameterized types
                         Error  : e -> Result(e, r) 
                         Result : r -> Result(e, r)  
                         
-Recursive types
-
-    -- Zoda 
+Some instances are automatically made for types - the Zoda equivalent of Haskell's `Show`, `Eq`, `Read`, `Ord`, `Functor`, `Traversible`, `Foldable`, `Typable`, `Generic`, and `Data`. In addition we add some new ones - `Hashable`, which generates unique hashes from values, and a whole array of `Functor2` (corresponds to a `Bifunctor`), `Functor3` (corresponds to a trifunctor), etc., and the same for `Traversable` and `Foldable`. Any of these can be overridden as long as its in the same file as the data definition, either with `Has-Trait` or `Hasn't-Trait`. If any of these can't be automatically generated, they won't be. 
 
 ## Synonyms
 
