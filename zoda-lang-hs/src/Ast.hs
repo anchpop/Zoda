@@ -13,6 +13,7 @@ import Nominal hiding ((.))
 import Optics
 import qualified Data.Bifunctor as Data.Bifunctor
 import Data.Void
+import Data.List.NonEmpty
 
 data Module t p m i = Module (ModuleHeader t p m i) [(Declaration t p m i)] p deriving (Show, Eq, Generic, Typeable)
 data ModuleHeader t p m i = ModuleHeader i (Tinydoc t p m i) p deriving (Show, Read, Eq, Ord, Generic, Typeable)

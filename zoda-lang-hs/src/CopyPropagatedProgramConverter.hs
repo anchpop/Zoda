@@ -55,19 +55,24 @@ eval (LambdaVariable (_, i) _ _) env =
   case i `lookup` env  of
     Just x -> normalizeSemanticMetadata x
     _      -> error "Couldn't find referenced variable"
-eval (NatTypeExpression                                   _ _) _   = NatTypeSem
-eval (NumberLiteral i 0                                   _ _) _   = NatValueSem i
-eval (AddExpression t1 t2                                 _ _) env = AddSem (eval t1 env) (eval t2 env)
-eval (TArrowBinding src dest                              _ _) env = PiTypeSem (eval src env) (Clos dest env)
+eval (NatTypeExpression                                       _ _) _   = NatTypeSem
+eval (NumberLiteral i 0                                       _ _) _   = NatValueSem i
+eval (NumberLiteral _ _                                       _ _) _   = error "We do not yet support fractional number literals!"
+eval (AddExpression t1 t2                                     _ _) env = AddSem (eval t1 env) (eval t2 env)
+eval (TArrowNonbinding src dest                               _ _) env = with_fresh (\x -> PiTypeSem (eval src env) (Clos (((), (x, ())) :. dest) env))
+eval (TArrowBinding src dest                                  _ _) env = PiTypeSem (eval src env) (Clos dest env)
+eval (FunctionLiteralExpression ([] :. express)               _ _) env = eval express env
 eval (FunctionLiteralExpression ((t:[]) :. express)           _ _) env = LamSem (Clos (t :. express) env)
-eval (FunctionLiteralExpression (((_, (a, _)):ts) :. express) _ _) env = 
-  LamSem (Clos (((), (a, ())) :. (FunctionLiteralExpression (ts :. express) () ())) (env))
-eval (FunctionApplicationExpression func args             _ _) env = foldl' do_ap (eval func env) $ fmap (flip eval env) args
-eval (UniverseExpression  i                               _ _) _   = UniSem i
-eval (TSigmaBinding    t1 t2                              _ _) env = SigTypeSem (eval t1 env) (Clos t2 env)
-eval (PairExpression   t1 t2                              _ _) env = PairSem (eval t1 env) (eval t2 env)
-eval (FirstExpression  t                                  _ _) env = do_fst (eval t env)
-eval (SecondExpression t                                  _ _) env = do_snd (eval t env)
+eval (FunctionLiteralExpression (((_, (a, _)):ts) :. express) _ _) env =  LamSem (Clos (((), (a, ())) :. (FunctionLiteralExpression (ts :. express) () ())) (env))
+eval (FunctionApplicationExpression func args                 _ _) env = foldl' do_ap (eval func env) $ fmap (flip eval env) args
+eval (UniverseExpression  i                                   _ _) _   = UniSem i
+eval (TSigmaBinding    t1 t2                                  _ _) env = SigTypeSem (eval t1 env) (Clos t2 env)
+eval (PairExpression   t1 t2                                  _ _) env = PairSem (eval t1 env) (eval t2 env)
+eval (FirstExpression  t                                      _ _) env = do_fst (eval t env)
+eval (SecondExpression t                                      _ _) env = do_snd (eval t env)
+eval (ParenthesizedExpression  t                              _ _) env = eval t env
+eval (Annotation  t _                                         _ _) env = eval t env
+
 
 -- |This is the "quotation" side of the algorithm. 
 -- It is a function converting semantic terms back to syntactic ones.
