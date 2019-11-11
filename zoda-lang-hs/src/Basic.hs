@@ -24,4 +24,4 @@ data ProductionError t p m i = ZodaSyntaxError (ParseErrorBundle String ZodaPars
     --MonadError (Except (ProductionError p))
 
 instance ShowErrorComponent ZodaParseError where 
-  showErrorComponent = show
+  showErrorComponent = show 

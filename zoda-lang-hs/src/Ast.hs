@@ -40,7 +40,7 @@ data Expression t p m i = ParenthesizedExpression (Expression t p m i)          
 
 data Tinydoc t p m i = Tinydoc Text p deriving (Show, Read, Eq, Ord, Generic, Typeable)
 --data Identifier t p i = Identifier { getIdentifier :: i, getIdentifierSourcePos :: p } deriving (Show, Read, Eq, Ord, NominalSupport, NominalShow, Generic, Nominal, Typeable)
-
+ 
 
 data Untyped = Untyped deriving (Show, Read, Eq, Ord, NominalSupport, NominalShow, Generic, Nominal)
 

@@ -5,7 +5,7 @@ import Data.Ratio
 import Nominal hiding ((.))
 import Ast
 import qualified Data.Bifunctor as Data.Bifunctor
-
+ 
 -- |Semantic values contain terms which have evaluated to a constructor which does not need to be 
 -- reduced further. So for instance, Lam and Pair may contain computation further inside the term 
 -- but at least the outermost constructor is stable and fully evaluated. 
@@ -72,8 +72,8 @@ mapExpr1 f (FirstExpression e t p)                       = FirstExpression (mapE
 mapExpr1 f (SecondExpression e t p)                      = SecondExpression (mapExpr1 f e) t p
 mapExpr1 f (PairExpression e1 e2 t p)                    = PairExpression (mapExpr1 f e1) (mapExpr1 f e2) t p
 mapExpr1 f (TSigmaBinding e1 (a :. e2) t p)              = TSigmaBinding (mapExpr1 f e1) ((Data.Bifunctor.first f a) :. (mapExpr1 f e2)) t p
-mapExpr1 f (UniverseExpression i t p)                    = UniverseExpression i t p
-mapExpr1 f (NumberLiteral i1 i2 t p)                     = NumberLiteral i1 i2 t p
+mapExpr1 _ (UniverseExpression i t p)                    = UniverseExpression i t p
+mapExpr1 _ (NumberLiteral i1 i2 t p)                     = NumberLiteral i1 i2 t p
 mapExpr1 f (AddExpression e1 e2 t p)                     = AddExpression (mapExpr1 f e1) (mapExpr1 f e2) t p
 mapExpr1 f (ReferenceVariable i m t p)                   = ReferenceVariable (f i) m t p 
 mapExpr1 f (LambdaVariable (i, a) t p)                   = LambdaVariable ((f i), a) t p
@@ -82,7 +82,7 @@ mapExpr1 f (FunctionApplicationExpression func args t p) = FunctionApplicationEx
 mapExpr1 f (TArrowNonbinding e1 e2 t p)                  = TArrowNonbinding (mapExpr1 f e1) (mapExpr1 f e2) t p
 mapExpr1 f (TArrowBinding e1 (a :. e2) t p)              = TArrowBinding (mapExpr1 f e1) ((Data.Bifunctor.first f a) :. (mapExpr1 f e2)) t p
 mapExpr1 f (Annotation e1 e2 t p)                        = Annotation (mapExpr1 f e1) (mapExpr1 f e2) t p
-mapExpr1 f (NatTypeExpression t p)                       = NatTypeExpression t p
+mapExpr1 _ (NatTypeExpression t p)                       = NatTypeExpression t p
 
 
 mapExpr2 :: (Bindable t, Bindable p, Bindable i, Nominal m1, Nominal m2) => (m1 -> m2) -> Expression t p m1 i -> Expression t p m2 i
@@ -91,17 +91,17 @@ mapExpr2 f (FirstExpression e t p)                       = FirstExpression (mapE
 mapExpr2 f (SecondExpression e t p)                      = SecondExpression (mapExpr2 f e) t p
 mapExpr2 f (PairExpression e1 e2 t p)                    = PairExpression (mapExpr2 f e1) (mapExpr2 f e2) t p
 mapExpr2 f (TSigmaBinding e1 (a :. e2) t p)              = TSigmaBinding (mapExpr2 f e1) (a :. (mapExpr2 f e2)) t p
-mapExpr2 f (UniverseExpression i t p)                    = UniverseExpression i t p
-mapExpr2 f (NumberLiteral i1 i2 t p)                     = NumberLiteral i1 i2 t p
+mapExpr2 _ (UniverseExpression i t p)                    = UniverseExpression i t p
+mapExpr2 _ (NumberLiteral i1 i2 t p)                     = NumberLiteral i1 i2 t p
 mapExpr2 f (AddExpression e1 e2 t p)                     = AddExpression (mapExpr2 f e1) (mapExpr2 f e2) t p
 mapExpr2 f (ReferenceVariable i m t p)                   = ReferenceVariable i (f m) t p 
-mapExpr2 f (LambdaVariable i t p)                        = LambdaVariable i t p
+mapExpr2 _ (LambdaVariable i t p)                        = LambdaVariable i t p
 mapExpr2 f (FunctionLiteralExpression (a :. e) t p)      = FunctionLiteralExpression (a :. (mapExpr2 f e)) t p
 mapExpr2 f (FunctionApplicationExpression func args t p) = FunctionApplicationExpression (mapExpr2 f func) (fmap (mapExpr2 f) args) t p
 mapExpr2 f (TArrowNonbinding e1 e2 t p)                  = TArrowNonbinding (mapExpr2 f e1) (mapExpr2 f e2) t p
 mapExpr2 f (TArrowBinding e1 (a :. e2) t p)              = TArrowBinding (mapExpr2 f e1) (a :. (mapExpr2 f e2)) t p
 mapExpr2 f (Annotation e1 e2 t p)                        = Annotation (mapExpr2 f e1) (mapExpr2 f e2) t p
-mapExpr2 f (NatTypeExpression t p)                       = NatTypeExpression t p
+mapExpr2 _ (NatTypeExpression t p)                       = NatTypeExpression t p
 
 
 copyIdentifierOntoMetadata :: (Bindable t, Bindable p, Bindable i, Nominal m) => Expression t p m i -> Expression t p (i, p) i
@@ -113,7 +113,7 @@ copyIdentifierOntoMetadata (TSigmaBinding e1 (a :. e2) t p)              = TSigm
 copyIdentifierOntoMetadata (UniverseExpression i t p)                    = UniverseExpression i t p
 copyIdentifierOntoMetadata (NumberLiteral i1 i2 t p)                     = NumberLiteral i1 i2 t p
 copyIdentifierOntoMetadata (AddExpression e1 e2 t p)                     = AddExpression (copyIdentifierOntoMetadata e1) (copyIdentifierOntoMetadata e2) t p
-copyIdentifierOntoMetadata (ReferenceVariable i m t p)                   = ReferenceVariable i (i, p) t p 
+copyIdentifierOntoMetadata (ReferenceVariable i _ t p)                   = ReferenceVariable i (i, p) t p 
 copyIdentifierOntoMetadata (LambdaVariable i t p)                        = LambdaVariable i t p
 copyIdentifierOntoMetadata (FunctionLiteralExpression (a :. e) t p)      = FunctionLiteralExpression (a :. (copyIdentifierOntoMetadata e)) t p
 copyIdentifierOntoMetadata (FunctionApplicationExpression func args t p) = FunctionApplicationExpression (copyIdentifierOntoMetadata func) (fmap (copyIdentifierOntoMetadata) args) t p
@@ -135,14 +135,14 @@ traverseExpr2 f (SecondExpression e t p)                      = do
   pure $ SecondExpression e' t p
 traverseExpr2 f (PairExpression e1 e2 t p)                    = do
   e1' <- traverseExpr2 f e1
-  e2' <- traverseExpr2 f e2
+  e2' <- traverseExpr2 f e2 
   pure $ PairExpression e1' e2' t p
 traverseExpr2 f (TSigmaBinding e1 (a :. e2) t p)              = do 
   e1' <- traverseExpr2 f e1
   e2' <- traverseExpr2 f e2
   pure $ TSigmaBinding e1' (a :. e2') t p
-traverseExpr2 f (UniverseExpression i t p)                    = pure $ UniverseExpression i t p
-traverseExpr2 f (NumberLiteral i1 i2 t p)                     = pure $ NumberLiteral i1 i2 t p
+traverseExpr2 _ (UniverseExpression i t p)                    = pure $ UniverseExpression i t p
+traverseExpr2 _ (NumberLiteral i1 i2 t p)                     = pure $ NumberLiteral i1 i2 t p
 traverseExpr2 f (AddExpression e1 e2 t p)                     = do
   e1' <- traverseExpr2 f e1
   e2' <- traverseExpr2 f e2
@@ -150,7 +150,7 @@ traverseExpr2 f (AddExpression e1 e2 t p)                     = do
 traverseExpr2 f (ReferenceVariable i m t p)                   = do
   m' <- f m 
   pure $ ReferenceVariable i m' t p 
-traverseExpr2 f (LambdaVariable i t p)                        = pure $ LambdaVariable i t p
+traverseExpr2 _ (LambdaVariable i t p)                        = pure $ LambdaVariable i t p
 traverseExpr2 f (FunctionLiteralExpression (a :. e) t p)      = do
   e' <- traverseExpr2 f e
   pure $ FunctionLiteralExpression (a :. e') t p
@@ -170,8 +170,9 @@ traverseExpr2 f (Annotation e1 e2 t p)                        = do
   e1' <- traverseExpr2 f e1 
   e2' <- traverseExpr2 f e2
   pure $ Annotation e1' e2' t p
-traverseExpr2 f (NatTypeExpression t p)                       = pure $ NatTypeExpression t p
+traverseExpr2 _ (NatTypeExpression t p)                       = pure $ NatTypeExpression t p
 
+forExpr2 :: (Bindable t, Bindable p, Bindable i, Monad mo, Nominal m1, Nominal m2) => Expression t p m1 i -> (m1 -> mo m2) -> mo (Expression t p m2 i)
 forExpr2 x y = traverseExpr2 y x
 
 
@@ -216,19 +217,19 @@ mapExpr4 f (NatTypeExpression t p)                       = NatTypeExpression (f 
 mapSemantic1 :: (Bindable t, Bindable i1, Bindable i2, Bindable p, Nominal m) => (i1 -> i2) -> Semantic t p m i1 -> Semantic t p m i2
 mapSemantic1 f (LamSem clos)                        = LamSem (mapClos1 f clos)
 mapSemantic1 f (NeutralSem typeNeutral termNeutral) = NeutralSem (mapSemantic1 f typeNeutral) (mapNe1 f termNeutral)
-mapSemantic1 f (NatTypeSem)                         = NatTypeSem
-mapSemantic1 f (NatValueSem i)                      = NatValueSem i
+mapSemantic1 _ (NatTypeSem)                         = NatTypeSem
+mapSemantic1 _ (NatValueSem i)                      = NatValueSem i
 mapSemantic1 f (AddSem s1 s2)                       = AddSem (mapSemantic1 f s1) (mapSemantic1 f s2)
 mapSemantic1 f (PiTypeSem s c)                      = PiTypeSem (mapSemantic1 f s) (mapClos1 f c)
 mapSemantic1 f (SigTypeSem s c)                     = SigTypeSem (mapSemantic1 f s) (mapClos1 f c)
 mapSemantic1 f (PairSem s1 s2)                      = PairSem (mapSemantic1 f s1) (mapSemantic1 f s2)
-mapSemantic1 f (UniSem i)                           = UniSem i
+mapSemantic1 _ (UniSem i)                           = UniSem i
 
 mapNf1 :: (Bindable t, Bindable i1, Bindable i2, Bindable p, Nominal m) => (i1 -> i2) -> Nf t p m i1 -> Nf t p m i2
 mapNf1 f (Normal tp tm) = Normal (mapSemantic1 f tp) (mapSemantic1 f tm)
 
 mapNe1 :: (Bindable t, Bindable i1, Bindable i2, Bindable p, Nominal m) => (i1 -> i2) -> Ne t p m i1 -> Ne t p m i2
-mapNe1 f (VarSem a) = VarSem a
+mapNe1 _ (VarSem a) = VarSem a
 mapNe1 f (ApSem ne nf) = ApSem (mapNe1 f ne) (mapNf1 f nf)
 mapNe1 f (FstSem ne) = FstSem (mapNe1 f ne)
 mapNe1 f (SndSem ne) = SndSem (mapNe1 f ne)
@@ -241,19 +242,19 @@ mapClos1 f (Clos ((i, (atom, p)) :. surf) (semanticEnv)) = Clos ((f i, (atom, p)
 mapSemantic2 :: (Bindable t, Bindable p, Bindable i, Nominal m1, Nominal m2) => (m1 -> m2) -> Semantic t p m1 i -> Semantic t p m2 i
 mapSemantic2 f (LamSem clos)                        = LamSem (mapClos2 f clos)
 mapSemantic2 f (NeutralSem typeNeutral termNeutral) = NeutralSem (mapSemantic2 f typeNeutral) (mapNe2 f termNeutral)
-mapSemantic2 f (NatTypeSem)                         = NatTypeSem
-mapSemantic2 f (NatValueSem i)                      = NatValueSem i
+mapSemantic2 _ (NatTypeSem)                         = NatTypeSem
+mapSemantic2 _ (NatValueSem i)                      = NatValueSem i
 mapSemantic2 f (AddSem s1 s2)                       = AddSem (mapSemantic2 f s1) (mapSemantic2 f s2)
 mapSemantic2 f (PiTypeSem s c)                      = PiTypeSem (mapSemantic2 f s) (mapClos2 f c)
 mapSemantic2 f (SigTypeSem s c)                     = SigTypeSem (mapSemantic2 f s) (mapClos2 f c)
 mapSemantic2 f (PairSem s1 s2)                      = PairSem (mapSemantic2 f s1) (mapSemantic2 f s2)
-mapSemantic2 f (UniSem i)                           = UniSem i
+mapSemantic2 _ (UniSem i)                           = UniSem i
 
 mapNf2 :: (Bindable t, Bindable p, Bindable i, Nominal m1, Nominal m2) => (m1 -> m2) -> Nf t p m1 i -> Nf t p m2 i
 mapNf2 f (Normal tp tm) = Normal (mapSemantic2 f tp) (mapSemantic2 f tm)
 
 mapNe2 :: (Bindable t, Bindable p, Bindable i, Nominal m1, Nominal m2) => (m1 -> m2) -> Ne t p m1 i -> Ne t p m2 i
-mapNe2 f (VarSem a) = VarSem a
+mapNe2 _ (VarSem a) = VarSem a
 mapNe2 f (ApSem ne nf) = (ApSem (mapNe2 f ne) (mapNf2 f nf))
 mapNe2 f (FstSem ne) = FstSem (mapNe2 f ne)
 mapNe2 f (SndSem ne) = SndSem (mapNe2 f ne)
@@ -265,19 +266,19 @@ mapClos2 f (Clos ((i, (atom, p)) :. surf) semanticEnv) = Clos ((i, (atom, p)) :.
 mapSemantic3 ::(Bindable t, Bindable p1, Bindable p2, Bindable i, Nominal m) => (p1 -> p2) -> Semantic t p1 m i -> Semantic t p2 m i
 mapSemantic3 f (LamSem clos)                        = LamSem (mapClos3 f clos)
 mapSemantic3 f (NeutralSem typeNeutral termNeutral) = NeutralSem (mapSemantic3 f typeNeutral) (mapNe3 f termNeutral)
-mapSemantic3 f (NatTypeSem)                         = NatTypeSem
-mapSemantic3 f (NatValueSem i)                      = NatValueSem i
+mapSemantic3 _ (NatTypeSem)                         = NatTypeSem
+mapSemantic3 _ (NatValueSem i)                      = NatValueSem i
 mapSemantic3 f (AddSem s1 s2)                       = AddSem (mapSemantic3 f s1) (mapSemantic3 f s2)
 mapSemantic3 f (PiTypeSem s c)                      = PiTypeSem (mapSemantic3 f s) (mapClos3 f c)
 mapSemantic3 f (SigTypeSem s c)                     = SigTypeSem (mapSemantic3 f s) (mapClos3 f c)
 mapSemantic3 f (PairSem s1 s2)                      = PairSem (mapSemantic3 f s1) (mapSemantic3 f s2)
-mapSemantic3 f (UniSem i)                           = UniSem i
+mapSemantic3 _ (UniSem i)                           = UniSem i
 
 mapNf3 ::(Bindable t, Bindable p1, Bindable p2, Bindable i, Nominal m) => (p1 -> p2) -> Nf t p1 m i -> Nf t p2 m i
 mapNf3 f (Normal tp tm) = Normal (mapSemantic3 f tp) (mapSemantic3 f tm)
 
 mapNe3 ::(Bindable t, Bindable p1, Bindable p2, Bindable i, Nominal m) => (p1 -> p2) -> Ne t p1 m i -> Ne t p2 m i
-mapNe3 f (VarSem a) = VarSem a
+mapNe3 _ (VarSem a) = VarSem a
 mapNe3 f (ApSem ne nf) = (ApSem (mapNe3 f ne) (mapNf3 f nf))
 mapNe3 f (FstSem ne) = FstSem (mapNe3 f ne)
 mapNe3 f (SndSem ne) = SndSem (mapNe3 f ne)
@@ -288,19 +289,19 @@ mapClos3 f (Clos ((i, (atom, p)) :. surf) (semanticEnv)) = Clos ((i, (atom, f p)
 mapSemantic4 :: (Bindable t1, Bindable t2, Bindable p, Bindable i, Nominal m) => (t1 -> t2) -> Semantic t1 p m i -> Semantic t2 p m i
 mapSemantic4 f (LamSem clos)                        = LamSem (mapClos4 f clos)
 mapSemantic4 f (NeutralSem typeNeutral termNeutral) = NeutralSem (mapSemantic4 f typeNeutral) (mapNe4 f termNeutral)
-mapSemantic4 f (NatTypeSem)                         = NatTypeSem
-mapSemantic4 f (NatValueSem i)                      = NatValueSem i
+mapSemantic4 _ (NatTypeSem)                         = NatTypeSem
+mapSemantic4 _ (NatValueSem i)                      = NatValueSem i
 mapSemantic4 f (AddSem s1 s2)                       = AddSem (mapSemantic4 f s1) (mapSemantic4 f s2)
 mapSemantic4 f (PiTypeSem s c)                      = PiTypeSem (mapSemantic4 f s) (mapClos4 f c)
 mapSemantic4 f (SigTypeSem s c)                     = SigTypeSem (mapSemantic4 f s) (mapClos4 f c)
 mapSemantic4 f (PairSem s1 s2)                      = PairSem (mapSemantic4 f s1) (mapSemantic4 f s2)
-mapSemantic4 f (UniSem i)                           = UniSem i
+mapSemantic4 _ (UniSem i)                           = UniSem i
 
 mapNf4 :: (Bindable t1, Bindable t2, Bindable p, Bindable i, Nominal m) => (t1 -> t2) -> Nf t1 p m i -> Nf t2 p m i
 mapNf4 f (Normal tp tm) = Normal (mapSemantic4 f tp) (mapSemantic4 f tm)
 
 mapNe4 :: (Bindable t1, Bindable t2, Bindable p, Bindable i, Nominal m) => (t1 -> t2) -> Ne t1 p m i -> Ne t2 p m i
-mapNe4 f (VarSem a) = VarSem a
+mapNe4 _ (VarSem a) = VarSem a
 mapNe4 f (ApSem ne nf) = (ApSem (mapNe4 f ne) (mapNf4 f nf))
 mapNe4 f (FstSem ne) = FstSem (mapNe4 f ne)
 mapNe4 f (SndSem ne) = SndSem (mapNe4 f ne)
@@ -308,12 +309,19 @@ mapNe4 f (SndSem ne) = SndSem (mapNe4 f ne)
 mapClos4 :: (Bindable t1, Bindable t2, Bindable p, Bindable i, Nominal m) => (t1 -> t2) -> Clos t1 p m i -> Clos t2 p m i
 mapClos4 f (Clos ((i, (atom, p)) :. surf) (semanticEnv)) = Clos ((i, (atom, p)) :. (mapExpr4 f surf)) (fmap (\(a, b) -> (a, mapSemantic4 f b)) semanticEnv)
 
-
-normalizeNeMetadata e = mapNe4 (const ()) $ mapNe3 (const ()) $ {-mapNe2 (const ()) $-} mapNe1 (const ()) $ e
-normalizeNfMetadata e = mapNf4 (const ()) $ mapNf3 (const ()) $ {-mapNf2 (const ()) $-} mapNf1 (const ()) $ e
-normalizeExprMetadata e = mapExpr4 (const ()) $ mapExpr3 (const ()) $ {-mapExpr2 (const ()) $-} mapExpr1 (const ()) $ e
-normalizeSemanticMetadata s = mapSemantic4 (const ()) $ mapSemantic3 (const ()) $ {-mapSemantic2 (const ()) $-} mapSemantic1 (const ()) $ s
-normalizeClosureMetadata  s = mapClos4 (const ()) $ mapClos3 (const ()) $ {-mapClos2 (const ()) $-} mapClos1 (const ()) $ s
+normalizeNeMetadata :: (Bindable b1, Bindable b2, Bindable b3, Nominal m) => Ne b1 b2 m b3 -> Ne () () m ()
+normalizeNeMetadata e = mapNe4 (const ()) $ mapNe3 (const ()) $ mapNe1 (const ()) $ e
+normalizeNfMetadata :: (Bindable b1, Bindable b2, Bindable b3, Nominal m) => Nf b1 b2 m b3 -> Nf () () m ()
+normalizeNfMetadata e = mapNf4 (const ()) $ mapNf3 (const ()) $ mapNf1 (const ()) $ e
+normalizeExprMetadata :: (Bindable b1, Bindable b2, Bindable b3, Nominal m) => Expression b1 b2 m b3 -> Expression () () m ()
+normalizeExprMetadata e = mapExpr4 (const ()) $ mapExpr3 (const ()) $ mapExpr1 (const ()) $ e
+normalizeSemanticMetadata :: (Bindable b1, Bindable b2, Bindable b3, Nominal m) => Semantic b1 b2 m b3 -> Semantic () () m ()
+normalizeSemanticMetadata s = mapSemantic4 (const ()) $ mapSemantic3 (const ()) $ mapSemantic1 (const ()) $ s
+normalizeClosureMetadata :: (Bindable b1, Bindable b2, Bindable b3, Nominal m) => Clos b1 b2 m b3 -> Clos () () m ()
+normalizeClosureMetadata  s = mapClos4 (const ()) $ mapClos3 (const ()) $ mapClos1 (const ()) $ s
+normalizeSemanticEnv :: (Functor f, Bifunctor p, Bindable b1, Bindable b2, Bindable b3, Nominal m) => f (p a (Semantic b1 b2 m b3)) -> f (p a (Semantic () () m ()))
 normalizeSemanticEnv s = fmap (Data.Bifunctor.second normalizeSemanticMetadata) s
+normalizeExprEnv :: (Functor f, Bifunctor p, Bindable b1, Bindable b2, Bindable b3, Nominal m) => f (p a (Expression b1 b2 m b3)) -> f (p a (Expression () () m ()))
 normalizeExprEnv s = fmap (Data.Bifunctor.second normalizeExprMetadata) s
-normalizeClosureArg (i, (a, p)) = ((), (a, ()))
+normalizeClosureArg :: (a1, (a2, b)) -> ((), (a2, ()))
+normalizeClosureArg (_, (a, _)) = ((), (a, ()))

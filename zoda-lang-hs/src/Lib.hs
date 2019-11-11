@@ -5,4 +5,4 @@ import ClassyPrelude
 import Basic
 
 someFunc :: IO ()
-someFunc = putStrLn "someFunc"
+someFunc = putStrLn "someFunc" 

@@ -21,7 +21,7 @@ data Types i = Number | Bool | Arr (Maybe i) (Types i) (Types i) deriving (Eq, S
 
 
 
-do_fst :: (Bindable m) => Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
+do_fst :: Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
 do_fst (PairSem p1 _)                   = p1
 do_fst (NeutralSem (SigTypeSem t _) ne) = NeutralSem t (FstSem ne)
 do_fst _                                = error "Couldn't fst argument in do_fst"
@@ -34,20 +34,20 @@ do_snd _                                    = error "Couldn't snd argument in do
 do_ap :: (Bindable m) => Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
 do_ap (LamSem clos)                      a = do_clos clos a
 do_ap (NeutralSem (PiTypeSem src dst) e) a = NeutralSem (do_clos dst a) (ApSem e (Normal src a))
-do_ap (NeutralSem _ e)                   a = error "Not a Pi in do_ap"
-do_ap _                                  a = error "Not a function in do_ap"
+do_ap (NeutralSem _ _)                   _ = error "Not a Pi in do_ap"
+do_ap _                                  _ = error "Not a function in do_ap"
 
 
-do_clos :: forall t p i m ph. Bindable m
+do_clos :: forall m ph. Bindable m
         => Clos () () (Map.Key ph m) ()        -- ^ The closure to evaluate
         -> Semantic () () (Map.Key ph m) ()    -- ^ What to pass to the closure
         -> Semantic () () (Map.Key ph m) () -- ^ The evaluated closure
 do_clos (Clos ((_, (atom, _)) :. term) env) bound = eval term ((atom, bound) : env)
 
 
-mk_var :: (Bindable t, Bindable p, Bindable i) => Semantic t p ph i -> Atom -> Semantic t p ph i
+mk_var :: Semantic t p ph i -> Atom -> Semantic t p ph i
 mk_var tp atom = NeutralSem tp (VarSem atom)
-
+ 
 
 -- |This converts the surface syntax into a semantic term with no beta redexes.
 eval :: (Bindable m) => Expression () () (Map.Key ph m) () -> SemanticEnv () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
@@ -59,9 +59,9 @@ eval (NatTypeExpression                                   _ _) _   = NatTypeSem
 eval (NumberLiteral i 0                                   _ _) _   = NatValueSem i
 eval (AddExpression t1 t2                                 _ _) env = AddSem (eval t1 env) (eval t2 env)
 eval (TArrowBinding src dest                              _ _) env = PiTypeSem (eval src env) (Clos dest env)
-eval (FunctionLiteralExpression ((t:[]) :. exp)           _ _) env = LamSem (Clos (t :. exp) env)
-eval (FunctionLiteralExpression (((i, (a, p)):ts) :. exp) _ _) env = 
-  LamSem (Clos (((), (a, ())) :. (FunctionLiteralExpression (ts :. exp) () ())) (env))
+eval (FunctionLiteralExpression ((t:[]) :. express)           _ _) env = LamSem (Clos (t :. express) env)
+eval (FunctionLiteralExpression (((_, (a, _)):ts) :. express) _ _) env = 
+  LamSem (Clos (((), (a, ())) :. (FunctionLiteralExpression (ts :. express) () ())) (env))
 eval (FunctionApplicationExpression func args             _ _) env = foldl' do_ap (eval func env) $ fmap (flip eval env) args
 eval (UniverseExpression  i                               _ _) _   = UniSem i
 eval (TSigmaBinding    t1 t2                              _ _) env = SigTypeSem (eval t1 env) (Clos t2 env)
@@ -80,9 +80,9 @@ read_back_nf (Normal (PiTypeSem src dest) f)                 = FunctionLiteralEx
                                                             where Clos ((_, (atom, _)) :. _) _ = dest
                                                                   arg = mk_var src atom 
                                                                   nf  = Normal (do_clos dest arg) (do_ap f arg)  
-read_back_nf (Normal (SigTypeSem fst snd) p)                 = PairExpression
-                                                                (read_back_nf (Normal fst                      (do_fst p)))
-                                                                (read_back_nf (Normal (do_clos snd (do_fst p)) (do_snd p))) () ()
+read_back_nf (Normal (SigTypeSem f s) p)                     = PairExpression
+                                                                (read_back_nf (Normal f                      (do_fst p)))
+                                                                (read_back_nf (Normal (do_clos s (do_fst p)) (do_snd p))) () ()
 read_back_nf (Normal NatTypeSem (NatValueSem i))             = NumberLiteral i 0 () ()
 read_back_nf (Normal NatTypeSem (AddSem nf1 nf2))            = AddExpression (read_back_nf (Normal NatTypeSem nf1)) (read_back_nf (Normal NatTypeSem nf2)) () ()
 read_back_nf (Normal NatTypeSem (NeutralSem _ ne))           = read_back_ne ne
@@ -129,11 +129,13 @@ make_initial_env ((atom, t):env) = (atom, d):env'
     d :: Semantic () () (Map.Key ph m) ()
     d = NeutralSem (eval (normalizeExprMetadata t) env') (VarSem atom)
 
-
+(@@) :: Expression () () m i -> [Expression () () m i] -> Expression () () m i
 m @@ n = FunctionApplicationExpression m n () ()
 infixl 9 @@
 
+make_lam :: (Nominal t1, Nominal m1) => ((t2 -> p -> Expression t2 p m2 ()) -> Expression t1 () m1 ()) -> t1 -> () -> Expression t1 () m1 ()
 make_lam         f = with_fresh         (\x -> FunctionLiteralExpression ([((), (x, ()))] :. f (LambdaVariable ((), x))))
+make_lam_named :: (Nominal t1, Nominal m1) => String -> ((t2 -> p -> Expression t2 p m2 ()) -> Expression t1 () m1 ()) -> t1 -> () -> Expression t1 () m1 ()
 make_lam_named n f = with_fresh_named n (\x -> FunctionLiteralExpression ([((), (x, ()))] :. f (LambdaVariable ((), x))))
 
 normalize :: forall t p i ph m. (Bindable t, Bindable p, Bindable i, Bindable m) => SurfaceEnv t p (Map.Key ph m) i -> Expression t p (Map.Key ph m) i -> Expression t p (Map.Key ph m) i -> Expression () () (Map.Key ph m) ()
@@ -144,30 +146,33 @@ normalize env term tp = read_back_nf (Normal tp' term')
         tp'    = eval (normalizeExprMetadata tp) env' 
         term' ::  Semantic () () (Map.Key ph m) ()
         term'  = eval (normalizeExprMetadata term) env' 
-  
-testterm :: Expression () () (Map.Key ph Text) ()
-testterm = NumberLiteral 1 0 () () --(make_lam $ \x -> (make_lam $ \y -> y @@ x)) @@ ((make_lam $ \x -> SuccSurf x) @@ ZeroSurf) @@ (make_lam $ \x -> SuccSurf x)
-testtype = NatTypeExpression () () 
-testenv  = []
+
+
+normalized :: Expression () () (Map.Key ph Text) ()
 normalized = normalize testenv testterm testtype
+  where testterm :: Expression () () (Map.Key ph Text) ()
+        testterm = NumberLiteral 1 0 () () --(make_lam $ \x -> (make_lam $ \y -> y @@ x)) @@ ((make_lam $ \x -> SuccSurf x) @@ ZeroSurf) @@ (make_lam $ \x -> SuccSurf x)
+        testtype = NatTypeExpression () () 
+        testenv  = []
+  
 
-
-listLookup toLookup [] = Nothing
+listLookup :: Eq t => t -> [(t, a)] -> Maybe a
+listLookup _ [] = Nothing
 listLookup toLookup ((k, v):xs)
     | k == toLookup = Just v
     | otherwise = listLookup toLookup xs
 
-copyPropagated :: forall i p t m o. (Eq i, Ord i, Bindable i, Bindable p, Bindable t, Nominal t, Nominal m) => Module t p m i -> (forall ph. JustifiedModule t p ph i -> o) -> Either (i, p) o
-copyPropagated (Module (ModuleHeader i (Tinydoc text p2) p3) declarations p) f = Map.withMap dUMap (\m -> f <$> dJmapToJustifiedModule m)
+copyPropagated :: forall i p t m o. (Ord i, Bindable i, Bindable p, Bindable t, Nominal m) => Module t p m i -> (forall ph. JustifiedModule t p ph i -> o) -> Either (i, p) o
+copyPropagated (Module _ declarations _) f = Map.withMap dUMap (\m -> f <$> dJmapToJustifiedModule m)
   where
-    dUMap = UMap.fromList (fmap (\(Declaration i e _) -> (i, e)) declarations)
+    dUMap = UMap.fromList (fmap (\(Declaration identifier expression _) -> (identifier, expression)) declarations)
     dJmapToJustifiedModule :: (Map.Map ph i (Expression t p m i)) -> Either (i, p) (Map.Map ph i (JustifiedExpression t p ph i))
     dJmapToJustifiedModule m = 
       for duped (\e -> forExpr2 e (justifyReferences m))
       where duped = fmap copyIdentifierOntoMetadata m
     justifyReferences :: Map.Map ph i c -> (i, p)->  Either (i, p) (Map.Key ph i)
-    justifyReferences map (i, p) = case i `Map.member` map of 
-      Nothing -> Left $ (i, p) 
+    justifyReferences referenceMap (iJustified, pJustified) = case iJustified `Map.member` referenceMap of 
+      Nothing -> Left $ (iJustified, pJustified) 
       Just k  -> pure k 
 
         

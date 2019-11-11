@@ -33,4 +33,4 @@ mapToCore exprMap = Core.Program (fmap (cata mapToCoreF) exprMap)
     mapToCoreF (IdentifierExpressionF ident t p)        = Core.IdentifierExpression ident t p
     mapToCoreF (FunctionLiteralExpressionF flit t p)    = Core.LambdaExpression (error "not implemented yet") t p
     mapToCoreF (FunctionApplicationExpressionF _ _ _ _) = error "not implemented yet"
-    -}
+    -} 

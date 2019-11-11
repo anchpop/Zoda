@@ -26,4 +26,4 @@ data Lambda ph t p k = forall ph'. FunctionLiteral ((Map.Key ph' k, Map.Key ph k
 
 data Untyped = Untyped deriving (Show, Read, Eq, Ord)
 
--}
+-} 

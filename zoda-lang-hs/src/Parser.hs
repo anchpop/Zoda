@@ -50,14 +50,12 @@ declarationP = sourcePosWrapperWithNewlines $ do
   expression <- expressionP
   pure (Declaration ident expression)
 
-
-padded s = many separatorChar *> s <* many separatorChar
-
-
+padded :: (MonadParsec e s f, Token s ~ Char) => f a -> f a
+padded s = many separatorChar *> s <* many separatorChar 
 
 
 expressionP :: Parser (Expression Untyped SourcePosition () Text)
-expressionP = expParser --addition basicP <|> funcApp basicP <|> tarrow2 basicP <|> tarrow1 basicP <|> annotation basicP <|> basicP
+expressionP = expParser
   where 
     expParser = try $ makeExprParser (leftRec basicP leftRecP) 
                         [
@@ -103,10 +101,6 @@ expressionP = expParser --addition basicP <|> funcApp basicP <|> tarrow2 basicP 
       padded $ string ":"
       expr2 <- expressionP
       pure (\expr1 -> Annotation expr1 expr2 Untyped) 
-    tarrow1 = try $ do
-      padded $ string "->"
-      expr2 <- expressionP
-      pure (\expr1 -> TArrowNonbinding expr1 expr2 Untyped)
     funcApp = try $ typedotexp
       where
         typedotexp = do
@@ -145,7 +139,9 @@ numberLiteralP = try
               major = justUnsafe (readMay ((toList majorS) <> " % 1"))
           pure $ if sign then major else negate major
         )
-  where justUnsafe (Just x) = x
+  where 
+    justUnsafe (Just x) = x
+    justUnsafe _        = error "shouldn't be possible"
 
 functionLiteralP :: ASTParser Expression
 functionLiteralP = do
@@ -156,14 +152,15 @@ functionLiteralP = do
       duplicates = List.length (Set.fromList identifiers) < List.length identifiers
   when duplicates (customFailure DuplicateFunctionArgumentNames)
   let binders = map (\(name, pos) -> with_fresh_named (unpack name) (\(x :: Atom) -> (name, (x, pos)))) identifierInfo
-  exp <- (withEnvInState binders expressionP)
-  pure $ FunctionLiteralExpression (binders :. exp) Untyped
+  express <- (withEnvInState binders expressionP)
+  pure $ FunctionLiteralExpression (binders :. express) Untyped
 
-
+getEnv :: StateT ParserState (Parsec ZodaParseError String) [(Text, (Atom, SourcePosition))]
 getEnv = do
   s <- get
   pure (join s)
 
+withEnvInState :: MonadState [a] m => a -> m b -> m b
 withEnvInState e a = do
   s <- get
   put (e:s) 
@@ -204,7 +201,8 @@ type Parser a = StateT ParserState (Parsec ZodaParseError String) a
 type ASTParser a = Parser (SourcePosition -> a Untyped SourcePosition () Text)
 data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
 instance Show SourcePosition where
-  show (SourcePosition f l1 c1 l2 c2) = ""--"(SourcePosition \"" <> f <> "\" " <> (show l1) <> " " <> (show c1) <> " " <> (show l2) <> " " <> (show c2) <> ")"
+  show (SourcePosition _ _ _ _ _) = ""
+  --show (SourcePosition f l1 c1 l2 c2) = --"(SourcePosition \"" <> f <> "\" " <> (show l1) <> " " <> (show c1) <> " " <> (show l2) <> " " <> (show c2) <> ")"
 
 sourcePosWrapper :: Parser (SourcePosition -> a) -> Parser a
 sourcePosWrapper f = do
@@ -219,11 +217,11 @@ sourcePosWrapperWithNewlines f = sourcePosWrapper f <* (many separatorChar *> so
 
 some' :: Parser a -> Parser (NonEmpty.NonEmpty a)
 some' p = do
-  first <- p
+  f <- p
   rest  <- many p
-  pure $ first NonEmpty.:| rest
+  pure $ f NonEmpty.:| rest
 
-leftRec :: forall a . Show a => Parser (SourcePosition -> a) -> Parser (a -> (SourcePosition -> a)) -> Parser a
+leftRec :: forall a . Parser (SourcePosition -> a) -> Parser (a -> (SourcePosition -> a)) -> Parser a
 leftRec p op = do pos <- getSourcePos
                   initial <- sourcePosWrapper p
                   rest initial pos
@@ -237,15 +235,19 @@ leftRec p op = do pos <- getSourcePos
 getRight :: Either (ParseErrorBundle String ZodaParseError) b -> b
 getRight (Right b  ) = b
 getRight (Left  err) = error $ errorBundlePretty err
-getRightZSE (Right b  ) = b
-getRightZSE (Left  (ZodaSyntaxError err)) = error $ errorBundlePretty err
 
-justUnsafe (Just a) = a
+getRightZSE :: Either (ProductionError t p1 m i) p2 -> p2
+getRightZSE (Right b  )                   = b
+getRightZSE (Left  (ZodaSyntaxError err)) = error $ errorBundlePretty err
+getRightZSE (Left  _)                     = error "Parse error!"
+
 
 --parseSomething :: Stream s => s -> StateT ParserState (Parsec e s) a -> Either (ParseErrorBundle s e) a
 
+parseSomething :: (Stream s, Ord e) => s -> StateT [a1] (ParsecT e s Identity) a2 -> Either (ParseErrorBundle s e) a2
 parseSomething text parser = (runParser (evalStateT (parser <* eof) []) "no_file" text)
 
+getSourcePosFromExpression :: Expression t p m i -> p
 getSourcePosFromExpression (ParenthesizedExpression _ _ p ) = p  
 getSourcePosFromExpression (NumberLiteral _ _ _ p ) = p 
 getSourcePosFromExpression (AddExpression _ _ _ p ) = p 
@@ -256,7 +258,14 @@ getSourcePosFromExpression (FunctionApplicationExpression _ _ _ p ) = p
 getSourcePosFromExpression (TArrowNonbinding _ _ _ p ) = p 
 getSourcePosFromExpression (TArrowBinding _ _ _ p ) = p 
 getSourcePosFromExpression (Annotation _ _ _ p ) = p 
+getSourcePosFromExpression (FirstExpression _ _ p ) = p  
+getSourcePosFromExpression (SecondExpression _ _ p) = p
+getSourcePosFromExpression (PairExpression _ _ _ p) = p
+getSourcePosFromExpression (TSigmaBinding _ _ _ p) = p
+getSourcePosFromExpression (UniverseExpression _ _ p) = p
+getSourcePosFromExpression (NatTypeExpression _ p) = p
 
+combineSourcePos :: Expression t1 SourcePosition m1 i1 -> Expression t2 SourcePosition m2 i2 -> SourcePosition
 combineSourcePos expr1 expr2 = SourcePosition filePath sourceLineStart sourceColumnStart sourceLineEnd sourceColumnEnd
   where 
     SourcePosition filePath sourceLineStart sourceColumnStart _ _ = getSourcePosFromExpression expr1
