@@ -4,7 +4,7 @@ import Data.List (lookup)
 import Basic
 import Data.Maybe
 import Ast
-import qualified CopyPropagatedProgram as CPP
+import CopyPropagatedProgram
 import qualified Data.Set as Set
 import qualified Data.Map.Justified as Map
 import qualified Data.Map.Lazy as UMap
@@ -21,52 +21,53 @@ data Types i = Number | Bool | Arr (Maybe i) (Types i) (Types i) deriving (Eq, S
 
 
 
-do_fst :: (Bindable t, Bindable p, Bindable i, Nominal m) => Semantic t p m i -> Semantic t p m i
+do_fst :: (Bindable m) => Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
 do_fst (PairSem p1 _)                   = p1
 do_fst (NeutralSem (SigTypeSem t _) ne) = NeutralSem t (FstSem ne)
 do_fst _                                = error "Couldn't fst argument in do_fst"
 
-do_snd :: (Bindable t, Bindable p, Bindable i, Nominal m) => Semantic t p m i -> Semantic t p m i
+do_snd :: (Bindable m) => Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
 do_snd (PairSem _ p2)                       = p2
 do_snd (NeutralSem p@(SigTypeSem _ clo) ne) = NeutralSem (do_clos clo (do_fst p)) (SndSem ne)
 do_snd _                                    = error "Couldn't snd argument in do_snd"
 
-do_ap :: (Bindable t, Bindable p, Bindable i, Nominal m) => Semantic t p m i -> Semantic t p m i -> Semantic t p m i
+do_ap :: (Bindable m) => Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
 do_ap (LamSem clos)                      a = do_clos clos a
 do_ap (NeutralSem (PiTypeSem src dst) e) a = NeutralSem (do_clos dst a) (ApSem e (Normal src a))
 do_ap (NeutralSem _ e)                   a = error "Not a Pi in do_ap"
 do_ap _                                  a = error "Not a function in do_ap"
 
 
-do_clos :: (Bindable t, Bindable p, Bindable i, Nominal m) => (Bindable i, Bindable t, Bindable p)
-        => Clos t p m i     -- ^ The closure to evaluate
-        -> Semantic t p m i -- ^ What to pass to the closure (will be added to the environment)
-        -> Semantic t p m i -- ^ The evaluated closure
-do_clos (Clos ((_, (atom, _)) :. term) env) bound = undefined--eval term ((atom, bound) : env)
+do_clos :: forall t p i m ph. Bindable m
+        => Clos () () (Map.Key ph m) ()        -- ^ The closure to evaluate
+        -> Semantic () () (Map.Key ph m) ()    -- ^ What to pass to the closure
+        -> Semantic () () (Map.Key ph m) () -- ^ The evaluated closure
+do_clos (Clos ((_, (atom, _)) :. term) env) bound = eval term ((atom, bound) : env)
 
 
 mk_var :: (Bindable t, Bindable p, Bindable i) => Semantic t p ph i -> Atom -> Semantic t p ph i
 mk_var tp atom = NeutralSem tp (VarSem atom)
 
 
--- |This converts the surface syntax into a semantic term with no beda redexes.
-eval :: (Bindable t, Bindable p, Bindable i, Show t, Show p, Show i, Nominal m) => JustifiedExpression t p m i -> SemanticEnv t p m i -> Semantic t p m i
+-- |This converts the surface syntax into a semantic term with no beta redexes.
+eval :: (Bindable m) => Expression () () (Map.Key ph m) () -> SemanticEnv () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
 eval (LambdaVariable (_, i) _ _) env =
   case i `lookup` env  of
-    Just x -> undefined --x
-    _      -> undefined--error ("index " <> show i <> " outide of range of environment: " <> show env)
-eval (NatTypeExpression                         _ _) _   = NatTypeSem
-eval (NumberLiteral i 0                         _ _) _   = NatValueSem i
-eval (AddExpression t1 t2                       _ _) env = AddSem (eval t1 env) (eval t2 env)
-eval (TArrowBinding src dest                    _ _) env = undefined--PiTypeSem (eval src env) (Clos dest env)
-eval (FunctionLiteralExpression ((t:[]) :. exp) _ _) env = undefined--LamSem (Clos (t :. exp) env)
-eval (FunctionLiteralExpression ((t:ts) :. exp) _ _) env = undefined--LamSem (Clos (t :. (FunctionLiteralExpression (ts :. exp) () ())) env)
-eval (FunctionApplicationExpression func args   _ _) env = foldl' do_ap (eval func env) $ fmap (flip eval env) args
-eval (UniverseExpression  i                     _ _) _   = UniSem i
-eval (TSigmaBinding    t1 t2                    _ _) env = undefined--SigTypeSem (eval t1 env) (Clos t2 env)
-eval (PairExpression   t1 t2                    _ _) env = PairSem (eval t1 env) (eval t2 env)
-eval (FirstExpression  t                        _ _) env = do_fst (eval t env)
-eval (SecondExpression t                        _ _) env = do_snd (eval t env)
+    Just x -> normalizeSemanticMetadata x
+    _      -> error "Couldn't find referenced variable"
+eval (NatTypeExpression                                   _ _) _   = NatTypeSem
+eval (NumberLiteral i 0                                   _ _) _   = NatValueSem i
+eval (AddExpression t1 t2                                 _ _) env = AddSem (eval t1 env) (eval t2 env)
+eval (TArrowBinding src dest                              _ _) env = PiTypeSem (eval src env) (Clos dest env)
+eval (FunctionLiteralExpression ((t:[]) :. exp)           _ _) env = LamSem (Clos (t :. exp) env)
+eval (FunctionLiteralExpression (((i, (a, p)):ts) :. exp) _ _) env = 
+  LamSem (Clos (((), (a, ())) :. (FunctionLiteralExpression (ts :. exp) () ())) (env))
+eval (FunctionApplicationExpression func args             _ _) env = foldl' do_ap (eval func env) $ fmap (flip eval env) args
+eval (UniverseExpression  i                               _ _) _   = UniSem i
+eval (TSigmaBinding    t1 t2                              _ _) env = SigTypeSem (eval t1 env) (Clos t2 env)
+eval (PairExpression   t1 t2                              _ _) env = PairSem (eval t1 env) (eval t2 env)
+eval (FirstExpression  t                                  _ _) env = do_fst (eval t env)
+eval (SecondExpression t                                  _ _) env = do_snd (eval t env)
 
 -- |This is the "quotation" side of the algorithm. 
 -- It is a function converting semantic terms back to syntactic ones.
@@ -74,14 +75,14 @@ eval (SecondExpression t                        _ _) env = do_snd (eval t env)
 --   - one for normal forms
 --   - one for neutral terms
 --   - one for types. 
-read_back_nf :: (Bindable t, Bindable p, Bindable i, Nominal m) => Nf t p m i -> Expression () () () ()
+read_back_nf :: (Bindable m) => Nf () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
 read_back_nf (Normal (PiTypeSem src dest) f)                 = FunctionLiteralExpression ([((), (atom, ()))] :. (read_back_nf nf)) () ()
                                                             where Clos ((_, (atom, _)) :. _) _ = dest
                                                                   arg = mk_var src atom 
                                                                   nf  = Normal (do_clos dest arg) (do_ap f arg)  
 read_back_nf (Normal (SigTypeSem fst snd) p)                 = PairExpression
-                                                                  (read_back_nf (Normal fst                      (do_fst p)))
-                                                                  (read_back_nf (Normal (do_clos snd (do_fst p)) (do_snd p))) () ()
+                                                                (read_back_nf (Normal fst                      (do_fst p)))
+                                                                (read_back_nf (Normal (do_clos snd (do_fst p)) (do_snd p))) () ()
 read_back_nf (Normal NatTypeSem (NatValueSem i))             = NumberLiteral i 0 () ()
 read_back_nf (Normal NatTypeSem (AddSem nf1 nf2))            = AddExpression (read_back_nf (Normal NatTypeSem nf1)) (read_back_nf (Normal NatTypeSem nf2)) () ()
 read_back_nf (Normal NatTypeSem (NeutralSem _ ne))           = read_back_ne ne
@@ -97,7 +98,7 @@ read_back_nf  _                                          = error "Ill-typed read
 -- so there is no annotation tell us what type we're reading back at. 
 -- The function itself just assumes that d is some term of type Uni i for some i. 
 -- This, however, means that the cases are almost identical to the type cases in read_back_nf. 
-read_back_tp :: (Bindable t, Bindable p, Bindable i, Nominal m) => Semantic t p m i -> Expression () () () ()
+read_back_tp :: forall m ph. (Bindable m) => Semantic () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
 read_back_tp (NeutralSem _ term) = read_back_ne term
 read_back_tp  NatTypeSem             = NatTypeExpression () ()
 read_back_tp (PiTypeSem src dest)    = TArrowBinding (read_back_tp src) (((), (atom, ())) :. (read_back_tp (do_clos dest var))) () ()
@@ -109,7 +110,7 @@ read_back_tp (SigTypeSem f s)        = TSigmaBinding (read_back_tp f) (((), (ato
 read_back_tp (UniSem k)          = UniverseExpression k () ()
 read_back_tp  _                  = error "Nbe_failed - Not a type in read_back_tp"
 
-read_back_ne :: (Bindable t, Bindable p, Bindable i, Nominal m) => Ne t p m i -> Expression () () () ()
+read_back_ne :: forall m ph.  (Bindable m) => Ne () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
 read_back_ne (VarSem x)     = LambdaVariable ((), x) () ()
 read_back_ne (ApSem ne arg) = FunctionApplicationExpression (read_back_ne ne) [read_back_nf arg] () ()
 read_back_ne (FstSem ne)    = FirstExpression (read_back_ne ne) () ()
@@ -119,11 +120,14 @@ read_back_ne (SndSem ne)    = SecondExpression (read_back_ne ne) () ()
 -- For each entry we use eval to convert it to a semantic type, tp and then add a neutral term Var i at 
 -- type tp where i is the variable at that type. 
 -- Notice that we don't need to worry about eta expanding them; all of that will be handled in read back.
+make_initial_env :: forall ph m. (Bindable m) => [(Atom, Expression () () (Map.Key ph m) ())] -> SemanticEnv () () (Map.Key ph m) ()
 make_initial_env [] = []
 make_initial_env ((atom, t):env) = (atom, d):env'
   where
+    env' :: SemanticEnv () () (Map.Key ph m) ()
     env' = make_initial_env env 
-    d    = NeutralSem (eval t env') (VarSem atom)
+    d :: Semantic () () (Map.Key ph m) ()
+    d = NeutralSem (eval (normalizeExprMetadata t) env') (VarSem atom)
 
 
 m @@ n = FunctionApplicationExpression m n () ()
@@ -132,17 +136,20 @@ infixl 9 @@
 make_lam         f = with_fresh         (\x -> FunctionLiteralExpression ([((), (x, ()))] :. f (LambdaVariable ((), x))))
 make_lam_named n f = with_fresh_named n (\x -> FunctionLiteralExpression ([((), (x, ()))] :. f (LambdaVariable ((), x))))
 
-normalize :: (Bindable t, Bindable p, Bindable i) => SurfaceEnv t p ph i -> JustifiedExpression t p ph i -> JustifiedExpression t p ph i -> JustifiedExpression () () ph ()
-normalize env term tp = undefined--read_back_nf (Normal tp' term')
-  where env'  = undefined--make_initial_env env 
-        tp'   = undefined--eval tp env' 
-        term' = undefined--eval term env' 
+normalize :: forall t p i ph m. (Bindable t, Bindable p, Bindable i, Bindable m) => SurfaceEnv t p (Map.Key ph m) i -> Expression t p (Map.Key ph m) i -> Expression t p (Map.Key ph m) i -> Expression () () (Map.Key ph m) ()
+normalize env term tp = read_back_nf (Normal tp' term')
+  where env'  :: SemanticEnv () () (Map.Key ph m) ()
+        env'   = make_initial_env (normalizeExprEnv env) 
+        tp'   ::  Semantic () () (Map.Key ph m) ()
+        tp'    = eval (normalizeExprMetadata tp) env' 
+        term' ::  Semantic () () (Map.Key ph m) ()
+        term'  = eval (normalizeExprMetadata term) env' 
   
-
--- testterm = (make_lam $ \x -> (make_lam $ \y -> y @@ x)) @@ ((make_lam $ \x -> SuccSurf x) @@ ZeroSurf) @@ (make_lam $ \x -> SuccSurf x)
--- testtype = NatTypeExpression () () 
--- testenv  = []
--- normalized = normalize testenv testterm testtype
+testterm :: Expression () () (Map.Key ph Text) ()
+testterm = NumberLiteral 1 0 () () --(make_lam $ \x -> (make_lam $ \y -> y @@ x)) @@ ((make_lam $ \x -> SuccSurf x) @@ ZeroSurf) @@ (make_lam $ \x -> SuccSurf x)
+testtype = NatTypeExpression () () 
+testenv  = []
+normalized = normalize testenv testterm testtype
 
 
 listLookup toLookup [] = Nothing
