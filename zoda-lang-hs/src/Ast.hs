@@ -51,5 +51,5 @@ instance Representational (Declaration t p) where rep Coercion = Coercion
 instance Representational (ModuleHeader t p) where rep Coercion = Coercion
 instance Representational (Module t p) where rep Coercion = Coercion
 
-type JustifiedModule     t p ph i = Map.Map ph i (Expression t p (Map.Key ph i) i)
-type JustifiedExpression t p ph i = Expression t p (Map.Key ph i) i
+type JustifiedModule     t p ph m i = Map.Map ph m (Expression t p (Map.Key ph m) i)
+type JustifiedExpression t p ph m i = Expression t p (Map.Key ph m) i
