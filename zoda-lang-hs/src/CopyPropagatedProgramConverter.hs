@@ -1,7 +1,7 @@
 module CopyPropagatedProgramConverter where
 import ClassyPrelude hiding (lookup)
 import Data.List (lookup)
-import Basic
+import Basic 
 import Data.Maybe
 import Ast
 import CopyPropagatedProgram
@@ -11,6 +11,7 @@ import qualified Data.Map.Lazy as UMap
 import Nominal hiding ((.))
 import Data.Void
 import Data.Ratio
+import Parser
 
 data Metavariable = TypechecksOkay{-MetavariableApplication Int [Metavariable] 
                   | Metavariable Int 
@@ -176,26 +177,29 @@ listLookup toLookup ((k, v):xs)
     | k == toLookup = Just v
     | otherwise = listLookup toLookup xs
 
-copyPropagated :: forall i p t m o. (Ord i, Bindable i, Bindable p, Bindable t, Nominal m) => Module t p m i -> (forall ph. JustifiedModule t p ph i i -> o) -> Either (i, p) o
+copyPropagated :: forall i p t m o. (Ord i, Bindable i, Bindable p, Bindable t, Nominal m) => Module t p m i -> (forall ph. JustifiedModule t p ph i i -> o) -> Either (ProductionError t p m i) o
 copyPropagated (Module _ declarations _) f = Map.withMap dUMap (\m -> f <$> dJmapToJustifiedModule m)
   where
     dUMap = UMap.fromList (fmap (\(Declaration identifier expression _) -> (identifier, expression)) declarations)
-    dJmapToJustifiedModule :: (Map.Map ph i (Expression t p m i)) -> Either (i, p) (Map.Map ph i (JustifiedExpression t p ph i i))
+    dJmapToJustifiedModule :: (Map.Map ph i (Expression t p m i)) -> Either (ProductionError t p m i) (Map.Map ph i (JustifiedExpression t p ph i i))
     dJmapToJustifiedModule m = 
       for duped (\e -> forExpr2 e (justifyReferences m))
       where duped = fmap copyIdentifierOntoMetadata m
-    justifyReferences :: Map.Map ph i c -> (i, p)->  Either (i, p) (Map.Key ph i)
+    justifyReferences :: Map.Map ph i c -> (i, p)->  Either (ProductionError t p m i) (Map.Key ph i)
     justifyReferences referenceMap (iJustified, pJustified) = case iJustified `Map.member` referenceMap of 
-      Nothing -> Left $ (iJustified, pJustified) 
+      Nothing -> Left $ UndeclaredValuesReferenced [(iJustified, pJustified)] 
       Just k  -> pure k 
 
-        
-       
+
+produceProgram :: Text -> Either (ProductionError Untyped SourcePosition () Text) Int
+produceProgram input = parsedModule >>= (\x -> copyPropagated x applicant)
+  where
+    parsedModule = parseModule input
+    applicant modu = undefined 
 
 
 
-
-example :: String
+example :: Text
 example = "module i `test module` \n\
           \z    = (-3.5)          \n\
           \func = (|x| x) : (Number -> Number)    \n\

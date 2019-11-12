@@ -43,7 +43,7 @@ data Tinydoc t p m i = Tinydoc Text p deriving (Show, Read, Eq, Ord, Generic, Ty
 --data Identifier t p i = Identifier { getIdentifier :: i, getIdentifierSourcePos :: p } deriving (Show, Read, Eq, Ord, NominalSupport, NominalShow, Generic, Nominal, Typeable)
  
 
-data Untyped = Untyped deriving (Show, Read, Eq, Ord, NominalSupport, NominalShow, Generic, Nominal)
+data Untyped = Untyped deriving (Show, Read, Eq, Ord, NominalSupport, NominalShow, Generic, Nominal, Bindable)
 
 instance Representational (Tinydoc t p) where rep Coercion = Coercion
 instance Representational (Expression t p) where rep Coercion = Coercion

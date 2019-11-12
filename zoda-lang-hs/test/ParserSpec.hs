@@ -13,47 +13,24 @@ import Data.Foldable (for_)
 import Parser
 import Ast
 
-shouldParseTo :: (Show a, Eq a) => Either (ParseErrorBundle String Void) a -> a -> Expectation
+import Nominal hiding ((.))
+
+--shouldParseTo :: (Show a, Eq a) => Either (ParseErrorBundle String Void) a -> a -> Expectation
 shouldParseTo a b = getRight a `shouldBe` b
-shouldNotParse :: (Show a, Show b) => Either a b -> Expectation
+--shouldNotParse :: (Show a, Show b) => Either a b -> Expectation
 shouldNotParse a = a `shouldSatisfy` (isLeft)
 
 test :: SpecWith ()
 test = parallel $ do
-  describe "Parser.lowercaseIdentifierP" $ do
-    it "parses lowercase identifiers" $ do
-      parseSomething "module"    lowercaseIdentifierP `shouldParseTo` LowercaseIdentifier "module" (SourcePosition "no_file" 1 1 1 7)
-
-      parseSomething "test-case" lowercaseIdentifierP `shouldParseTo` LowercaseIdentifier "test-case" (SourcePosition "no_file" 1 1 1 10)
-    it "doesn't accept what it shouldn't" $ do
-      shouldNotParse $ parseSomething "test case" lowercaseIdentifierP
-      shouldNotParse $ parseSomething "Test" lowercaseIdentifierP
-      shouldNotParse $ parseSomething "-test" lowercaseIdentifierP
-
-
-
-  describe "Parser.uppercaseIdentifierP" $ do
-    it "parses Uppercase identifiers" $ do
-      parseSomething "Module"    uppercaseIdentifierP `shouldParseTo` UppercaseIdentifier "Module" (SourcePosition "no_file" 1 1 1 7)
-
-      parseSomething "Test-case" uppercaseIdentifierP `shouldParseTo` UppercaseIdentifier "Test-case" (SourcePosition "no_file" 1 1 1 10)
-
-    it "doesn't accept what it shouldn't" $ do
-      shouldNotParse $ parseSomething "Test case" uppercaseIdentifierP
-      shouldNotParse $ parseSomething "test" uppercaseIdentifierP
-      shouldNotParse $ parseSomething "-Test" uppercaseIdentifierP
-
-
-
   describe "Parser.tinydocP" $ do
     it "parses tinydocs" $ do
-      parseSomething "`test test test`" tinydocP `shouldParseTo` Tinydoc "test test test" (SourcePosition "no_file" 1 1 1 17)
+      parseSomething "`test test test`" (sourcePosWrapper tinydocP) `shouldParseTo` Tinydoc "test test test" (SourcePosition "no_file" 1 1 1 17)
 
-      parseSomething "`Test-case! `"    tinydocP `shouldParseTo` Tinydoc "Test-case! " (SourcePosition "no_file" 1 1 1 14)
+      parseSomething "`Test-case! `"    (sourcePosWrapper tinydocP) `shouldParseTo` Tinydoc "Test-case! " (SourcePosition "no_file" 1 1 1 14)
 
     it "doesn't accept what it shouldn't" $ do
-      shouldNotParse $ parseSomething "`test" tinydocP
-      shouldNotParse $ parseSomething "`test\n`" tinydocP
+      shouldNotParse $ parseSomething "`test" (sourcePosWrapper tinydocP)
+      shouldNotParse $ parseSomething "`test\n`" (sourcePosWrapper tinydocP)
 
 
 
@@ -77,34 +54,30 @@ test = parallel $ do
 
   describe "Parser.expressionP" $ do
     it "parses number literals" $ do
-      parseSomething "3" expressionP `shouldParseTo` (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 1 1 2)) 
+      parseSomething "3" expressionP `shouldParseTo` (NumberLiteral 3 0 Untyped (SourcePosition "no_file" 1 1 1 2)) 
 
     it "parses identifiers" $ do
-      parseSomething "test" expressionP `shouldParseTo` IdentifierExpression (LowercaseIdentifier "test" (SourcePosition "no_file" 1 1 1 5)) Untyped (SourcePosition "no_file" 1 1 1 5)
+      parseSomething "test" expressionP `shouldParseTo` (ReferenceVariable "test" () Untyped (SourcePosition "no_file" 1 1 1 5))
 
 
     it "parses functions" $ do
       parseSomething "|a, b, c| 3" expressionP `shouldParseTo` FunctionLiteralExpression
-        ( FunctionLiteral
-          [ LowercaseIdentifier "a" (SourcePosition "no_file" 1 2 1 3)
-          , LowercaseIdentifier "b" (SourcePosition "no_file" 1 5 1 6)
-          , LowercaseIdentifier "c" (SourcePosition "no_file" 1 8 1 9)
-          ]
-          (NumberLiteral (3 % 1) Untyped (SourcePosition "no_file" 1 11 1 12))
-          (SourcePosition "no_file" 1 1 1 12)
-        )
-        Untyped (SourcePosition "no_file" 1 1 1 12)
+          (with_fresh_named "a" $ \a -> with_fresh_named "b" $ \b -> with_fresh_named "c" $ \c ->   
+          ([("a", (a, SourcePosition "no_file" 1 2 1 3))
+          , ("b", (b, SourcePosition "no_file" 1 5 1 6))
+          , ("c", (c, SourcePosition "no_file" 1 8 1 9))
+          ] :. (NumberLiteral 3 1 Untyped (SourcePosition "no_file" 1 11 1 12))))
+          Untyped (SourcePosition "no_file" 1 1 1 12)
 
 
 
     it "parses function applications" $ do
-      parseSomething "3.b" expressionP `shouldParseTo` FunctionApplicationExpression (IdentifierExpression (LowercaseIdentifier "b" (SourcePosition "no_file" 1 3 1 4)) Untyped (SourcePosition "no_file" 1 3 1 4))
-        [NumberLiteral (3 % 1) Untyped (SourcePosition "no_file" 1 1 1 2) ]
+      parseSomething "3.b" expressionP `shouldParseTo` FunctionApplicationExpression (ReferenceVariable "b" () Untyped (SourcePosition "no_file" 1 3 1 4))
+        [NumberLiteral 3 1 Untyped (SourcePosition "no_file" 1 1 1 2) ]
         Untyped (SourcePosition "no_file" 1 1 1 4)
 
   describe "Parser.declarationP" $ do
     it "allows assignment to number literals" $ do
       parseSomething "i = 3" declarationP `shouldParseTo` Declaration
-        (LowercaseIdentifier "i" (SourcePosition "no_file" 1 1 1 2))
-        (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 5 1 6))
+        "i" (NumberLiteral 3 0 Untyped (SourcePosition "no_file" 1 5 1 6))
         (SourcePosition "no_file" 1 1 1 6)

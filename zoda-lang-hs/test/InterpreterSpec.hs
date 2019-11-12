@@ -26,7 +26,7 @@ test = parallel $ do
                     \main = 3\n\
                     \"
                     
-      (runM (parseModule example >>= produceProgram)) `shouldBe` pure 3
+      (produceProgram example) `shouldBe` pure 3
 
       
     it "parses simplest possible program where main is behind a layer of indirection" $ do
@@ -35,4 +35,4 @@ test = parallel $ do
                     \main = test\n\
                     \"
                     
-      (runM (parseModule example >>= produceProgram)) `shouldBe` pure 3
+      (produceProgram example) `shouldBe` pure 3

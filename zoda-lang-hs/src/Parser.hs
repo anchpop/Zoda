@@ -17,10 +17,10 @@ import Control.Monad.Combinators.Expr
 
 import Nominal hiding ((.))
 
-parseModule :: String -> Either (ProductionError Untyped p () Text) (Module Untyped SourcePosition () Text)
+parseModule :: Text -> Either (ProductionError Untyped p () Text) (Module Untyped SourcePosition () Text)
 parseModule text = handleResult result
  where
-  result = Data.Bifunctor.first ZodaSyntaxError (runParser (evalStateT moduleP []) "module" text)
+  result = Data.Bifunctor.first ZodaSyntaxError (runParser (evalStateT moduleP []) "module" (unpack text))
   handleResult (Left  e) = Left e
   handleResult (Right r) = pure r
 
