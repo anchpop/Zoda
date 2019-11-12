@@ -62,8 +62,7 @@ eval modu = eval'
         Just x -> x
         _      -> error "Couldn't find referenced variable"
     eval' (NatTypeExpression                                       _ _) _   = NatTypeSem
-    eval' (NumberLiteral i 0                                       _ _) _   = NatValueSem i
-    eval' (NumberLiteral _ _                                       _ _) _   = error "We do not yet support fractional number literals!"
+    eval' (NumberLiteral i                                         _ _) _   = if denominator i == 1 then NatValueSem $ numerator i else error "We do not yet support fractional number literals!"
     eval' (AddExpression t1 t2                                     _ _) env = AddSem (eval' t1 env) (eval' t2 env)
     eval' (TArrowNonbinding src dest                               _ _) env = with_fresh (\x -> PiTypeSem (eval' src env) (Clos (((), (x, ())) :. dest) env))
     eval' (TArrowBinding src dest                                  _ _) env = PiTypeSem (eval' src env) (Clos dest env)
@@ -96,7 +95,7 @@ read_back_nf modu (Normal (PiTypeSem src dest) f)                 = FunctionLite
 read_back_nf modu (Normal (SigTypeSem f s) p)                     = PairExpression
                                                                       (read_back_nf modu (Normal f                                (do_fst modu p)))
                                                                       (read_back_nf modu (Normal (do_clos modu s (do_fst modu p)) (do_snd modu p))) () ()
-read_back_nf _    (Normal NatTypeSem (NatValueSem i))             = NumberLiteral i 0 () ()
+read_back_nf _    (Normal NatTypeSem (NatValueSem i))             = NumberLiteral (fromInteger i) () ()
 read_back_nf modu (Normal NatTypeSem (AddSem (NatValueSem i1) (NatValueSem i2)))  = 
   read_back_nf modu (Normal NatTypeSem (NatValueSem $ i1 + i2))
 read_back_nf modu (Normal NatTypeSem (NeutralSem _ ne))           = read_back_ne modu ne
@@ -166,7 +165,7 @@ normalize modu env term tp = read_back_nf modu' (Normal tp' term')
 normalized :: Expression () () (Map.Key ph Text) ()
 normalized = normalize undefined testenv testterm testtype
   where testterm :: Expression () () (Map.Key ph Text) ()
-        testterm = (make_lam $ \x -> (AddExpression (NumberLiteral 4 0 () ()) x () ())) @@ [NumberLiteral 1 0 () ()] --(make_lam $ \x -> (make_lam $ \y -> y @@ x)) @@ ((make_lam $ \x -> SuccSurf x) @@ ZeroSurf) @@ (make_lam $ \x -> SuccSurf x)
+        testterm = (make_lam $ \x -> (AddExpression (NumberLiteral 4 () ()) x () ())) @@ [NumberLiteral 1 () ()] --(make_lam $ \x -> (make_lam $ \y -> y @@ x)) @@ ((make_lam $ \x -> SuccSurf x) @@ ZeroSurf) @@ (make_lam $ \x -> SuccSurf x)
         testtype = NatTypeExpression () () 
         testenv  = []
   

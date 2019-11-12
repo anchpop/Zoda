@@ -41,7 +41,7 @@ extra-deps:
 - optics-0.2@sha256:813ef6cc4d2e2b5ee00435831031f38917ba01d1e56dcb62dc18cd0315a9ccb7,6296
 - optics-th-0.2@sha256:b4f6c5a3f134c697837190ed6da969dd284aefe79e43c3ef793093b607bb83b9,1929
 - git: https://github.com/anchpop/Nominal.git
-  commit: 7a879ca226a039702a6baf9a9efd37f0209429bb
+  commit: 1ab81220823f7938c10173bfedffef8001f07cfb
 # Override default flag values for local packages and extra-deps
 # flags: {}
 

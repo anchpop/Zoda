@@ -84,7 +84,7 @@ expressionP = expParser
       pure (ParenthesizedExpression expression Untyped)
     numbP = try $ do
       numb <- numberLiteralP
-      pure (NumberLiteral (numerator numb) (denominator numb) Untyped)
+      pure (NumberLiteral numb Untyped)
     tarrow2 = try $ do
       (name, namepos) <- sourcePosWrapper identifierP
       let atom = with_fresh_named (unpack name) $ \(x :: Atom) -> x
@@ -249,7 +249,7 @@ parseSomething text parser = (runParser (evalStateT (parser <* eof) []) "no_file
 
 getSourcePosFromExpression :: Expression t p m i -> p
 getSourcePosFromExpression (ParenthesizedExpression _ _ p ) = p  
-getSourcePosFromExpression (NumberLiteral _ _ _ p ) = p 
+getSourcePosFromExpression (NumberLiteral _ _ p ) = p 
 getSourcePosFromExpression (AddExpression _ _ _ p ) = p 
 getSourcePosFromExpression (ReferenceVariable _ _ _ p ) = p 
 getSourcePosFromExpression (LambdaVariable _ _ p ) = p 

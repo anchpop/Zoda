@@ -54,7 +54,7 @@ test = parallel $ do
 
   describe "Parser.expressionP" $ do
     it "parses number literals" $ do
-      parseSomething "3" expressionP `shouldParseTo` (NumberLiteral 3 0 Untyped (SourcePosition "no_file" 1 1 1 2)) 
+      parseSomething "3" expressionP `shouldParseTo` (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 1 1 2)) 
 
     it "parses identifiers" $ do
       parseSomething "test" expressionP `shouldParseTo` (ReferenceVariable "test" () Untyped (SourcePosition "no_file" 1 1 1 5))
@@ -66,18 +66,18 @@ test = parallel $ do
           ([("a", (a, SourcePosition "no_file" 1 2 1 3))
           , ("b", (b, SourcePosition "no_file" 1 5 1 6))
           , ("c", (c, SourcePosition "no_file" 1 8 1 9))
-          ] :. (NumberLiteral 3 1 Untyped (SourcePosition "no_file" 1 11 1 12))))
+          ] :. (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 11 1 12))))
           Untyped (SourcePosition "no_file" 1 1 1 12)
 
 
 
     it "parses function applications" $ do
       parseSomething "3.b" expressionP `shouldParseTo` FunctionApplicationExpression (ReferenceVariable "b" () Untyped (SourcePosition "no_file" 1 3 1 4))
-        [NumberLiteral 3 1 Untyped (SourcePosition "no_file" 1 1 1 2) ]
+        [NumberLiteral 3 Untyped (SourcePosition "no_file" 1 1 1 2) ]
         Untyped (SourcePosition "no_file" 1 1 1 4)
 
   describe "Parser.declarationP" $ do
     it "allows assignment to number literals" $ do
       parseSomething "i = 3" declarationP `shouldParseTo` Declaration
-        "i" (NumberLiteral 3 0 Untyped (SourcePosition "no_file" 1 5 1 6))
+        "i" (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 5 1 6))
         (SourcePosition "no_file" 1 1 1 6)

@@ -26,7 +26,7 @@ data Expression t p m i = ParenthesizedExpression (Expression t p m i)          
                         | PairExpression (Expression t p m i) (Expression t p m i)                         t p 
                         | TSigmaBinding (Expression t p m i) (Bind (i, (Atom, p)) (Expression t p m i))    t p 
                         | UniverseExpression Integer                                                       t p 
-                        | NumberLiteral Integer Integer                                                    t p 
+                        | NumberLiteral Rational                                                           t p 
                         | AddExpression (Expression t p m i) (Expression t p m i)                          t p 
                         | ReferenceVariable i m                                                            t p 
                         | LambdaVariable (i, Atom)                                                         t p 
