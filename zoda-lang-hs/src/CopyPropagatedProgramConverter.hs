@@ -28,19 +28,19 @@ do_fst _ (PairSem p1 _)                   = p1
 do_fst _ (NeutralSem (SigTypeSem t _) ne) = NeutralSem t (FstSem ne)
 do_fst _ _                                = error "Couldn't fst argument in do_fst"
 
-do_snd :: (Bindable m, Ord m) => JustifiedModule () () ph m () -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
+do_snd :: (Bindable m, Ord m, Show m) => JustifiedModule () () ph m () -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
 do_snd _    (PairSem _ p2)                       = p2
 do_snd modu (NeutralSem p@(SigTypeSem _ clo) ne) = NeutralSem (do_clos modu clo (do_fst modu p)) (SndSem ne)
 do_snd _    _                                    = error "Couldn't snd argument in do_snd"
 
-do_ap :: (Bindable m, Ord m) => JustifiedModule () () ph m () -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
+do_ap :: (Bindable m, Ord m, Show m) => JustifiedModule () () ph m () -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
 do_ap modu (LamSem clos)                      a = do_clos modu clos a
 do_ap modu (NeutralSem (PiTypeSem src dst) e) a = NeutralSem (do_clos modu dst a) (ApSem e (Normal src a))
 do_ap _    (NeutralSem _ _)                   _ = error "Not a Pi in do_ap"
 do_ap _    _                                  _ = error "Not a function in do_ap"
 
 
-do_clos :: forall m ph. (Bindable m, Ord m)
+do_clos :: forall m ph. (Bindable m, Ord m, Show m)
         => JustifiedModule () () ph m () 
         -> Clos () () (Map.Key ph m) ()        -- ^ The closure to evaluate
         -> Semantic () () (Map.Key ph m) ()    -- ^ What to pass to the closure
@@ -53,7 +53,7 @@ mk_var tp atom = NeutralSem tp (VarSem atom)
  
 
 -- |This converts the surface syntax into a semantic term with no beta redexes.
-eval :: forall ph m. (Bindable m, Ord m) => JustifiedModule () () ph m () -> Expression () () (Map.Key ph m) () -> SemanticEnv () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
+eval :: forall ph m. (Bindable m, Ord m, Show m) => JustifiedModule () () ph m () -> Expression () () (Map.Key ph m) () -> SemanticEnv () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
 eval modu = eval'
   where 
     eval' :: Expression () () (Map.Key ph m) () -> SemanticEnv () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
@@ -63,12 +63,13 @@ eval modu = eval'
         _      -> error "Couldn't find referenced variable"
     eval' (NatTypeExpression                                       _ _) _   = NatTypeSem
     eval' (NumberLiteral i                                         _ _) _   = if denominator i == 1 then NatValueSem $ numerator i else error "We do not yet support fractional number literals!"
+    eval' (AddExpression (NumberLiteral i1 () ()) (NumberLiteral i2 () ()) _ _) env = if denominator i1 == 1 && denominator i2 == 1 then NatValueSem ((numerator i1) + (numerator i2)) else error "We do not yet support fractional number literals!"
     eval' (AddExpression t1 t2                                     _ _) env = AddSem (eval' t1 env) (eval' t2 env)
     eval' (TArrowNonbinding src dest                               _ _) env = with_fresh (\x -> PiTypeSem (eval' src env) (Clos ((NoBind (), (x, NoBind ())) :. dest) env))
     eval' (TArrowBinding src dest                                  _ _) env = PiTypeSem (eval' src env) (Clos dest env)
     eval' (FunctionLiteralExpression ([] :. express)               _ _) env = eval' express env
     eval' (FunctionLiteralExpression ((t:[]) :. express)           _ _) env = LamSem (Clos (t :. express) env)
-    eval' (FunctionLiteralExpression (((_, (a, _)):ts) :. express) _ _) env =  LamSem (Clos ((NoBind (), (a, NoBind ())) :. (FunctionLiteralExpression (ts :. express) () ())) (env))
+    eval' (FunctionLiteralExpression (((_, (a, _)):ts) :. express) _ _) env = LamSem (Clos ((NoBind (), (a, NoBind ())) :. (FunctionLiteralExpression (ts :. express) () ())) (env))
     eval' (FunctionApplicationExpression func args                 _ _) env = foldl' (do_ap modu) (eval' func env) $ fmap (flip eval' env) args
     eval' (UniverseExpression  i                                   _ _) _   = UniSem i
     eval' (TSigmaBinding    t1 t2                                  _ _) env = SigTypeSem (eval' t1 env) (Clos t2 env)
@@ -87,7 +88,7 @@ eval modu = eval'
 --   - one for normal forms
 --   - one for neutral terms
 --   - one for types. 
-read_back_nf :: (Bindable m, Ord m) => JustifiedModule () () ph m () ->  Nf () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
+read_back_nf :: (Bindable m, Ord m, Show m) => JustifiedModule () () ph m () ->  Nf () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
 read_back_nf modu (Normal (PiTypeSem src dest) f)                 = FunctionLiteralExpression ([(NoBind (), (atom, NoBind ()))] :. (read_back_nf modu nf)) () ()
                                                             where Clos ((_, (atom, _)) :. _) _ = dest
                                                                   arg = mk_var src atom 
@@ -98,6 +99,8 @@ read_back_nf modu (Normal (SigTypeSem f s) p)                     = PairExpressi
 read_back_nf _    (Normal NatTypeSem (NatValueSem i))             = NumberLiteral (fromInteger i) () ()
 read_back_nf modu (Normal NatTypeSem (AddSem (NatValueSem i1) (NatValueSem i2)))  = 
   read_back_nf modu (Normal NatTypeSem (NatValueSem $ i1 + i2))
+--read_back_nf modu (Normal NatTypeSem (AddSem i1 i2))  = 
+--  read_back_nf modu (Normal NatTypeSem (AddSem (eval modu i1) (eval modu i2)))
 read_back_nf modu (Normal NatTypeSem (NeutralSem _ ne))           = read_back_ne modu ne
 read_back_nf modu (Normal (UniSem i) (PiTypeSem src dest))        = TArrowBinding
                                                                       (read_back_nf modu (Normal (UniSem i) src))
@@ -105,13 +108,13 @@ read_back_nf modu (Normal (UniSem i) (PiTypeSem src dest))        = TArrowBindin
                                                                       where Clos ((_, (atom, _)) :. _) _ = dest
                                                                             var = mk_var src atom
 read_back_nf modu (Normal (NeutralSem _ _) (NeutralSem _ ne)) = read_back_ne modu ne
-read_back_nf _     _                                          = error "Ill-typed read_back_nf"
+read_back_nf _     v                                          = error $ "Ill-typed read_back_nf - " <> show v
 
 -- |This is almost like the read back for normal forms but works specifically for types
 -- so there is no annotation tell us what type we're reading back at. 
 -- The function itself just assumes that d is some term of type Uni i for some i. 
 -- This, however, means that the cases are almost identical to the type cases in read_back_nf. 
-read_back_tp :: forall m ph. (Bindable m, Ord m) => JustifiedModule () () ph m () -> Semantic () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
+read_back_tp :: forall m ph. (Bindable m, Ord m, Show m) => JustifiedModule () () ph m () -> Semantic () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
 read_back_tp modu (NeutralSem _ term)  = read_back_ne modu term
 read_back_tp _    NatTypeSem           = NatTypeExpression () ()
 read_back_tp modu (PiTypeSem src dest) = TArrowBinding (read_back_tp modu src) ((NoBind (), (atom, NoBind ())) :. (read_back_tp modu (do_clos modu dest var))) () ()
@@ -123,7 +126,7 @@ read_back_tp modu (SigTypeSem f s)     = TSigmaBinding (read_back_tp modu f) ((N
 read_back_tp _ (UniSem k)              = UniverseExpression k () ()
 read_back_tp _ _                       = error "Nbe_failed - Not a type in read_back_tp"
 
-read_back_ne :: forall m ph.  (Bindable m, Ord m) => JustifiedModule () () ph m () -> Ne () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
+read_back_ne :: forall m ph.  (Bindable m, Ord m, Show m) => JustifiedModule () () ph m () -> Ne () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
 read_back_ne _    (VarSem x)     = LambdaVariable ((), x) () ()
 read_back_ne modu (ApSem ne arg) = FunctionApplicationExpression (read_back_ne modu ne) [read_back_nf modu arg] () ()
 read_back_ne modu (FstSem ne)    = FirstExpression (read_back_ne modu ne) () ()
@@ -133,7 +136,7 @@ read_back_ne modu (SndSem ne)    = SecondExpression (read_back_ne modu ne) () ()
 -- For each entry we use eval to convert it to a semantic type, tp and then add a neutral term Var i at 
 -- type tp where i is the variable at that type. 
 -- Notice that we don't need to worry about eta expanding them; all of that will be handled in read back.
-make_initial_env :: forall ph m. (Bindable m, Ord m) => JustifiedModule () () ph m () -> [(Atom, Expression () () (Map.Key ph m) ())] -> SemanticEnv () () (Map.Key ph m) ()
+make_initial_env :: forall ph m. (Bindable m, Ord m, Show m) => JustifiedModule () () ph m () -> [(Atom, Expression () () (Map.Key ph m) ())] -> SemanticEnv () () (Map.Key ph m) ()
 make_initial_env _    [] = []
 make_initial_env modu ((atom, t):env) = (atom, d):env'
   where
@@ -151,7 +154,7 @@ make_lam         f = with_fresh         (\x -> FunctionLiteralExpression ([(NoBi
 make_lam_named :: Nominal m1 => String -> (Expression () () m2 () -> Expression () () m1 ()) -> Expression () () m1 ()
 make_lam_named n f = with_fresh_named n (\x -> FunctionLiteralExpression ([(NoBind (), (x, NoBind ()))] :. f (LambdaVariable ((), x) () ())) () ())
 
-normalize :: forall t p i ph m. (Bindable t, Bindable p, Bindable i, Bindable m, Ord m) => JustifiedModule t p ph m i -> SurfaceEnv t p (Map.Key ph m) i -> Expression t p (Map.Key ph m) i -> Expression t p (Map.Key ph m) i -> Expression () () (Map.Key ph m) ()
+normalize :: forall t p i ph m. (Bindable t, Bindable p, Bindable i, Bindable m, Ord m, Show m) => JustifiedModule t p ph m i -> SurfaceEnv t p (Map.Key ph m) i -> Expression t p (Map.Key ph m) i -> Expression t p (Map.Key ph m) i -> Expression () () (Map.Key ph m) ()
 normalize modu env term tp = read_back_nf modu' (Normal tp' term')
   where env'  :: SemanticEnv () () (Map.Key ph m) ()
         env'  = make_initial_env modu' (normalizeExprEnv env) 
@@ -202,9 +205,7 @@ produceProgram input = join (parsedModule >>= (\x -> copyPropagated x (applicant
 
 example :: Text
 example = "module i `test module`\n\
-          \test = 3 + 5\n\
+          \test = 3 + 1 \n\
           \func = |a| (a + 4) \n\
           \main = test.func\n\
           \"
-
-

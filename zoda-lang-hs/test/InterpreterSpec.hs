@@ -56,9 +56,17 @@ test = parallel $ do
       
     it "evaluates addition function" $ do
       let example = "module i `test module`\n\
-                    \test = 3 + 5\n\
+                      \main = 3.(|a| (a + 4))\n\
+                      \"
+                      
+      (produceProgram example) `shouldBe` pure 7
+
+      
+    it "evaluates addition function behind indirection " $ do
+      let example = "module i `test module`\n\
+                    \test = 3 + 1 \n\
                     \func = |a| (a + 4) \n\
                     \main = test.func\n\
                     \"
                     
-      (produceProgram example) `shouldBe` pure 12
+      (produceProgram example) `shouldBe` pure 8
