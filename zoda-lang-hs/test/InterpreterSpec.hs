@@ -70,3 +70,13 @@ test = parallel $ do
                     \"
                     
       (produceProgram example) `shouldBe` pure 8
+
+    it "evaluates higher order functions " $ do
+      let example = "module i `test module`\n\
+                    \test = 3 + 1 \n\
+                    \func = |a| (a + 4) \n\
+                    \ho = |a| (|b| a.b)\n\
+                    \main = func.(test.ho)\n\
+                    \"
+                    
+      (getRightZSE $ produceProgram example) `shouldBe` 8
