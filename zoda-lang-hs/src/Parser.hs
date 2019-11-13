@@ -92,8 +92,8 @@ expressionP = expParser
       string ":"
       expr1 <- padded expressionP
       padded $ string "->"
-      expr2 <- (withEnvInState [(name, (atom, namepos))] expressionP)
-      pure (TArrowBinding expr1 ((name, (atom, namepos)) :. expr2) Untyped) 
+      expr2 <- (withEnvInState [(NoBind name, (atom, NoBind namepos))] expressionP)
+      pure (TArrowBinding expr1 ((NoBind name, (atom, NoBind namepos)) :. expr2) Untyped) 
     
 
     -- these parsers are left recursive, meaning they start with trying to return an expression and return an expression
@@ -148,14 +148,15 @@ functionLiteralP = do
   char '|'
   identifierInfo <- padded $ (sourcePosWrapper identifierP) `sepBy1` (padded $ char ',')
   char '|'
+  some separatorChar
   let identifiers = map fst identifierInfo
       duplicates = List.length (Set.fromList identifiers) < List.length identifiers
   when duplicates (customFailure DuplicateFunctionArgumentNames)
-  let binders = map (\(name, pos) -> with_fresh_named (unpack name) (\(x :: Atom) -> (name, (x, pos)))) identifierInfo
+  let binders = map (\(name, pos) -> with_fresh_named (unpack name) (\(x :: Atom) -> (NoBind name, (x, NoBind pos)))) identifierInfo
   express <- (withEnvInState binders expressionP)
   pure $ FunctionLiteralExpression (binders :. express) Untyped
 
-getEnv :: StateT ParserState (Parsec ZodaParseError String) [(Text, (Atom, SourcePosition))]
+getEnv :: StateT ParserState (Parsec ZodaParseError String) [(NoBind Text, (Atom, NoBind SourcePosition))]
 getEnv = do
   s <- get
   pure (join s)
@@ -188,7 +189,7 @@ identifierExpP :: ASTParser Expression
 identifierExpP = do (ident, _) <- sourcePosWrapper identifierP
 
                     env  <- getEnv
-                    case ident `lookup` env of
+                    case (NoBind ident) `lookup` env of
                       Just (fresh_name, _) -> pure $ LambdaVariable (ident, fresh_name) Untyped 
                       Nothing         -> pure $ ReferenceVariable ident () Untyped
 
@@ -196,7 +197,7 @@ identifierExpP = do (ident, _) <- sourcePosWrapper identifierP
 identifierCharacter :: Parser Char
 identifierCharacter = try letterChar <|> try alphaNumChar <|> try (char '\'') <|> try (char '-')
 
-type ParserState = [[(Text, (Atom, SourcePosition))]]
+type ParserState = [[(NoBind Text, (Atom, NoBind SourcePosition))]]
 type Parser a = StateT ParserState (Parsec ZodaParseError String) a
 type ASTParser a = Parser (SourcePosition -> a Untyped SourcePosition () Text)
 data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)

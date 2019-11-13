@@ -46,7 +46,7 @@ type UniLevel = Integer
 type SurfaceEnv t p m i = [(Atom, Expression t p m i)]
 
 type SemanticEnv t p m i = [(Atom, Semantic t p m i)]
-data Clos t p m i = Clos {termClos :: (Bind (i, (Atom, p)) (Expression t p m i)), envClos :: (SemanticEnv t p m i)}
+data Clos t p m i = Clos {termClos :: (Bind (NoBind i, (Atom, NoBind p)) (Expression t p m i)), envClos :: (SemanticEnv t p m i)}
   deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
 
@@ -71,16 +71,16 @@ mapExpr1 f (ParenthesizedExpression e t p)               = ParenthesizedExpressi
 mapExpr1 f (FirstExpression e t p)                       = FirstExpression (mapExpr1 f e) t p
 mapExpr1 f (SecondExpression e t p)                      = SecondExpression (mapExpr1 f e) t p
 mapExpr1 f (PairExpression e1 e2 t p)                    = PairExpression (mapExpr1 f e1) (mapExpr1 f e2) t p
-mapExpr1 f (TSigmaBinding e1 (a :. e2) t p)              = TSigmaBinding (mapExpr1 f e1) ((Data.Bifunctor.first f a) :. (mapExpr1 f e2)) t p
+mapExpr1 f (TSigmaBinding e1 (a :. e2) t p)              = TSigmaBinding (mapExpr1 f e1) ((Data.Bifunctor.first (fmap f) a) :. (mapExpr1 f e2)) t p
 mapExpr1 _ (UniverseExpression i t p)                    = UniverseExpression i t p
-mapExpr1 _ (NumberLiteral i1 t p)                     = NumberLiteral i1 t p
+mapExpr1 _ (NumberLiteral i1 t p)                        = NumberLiteral i1 t p
 mapExpr1 f (AddExpression e1 e2 t p)                     = AddExpression (mapExpr1 f e1) (mapExpr1 f e2) t p
 mapExpr1 f (ReferenceVariable i m t p)                   = ReferenceVariable (f i) m t p 
 mapExpr1 f (LambdaVariable (i, a) t p)                   = LambdaVariable ((f i), a) t p
-mapExpr1 f (FunctionLiteralExpression (a :. e) t p)      = FunctionLiteralExpression ((fmap (Data.Bifunctor.first f) a) :. (mapExpr1 f e)) t p
+mapExpr1 f (FunctionLiteralExpression (a :. e) t p)      = FunctionLiteralExpression ((fmap (Data.Bifunctor.first (fmap f)) a) :. (mapExpr1 f e)) t p
 mapExpr1 f (FunctionApplicationExpression func args t p) = FunctionApplicationExpression (mapExpr1 f func) (fmap (mapExpr1 f) args) t p
 mapExpr1 f (TArrowNonbinding e1 e2 t p)                  = TArrowNonbinding (mapExpr1 f e1) (mapExpr1 f e2) t p
-mapExpr1 f (TArrowBinding e1 (a :. e2) t p)              = TArrowBinding (mapExpr1 f e1) ((Data.Bifunctor.first f a) :. (mapExpr1 f e2)) t p
+mapExpr1 f (TArrowBinding e1 (a :. e2) t p)              = TArrowBinding (mapExpr1 f e1) ((Data.Bifunctor.first (fmap f) a) :. (mapExpr1 f e2)) t p
 mapExpr1 f (Annotation e1 e2 t p)                        = Annotation (mapExpr1 f e1) (mapExpr1 f e2) t p
 mapExpr1 _ (NatTypeExpression t p)                       = NatTypeExpression t p
 
@@ -181,16 +181,16 @@ mapExpr3 f (ParenthesizedExpression e t p)               = ParenthesizedExpressi
 mapExpr3 f (FirstExpression e t p)                       = FirstExpression (mapExpr3 f e) t (f p)
 mapExpr3 f (SecondExpression e t p)                      = SecondExpression (mapExpr3 f e) t (f p)
 mapExpr3 f (PairExpression e1 e2 t p)                    = PairExpression (mapExpr3 f e1) (mapExpr3 f e2) t (f p)
-mapExpr3 f (TSigmaBinding e1 (a :. e2) t p)              = TSigmaBinding (mapExpr3 f e1) ((Data.Bifunctor.second (Data.Bifunctor.second f) a) :. (mapExpr3 f e2)) t (f p)
+mapExpr3 f (TSigmaBinding e1 (a :. e2) t p)              = TSigmaBinding (mapExpr3 f e1) ((Data.Bifunctor.second (Data.Bifunctor.second (fmap f)) a) :. (mapExpr3 f e2)) t (f p)
 mapExpr3 f (UniverseExpression i t p)                    = UniverseExpression i t (f p)
 mapExpr3 f (NumberLiteral i1 t p)                        = NumberLiteral i1 t (f p)
 mapExpr3 f (AddExpression e1 e2 t p)                     = AddExpression (mapExpr3 f e1) (mapExpr3 f e2) t (f p)
 mapExpr3 f (ReferenceVariable i m t p)                   = ReferenceVariable i m t (f p) 
 mapExpr3 f (LambdaVariable i t p)                        = LambdaVariable i t (f p)
-mapExpr3 f (FunctionLiteralExpression (a :. e) t p)      = FunctionLiteralExpression ((fmap (Data.Bifunctor.second (Data.Bifunctor.second f)) a) :. (mapExpr3 f e)) t (f p)
+mapExpr3 f (FunctionLiteralExpression (a :. e) t p)      = FunctionLiteralExpression ((fmap (Data.Bifunctor.second (Data.Bifunctor.second (fmap f))) a) :. (mapExpr3 f e)) t (f p)
 mapExpr3 f (FunctionApplicationExpression func args t p) = FunctionApplicationExpression (mapExpr3 f func) (fmap (mapExpr3 f) args) t (f p)
 mapExpr3 f (TArrowNonbinding e1 e2 t p)                  = TArrowNonbinding (mapExpr3 f e1) (mapExpr3 f e2) t (f p)
-mapExpr3 f (TArrowBinding e1 (a :. e2) t p)              = TArrowBinding (mapExpr3 f e1) ((Data.Bifunctor.second (Data.Bifunctor.second f) a) :. (mapExpr3 f e2)) t (f p)
+mapExpr3 f (TArrowBinding e1 (a :. e2) t p)              = TArrowBinding (mapExpr3 f e1) ((Data.Bifunctor.second (Data.Bifunctor.second (fmap f)) a) :. (mapExpr3 f e2)) t (f p)
 mapExpr3 f (Annotation e1 e2 t p)                        = Annotation (mapExpr3 f e1) (mapExpr3 f e2) t (f p)
 mapExpr3 f (NatTypeExpression t p)                       = NatTypeExpression t (f p)
 
@@ -235,7 +235,7 @@ mapNe1 f (FstSem ne) = FstSem (mapNe1 f ne)
 mapNe1 f (SndSem ne) = SndSem (mapNe1 f ne)
 
 mapClos1 :: (Bindable t, Bindable i1, Bindable i2, Bindable p, Nominal m) => (i1 -> i2) -> Clos t p m i1 -> Clos t p m i2
-mapClos1 f (Clos ((i, (atom, p)) :. surf) (semanticEnv)) = Clos ((f i, (atom, p)) :. (mapExpr1 f surf)) (fmap (Data.Bifunctor.second (mapSemantic1 f)) semanticEnv)
+mapClos1 f (Clos ((i, (atom, p)) :. surf) (semanticEnv)) = Clos ((fmap f i, (atom, p)) :. (mapExpr1 f surf)) (fmap (Data.Bifunctor.second (mapSemantic1 f)) semanticEnv)
 
 
 
@@ -284,7 +284,7 @@ mapNe3 f (FstSem ne) = FstSem (mapNe3 f ne)
 mapNe3 f (SndSem ne) = SndSem (mapNe3 f ne)
 
 mapClos3 :: (Bindable t, Bindable p1, Bindable p2, Bindable i, Nominal m) => (p1 -> p2) -> Clos t p1 m i -> Clos t p2 m i
-mapClos3 f (Clos ((i, (atom, p)) :. surf) (semanticEnv)) = Clos ((i, (atom, f p)) :. (mapExpr3 f surf)) (fmap (Data.Bifunctor.second (mapSemantic3 f)) semanticEnv)
+mapClos3 f (Clos ((i, (atom, p)) :. surf) (semanticEnv)) = Clos ((i, (atom, fmap f p)) :. (mapExpr3 f surf)) (fmap (Data.Bifunctor.second (mapSemantic3 f)) semanticEnv)
 
 mapSemantic4 :: (Bindable t1, Bindable t2, Bindable p, Bindable i, Nominal m) => (t1 -> t2) -> Semantic t1 p m i -> Semantic t2 p m i
 mapSemantic4 f (LamSem clos)                        = LamSem (mapClos4 f clos)

@@ -24,16 +24,16 @@ data Expression t p m i = ParenthesizedExpression (Expression t p m i)          
                         | FirstExpression (Expression t p m i)                                             t p 
                         | SecondExpression (Expression t p m i)                                            t p 
                         | PairExpression (Expression t p m i) (Expression t p m i)                         t p 
-                        | TSigmaBinding (Expression t p m i) (Bind (i, (Atom, p)) (Expression t p m i))    t p 
+                        | TSigmaBinding (Expression t p m i) (Bind (NoBind i, (Atom, NoBind p)) (Expression t p m i))    t p 
                         | UniverseExpression Integer                                                       t p 
                         | NumberLiteral Rational                                                           t p 
                         | AddExpression (Expression t p m i) (Expression t p m i)                          t p 
                         | ReferenceVariable i m                                                            t p 
                         | LambdaVariable (i, Atom)                                                         t p 
-                        | FunctionLiteralExpression (Bind [(i, (Atom, p))] (Expression t p m i))           t p 
+                        | FunctionLiteralExpression (Bind [(NoBind i, (Atom, NoBind p))] (Expression t p m i))           t p 
                         | FunctionApplicationExpression (Expression t p m i) [Expression t p m i]          t p 
                         | TArrowNonbinding (Expression t p m i)                    (Expression t p m i)    t p 
-                        | TArrowBinding    (Expression t p m i) (Bind (i, (Atom, p)) (Expression t p m i)) t p
+                        | TArrowBinding    (Expression t p m i) (Bind (NoBind i, (Atom, NoBind p)) (Expression t p m i)) t p
                         | Annotation (Expression t p m i) (Expression t p m i)                             t p 
                         | NatTypeExpression                                                                t p 
                         deriving (Show, Eq, Typeable, NominalSupport, NominalShow, Generic, Nominal)
