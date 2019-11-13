@@ -1,4 +1,4 @@
-module CopyPropagatedProgramConverter where
+module Interpreter where
 import ClassyPrelude hiding (lookup)
 import Data.List (lookup)
 import Basic 

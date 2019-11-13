@@ -15,7 +15,7 @@ import Data.Foldable (for_)
 
 import Parser
 import Ast
-import CopyPropagatedProgramConverter
+import Interpreter
 
 test :: SpecWith ()
 test = parallel $ do
