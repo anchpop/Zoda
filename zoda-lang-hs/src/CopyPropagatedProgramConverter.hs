@@ -23,10 +23,10 @@ data Types i = Number | Bool | Arr (Maybe i) (Types i) (Types i) deriving (Eq, S
 
 
 
-do_fst :: JustifiedModule () () ph m () -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
+do_fst :: (Show m) => JustifiedModule () () ph m () -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
 do_fst _ (PairSem p1 _)                   = p1
 do_fst _ (NeutralSem (SigTypeSem t _) ne) = NeutralSem t (FstSem ne)
-do_fst _ _                                = error "Couldn't fst argument in do_fst"
+do_fst _ a                                = error $ "Couldn't fst argument in do_fst - " <> show a
 
 do_snd :: (Bindable m, Ord m, Show m) => JustifiedModule () () ph m () -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
 do_snd _    (PairSem _ p2)                       = p2
@@ -38,6 +38,13 @@ do_ap modu (LamSem clos)                      a = do_clos modu clos a
 do_ap modu (NeutralSem (PiTypeSem src dst) e) a = NeutralSem (do_clos modu dst a) (ApSem e (Normal src a))
 do_ap _    (NeutralSem _ _)                   _ = error "Not a Pi in do_ap"
 do_ap _    _                                  _ = error "Not a function in do_ap"
+
+do_add :: (Show m) => JustifiedModule () () ph m () -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
+do_add _    (NatValueSem i1)     (NatValueSem i2)   = NatValueSem $ i1 + i2 
+do_add _ e1@(NatValueSem _)      (NeutralSem _ ne)  = NeutralSem NatTypeSem (AddSem1 (Normal NatTypeSem e1) ne)
+do_add _    (NeutralSem _ ne) e2@(NatValueSem _)    = NeutralSem NatTypeSem (AddSem2 ne (Normal NatTypeSem e2))
+do_add _    (NeutralSem _ ne1)   (NeutralSem _ ne2) = NeutralSem NatTypeSem (AddSem3 ne1 ne2)
+do_add _    e1                     e2               = error $ "Arguments to do_add not both numbers - " <> show e1 <> " and " <> show e2
 
 
 do_clos :: forall m ph. (Bindable m, Ord m, Show m)
@@ -63,8 +70,7 @@ eval modu = eval'
         _      -> error "Couldn't find referenced variable"
     eval' (NatTypeExpression                                       _ _) _   = NatTypeSem
     eval' (NumberLiteral i                                         _ _) _   = if denominator i == 1 then NatValueSem $ numerator i else error "We do not yet support fractional number literals!"
-    eval' (AddExpression (NumberLiteral i1 () ()) (NumberLiteral i2 () ()) _ _) env = if denominator i1 == 1 && denominator i2 == 1 then NatValueSem ((numerator i1) + (numerator i2)) else error "We do not yet support fractional number literals!"
-    eval' (AddExpression t1 t2                                     _ _) env = AddSem (eval' t1 env) (eval' t2 env)
+    eval' (AddExpression t1 t2                                     _ _) env = do_add modu (eval' t1 env) (eval' t2 env)
     eval' (TArrowNonbinding src dest                               _ _) env = with_fresh (\x -> PiTypeSem (eval' src env) (Clos ((NoBind (), (x, NoBind ())) :. dest) env))
     eval' (TArrowBinding src dest                                  _ _) env = PiTypeSem (eval' src env) (Clos dest env)
     eval' (FunctionLiteralExpression ([] :. express)               _ _) env = eval' express env
@@ -97,10 +103,8 @@ read_back_nf modu (Normal (SigTypeSem f s) p)                     = PairExpressi
                                                                       (read_back_nf modu (Normal f                                (do_fst modu p)))
                                                                       (read_back_nf modu (Normal (do_clos modu s (do_fst modu p)) (do_snd modu p))) () ()
 read_back_nf _    (Normal NatTypeSem (NatValueSem i))             = NumberLiteral (fromInteger i) () ()
-read_back_nf modu (Normal NatTypeSem (AddSem (NatValueSem i1) (NatValueSem i2)))  = 
-  read_back_nf modu (Normal NatTypeSem (NatValueSem $ i1 + i2))
---read_back_nf modu (Normal NatTypeSem (AddSem i1 i2))  = 
---  read_back_nf modu (Normal NatTypeSem (AddSem (eval modu i1) (eval modu i2)))
+--read_back_nf modu (Normal NatTypeSem (AddSem (NatValueSem i1) (NatValueSem i2)))  = 
+--  read_back_nf modu (Normal NatTypeSem (NatValueSem $ i1 + i2))
 read_back_nf modu (Normal NatTypeSem (NeutralSem _ ne))           = read_back_ne modu ne
 read_back_nf modu (Normal (UniSem i) (PiTypeSem src dest))        = TArrowBinding
                                                                       (read_back_nf modu (Normal (UniSem i) src))
@@ -131,6 +135,9 @@ read_back_ne _    (VarSem x)     = LambdaVariable ((), x) () ()
 read_back_ne modu (ApSem ne arg) = FunctionApplicationExpression (read_back_ne modu ne) [read_back_nf modu arg] () ()
 read_back_ne modu (FstSem ne)    = FirstExpression (read_back_ne modu ne) () ()
 read_back_ne modu (SndSem ne)    = SecondExpression (read_back_ne modu ne) () ()
+read_back_ne modu (AddSem1 nf ne)   = AddExpression (read_back_nf modu nf) (read_back_ne modu ne) () ()
+read_back_ne modu (AddSem2 ne nf)   = AddExpression (read_back_ne modu ne) (read_back_nf modu nf) () ()
+read_back_ne modu (AddSem3 ne1 ne2) = AddExpression (read_back_ne modu ne1) (read_back_ne modu ne2) () ()
 
 -- |The environment is a list of types associated with variables which are supposed to be a member of that type.
 -- For each entry we use eval to convert it to a semantic type, tp and then add a neutral term Var i at 

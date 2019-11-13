@@ -9,13 +9,13 @@ import qualified Data.Bifunctor as Data.Bifunctor
 -- |Semantic values contain terms which have evaluated to a constructor which does not need to be 
 -- reduced further. So for instance, Lam and Pair may contain computation further inside the term 
 -- but at least the outermost constructor is stable and fully evaluated. 
+-- Essentially, this contains the introduction forms.
 data Semantic t p m i =
     LamSem (Clos t p m i)
   | NeutralSem {tpNeutral   :: Semantic t p m i,  -- ^This should be the type of the neutral term
                 termNeutral :: Ne       t p m i}  -- ^This should be the neutral term iteslf
   | NatTypeSem
   | NatValueSem Integer
-  | AddSem (Semantic t p m i) (Semantic t p m i)
   | PiTypeSem (Semantic t p m i) (Clos t p m i)
   | SigTypeSem (Semantic t p m i) (Clos t p m i) 
   | PairSem (Semantic t p m i) (Semantic t p m i)
@@ -28,11 +28,18 @@ data Semantic t p m i =
 -- no way to convert it to a value since we have no information on what x is yet. Similarly, if 
 -- we have some neutral term and we apply Fst to it it's clearly still not a value but we don't 
 -- have any way of reducing it further so what's there to do. 
+-- Essentially, this contains the elimination forms (since they might get blocked on an argument). 
 data Ne t p m i =
     VarSem Atom
   | ApSem (Ne t p m i) (Nf t p m i)
   | FstSem (Ne t p m i)
   | SndSem (Ne t p m i)
+  -- For addition, we might be blocked on the first, second, or both arguments 
+  -- (this doesn't apply to function application because we can only get blocked if
+  -- we don't know what the function is.
+  | AddSem1 (Nf t p m i) (Ne t p m i)
+  | AddSem2 (Ne t p m i) (Nf t p m i)
+  | AddSem3 (Ne t p m i) (Ne t p m i)
   deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
 -- |nf is a special class of values coming from the style of NbE we use. It associates a type 
@@ -47,7 +54,7 @@ type SurfaceEnv t p m i = [(Atom, Expression t p m i)]
 
 type SemanticEnv t p m i = [(Atom, Semantic t p m i)]
 data Clos t p m i = Clos {termClos :: (Bind (NoBind i, (Atom, NoBind p)) (Expression t p m i)), envClos :: (SemanticEnv t p m i)}
-  deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
+  deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal) 
 
 
 
@@ -219,7 +226,6 @@ mapSemantic1 f (LamSem clos)                        = LamSem (mapClos1 f clos)
 mapSemantic1 f (NeutralSem typeNeutral termNeutral) = NeutralSem (mapSemantic1 f typeNeutral) (mapNe1 f termNeutral)
 mapSemantic1 _ (NatTypeSem)                         = NatTypeSem
 mapSemantic1 _ (NatValueSem i)                      = NatValueSem i
-mapSemantic1 f (AddSem s1 s2)                       = AddSem (mapSemantic1 f s1) (mapSemantic1 f s2)
 mapSemantic1 f (PiTypeSem s c)                      = PiTypeSem (mapSemantic1 f s) (mapClos1 f c)
 mapSemantic1 f (SigTypeSem s c)                     = SigTypeSem (mapSemantic1 f s) (mapClos1 f c)
 mapSemantic1 f (PairSem s1 s2)                      = PairSem (mapSemantic1 f s1) (mapSemantic1 f s2)
@@ -233,6 +239,9 @@ mapNe1 _ (VarSem a) = VarSem a
 mapNe1 f (ApSem ne nf) = ApSem (mapNe1 f ne) (mapNf1 f nf)
 mapNe1 f (FstSem ne) = FstSem (mapNe1 f ne)
 mapNe1 f (SndSem ne) = SndSem (mapNe1 f ne)
+mapNe1 f (AddSem1 nf ne) = AddSem1 (mapNf1 f nf) (mapNe1 f ne)
+mapNe1 f (AddSem2 ne nf) = AddSem2 (mapNe1 f ne) (mapNf1 f nf)
+mapNe1 f (AddSem3 ne1 ne2) = AddSem3 (mapNe1 f ne1) (mapNe1 f ne2)
 
 mapClos1 :: (Bindable t, Bindable i1, Bindable i2, Bindable p, Nominal m) => (i1 -> i2) -> Clos t p m i1 -> Clos t p m i2
 mapClos1 f (Clos ((i, (atom, p)) :. surf) (semanticEnv)) = Clos ((fmap f i, (atom, p)) :. (mapExpr1 f surf)) (fmap (Data.Bifunctor.second (mapSemantic1 f)) semanticEnv)
@@ -244,7 +253,6 @@ mapSemantic2 f (LamSem clos)                        = LamSem (mapClos2 f clos)
 mapSemantic2 f (NeutralSem typeNeutral termNeutral) = NeutralSem (mapSemantic2 f typeNeutral) (mapNe2 f termNeutral)
 mapSemantic2 _ (NatTypeSem)                         = NatTypeSem
 mapSemantic2 _ (NatValueSem i)                      = NatValueSem i
-mapSemantic2 f (AddSem s1 s2)                       = AddSem (mapSemantic2 f s1) (mapSemantic2 f s2)
 mapSemantic2 f (PiTypeSem s c)                      = PiTypeSem (mapSemantic2 f s) (mapClos2 f c)
 mapSemantic2 f (SigTypeSem s c)                     = SigTypeSem (mapSemantic2 f s) (mapClos2 f c)
 mapSemantic2 f (PairSem s1 s2)                      = PairSem (mapSemantic2 f s1) (mapSemantic2 f s2)
@@ -258,6 +266,9 @@ mapNe2 _ (VarSem a) = VarSem a
 mapNe2 f (ApSem ne nf) = (ApSem (mapNe2 f ne) (mapNf2 f nf))
 mapNe2 f (FstSem ne) = FstSem (mapNe2 f ne)
 mapNe2 f (SndSem ne) = SndSem (mapNe2 f ne)
+mapNe2 f (AddSem1 nf ne) = AddSem1 (mapNf2 f nf) (mapNe2 f ne)
+mapNe2 f (AddSem2 ne nf) = AddSem2 (mapNe2 f ne) (mapNf2 f nf)
+mapNe2 f (AddSem3 ne1 ne2) = AddSem3 (mapNe2 f ne1) (mapNe2 f ne2)
 
 mapClos2 :: (Bindable t, Bindable p, Bindable i, Nominal m1, Nominal m2) => (m1 -> m2) -> Clos t p m1 i -> Clos t p m2 i
 mapClos2 f (Clos ((i, (atom, p)) :. surf) semanticEnv) = Clos ((i, (atom, p)) :. mapExpr2 f surf) (fmap (\(a, b) -> (a, mapSemantic2 f b)) semanticEnv)
@@ -268,7 +279,6 @@ mapSemantic3 f (LamSem clos)                        = LamSem (mapClos3 f clos)
 mapSemantic3 f (NeutralSem typeNeutral termNeutral) = NeutralSem (mapSemantic3 f typeNeutral) (mapNe3 f termNeutral)
 mapSemantic3 _ (NatTypeSem)                         = NatTypeSem
 mapSemantic3 _ (NatValueSem i)                      = NatValueSem i
-mapSemantic3 f (AddSem s1 s2)                       = AddSem (mapSemantic3 f s1) (mapSemantic3 f s2)
 mapSemantic3 f (PiTypeSem s c)                      = PiTypeSem (mapSemantic3 f s) (mapClos3 f c)
 mapSemantic3 f (SigTypeSem s c)                     = SigTypeSem (mapSemantic3 f s) (mapClos3 f c)
 mapSemantic3 f (PairSem s1 s2)                      = PairSem (mapSemantic3 f s1) (mapSemantic3 f s2)
@@ -282,6 +292,9 @@ mapNe3 _ (VarSem a) = VarSem a
 mapNe3 f (ApSem ne nf) = (ApSem (mapNe3 f ne) (mapNf3 f nf))
 mapNe3 f (FstSem ne) = FstSem (mapNe3 f ne)
 mapNe3 f (SndSem ne) = SndSem (mapNe3 f ne)
+mapNe3 f (AddSem1 nf ne) = AddSem1 (mapNf3 f nf) (mapNe3 f ne)
+mapNe3 f (AddSem2 ne nf) = AddSem2 (mapNe3 f ne) (mapNf3 f nf)
+mapNe3 f (AddSem3 ne1 ne2) = AddSem3 (mapNe3 f ne1) (mapNe3 f ne2)
 
 mapClos3 :: (Bindable t, Bindable p1, Bindable p2, Bindable i, Nominal m) => (p1 -> p2) -> Clos t p1 m i -> Clos t p2 m i
 mapClos3 f (Clos ((i, (atom, p)) :. surf) (semanticEnv)) = Clos ((i, (atom, fmap f p)) :. (mapExpr3 f surf)) (fmap (Data.Bifunctor.second (mapSemantic3 f)) semanticEnv)
@@ -291,7 +304,6 @@ mapSemantic4 f (LamSem clos)                        = LamSem (mapClos4 f clos)
 mapSemantic4 f (NeutralSem typeNeutral termNeutral) = NeutralSem (mapSemantic4 f typeNeutral) (mapNe4 f termNeutral)
 mapSemantic4 _ (NatTypeSem)                         = NatTypeSem
 mapSemantic4 _ (NatValueSem i)                      = NatValueSem i
-mapSemantic4 f (AddSem s1 s2)                       = AddSem (mapSemantic4 f s1) (mapSemantic4 f s2)
 mapSemantic4 f (PiTypeSem s c)                      = PiTypeSem (mapSemantic4 f s) (mapClos4 f c)
 mapSemantic4 f (SigTypeSem s c)                     = SigTypeSem (mapSemantic4 f s) (mapClos4 f c)
 mapSemantic4 f (PairSem s1 s2)                      = PairSem (mapSemantic4 f s1) (mapSemantic4 f s2)
@@ -305,6 +317,9 @@ mapNe4 _ (VarSem a) = VarSem a
 mapNe4 f (ApSem ne nf) = (ApSem (mapNe4 f ne) (mapNf4 f nf))
 mapNe4 f (FstSem ne) = FstSem (mapNe4 f ne)
 mapNe4 f (SndSem ne) = SndSem (mapNe4 f ne)
+mapNe4 f (AddSem1 nf ne) = AddSem1 (mapNf4 f nf) (mapNe4 f ne)
+mapNe4 f (AddSem2 ne nf) = AddSem2 (mapNe4 f ne) (mapNf4 f nf)
+mapNe4 f (AddSem3 ne1 ne2) = AddSem3 (mapNe4 f ne1) (mapNe4 f ne2)
 
 mapClos4 :: (Bindable t1, Bindable t2, Bindable p, Bindable i, Nominal m) => (t1 -> t2) -> Clos t1 p m i -> Clos t2 p m i
 mapClos4 f (Clos ((i, (atom, p)) :. surf) (semanticEnv)) = Clos ((i, (atom, p)) :. (mapExpr4 f surf)) (fmap (\(a, b) -> (a, mapSemantic4 f b)) semanticEnv)
