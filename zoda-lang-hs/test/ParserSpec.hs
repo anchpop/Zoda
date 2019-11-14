@@ -74,7 +74,7 @@ test = parallel $ do
 
     it "parses function applications" $ do
       parseSomething "3.b" expressionP `shouldParseTo` FunctionApplicationExpression (ReferenceVariable "b" () Untyped (SourcePosition "no_file" 1 3 1 4))
-        [NumberLiteral 3 Untyped (SourcePosition "no_file" 1 1 1 2) ]
+        (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 1 1 2) NonEmpty.:| [])
         Untyped (SourcePosition "no_file" 1 1 1 4)
 
   describe "Parser.declarationP" $ do

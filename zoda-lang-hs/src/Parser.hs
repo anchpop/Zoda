@@ -14,7 +14,6 @@ import qualified Data.Set as Set
 import qualified Data.List as List
 import Text.Megaparsec.Debug
 import Control.Monad.Combinators.Expr
-import qualified Data.List.NonEmpty
 
 import Nominal hiding ((.))
 
@@ -62,7 +61,7 @@ expressionP = expParser
                         [
                           [InfixL . try $ do 
                             padded $ string "."
-                            pure (\expr1 expr2 -> FunctionApplicationExpression expr2 [expr1] Untyped (combineSourcePos expr1 expr2))
+                            pure (\expr1 expr2 -> FunctionApplicationExpression expr2 (expr1 NonEmpty.:| []) Untyped (combineSourcePos expr1 expr2))
                           ],
                           [InfixR . try $ do 
                             padded $ string "+"
@@ -112,7 +111,7 @@ expressionP = expParser
           furtherArgs <- padded $ expressionP `sepBy` (many separatorChar *> string "," *> many separatorChar )
           string ")"
 
-          pure $ \applicant -> FunctionApplicationExpression f (applicant:furtherArgs) Untyped  
+          pure $ \applicant -> FunctionApplicationExpression f (applicant NonEmpty.:| furtherArgs) Untyped  
   
 
 numberLiteralP :: Parser Rational
@@ -155,7 +154,7 @@ functionLiteralP = do
   when duplicates (customFailure DuplicateFunctionArgumentNames)
   let binders = map (\(name, pos) -> with_fresh_named (unpack name) (\(x :: Atom) -> (NoBind name, (x, NoBind pos)))) identifierInfo
   express <- (withEnvInState binders expressionP)
-  pure $ FunctionLiteralExpression ((Data.List.NonEmpty.fromList binders) :. express) Untyped
+  pure $ FunctionLiteralExpression ((NonEmpty.fromList binders) :. express) Untyped
 
 getEnv :: StateT ParserState (Parsec ZodaParseError String) [(NoBind Text, (Atom, NoBind SourcePosition))]
 getEnv = do

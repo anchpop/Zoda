@@ -31,7 +31,7 @@ data Expression t p m i = ParenthesizedExpression (Expression t p m i)          
                         | ReferenceVariable i m                                                            t p 
                         | LambdaVariable (i, Atom)                                                         t p 
                         | FunctionLiteralExpression (Bind (NonEmpty (NoBind i, (Atom, NoBind p))) (Expression t p m i)) t p 
-                        | FunctionApplicationExpression (Expression t p m i) [Expression t p m i]          t p 
+                        | FunctionApplicationExpression (Expression t p m i) (NonEmpty (Expression t p m i))     t p 
                         | TArrowNonbinding (Expression t p m i)                    (Expression t p m i)    t p 
                         | TArrowBinding    (Expression t p m i) (Bind (NoBind i, (Atom, NoBind p)) (Expression t p m i)) t p
                         | Annotation (Expression t p m i) (Expression t p m i)                             t p 

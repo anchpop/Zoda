@@ -74,8 +74,8 @@ eval modu = eval'
     eval' (AddExpression t1 t2                                     _ _) env = do_add modu (eval' t1 env) (eval' t2 env)
     eval' (TArrowNonbinding src dest                               _ _) env = with_fresh (\x -> PiTypeSem (eval' src env) (Clos ((NoBind (), (x, NoBind ())) :. dest) env))
     eval' (TArrowBinding src dest                                  _ _) env = PiTypeSem (eval' src env) (Clos dest env)
-    eval' (FunctionLiteralExpression ((t NonEmpty.:| []) :. express)        _ _) env = LamSem (Clos (t :. express) env)
-    eval' (FunctionLiteralExpression ((t NonEmpty.:| (t1:ts)) :. express)        _ _) env = LamSem (Clos (t :. (FunctionLiteralExpression ((t1 NonEmpty.:| ts) :. express) () ())) (env))
+    eval' (FunctionLiteralExpression ((t NonEmpty.:| []) :. express)      _ _) env = LamSem (Clos (t :. express) env)
+    eval' (FunctionLiteralExpression ((t NonEmpty.:| (t1:ts)) :. express) _ _) env = LamSem (Clos (t :. (FunctionLiteralExpression ((t1 NonEmpty.:| ts) :. express) () ())) (env))
     eval' (FunctionApplicationExpression func args                 _ _) env = foldl' (do_ap modu) (eval' func env) $ fmap (flip eval' env) args
     eval' (UniverseExpression  i                                   _ _) _   = UniSem i
     eval' (TSigmaBinding    t1 t2                                  _ _) env = SigTypeSem (eval' t1 env) (Clos t2 env)
@@ -130,7 +130,7 @@ read_back_tp _ _                       = error "Nbe_failed - Not a type in read_
 
 read_back_ne :: forall m ph.  (Bindable m, Ord m, Show m) => JustifiedModule () () ph m () -> Ne () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
 read_back_ne _    (VarSem x)     = LambdaVariable ((), x) () ()
-read_back_ne modu (ApSem ne arg) = FunctionApplicationExpression (read_back_ne modu ne) [read_back_nf modu arg] () ()
+read_back_ne modu (ApSem ne arg) = FunctionApplicationExpression (read_back_ne modu ne) (read_back_nf modu arg NonEmpty.:| []) () ()
 read_back_ne modu (FstSem ne)    = FirstExpression (read_back_ne modu ne) () ()
 read_back_ne modu (SndSem ne)    = SecondExpression (read_back_ne modu ne) () ()
 read_back_ne modu (AddSem1 nf ne)   = AddExpression (read_back_nf modu nf) (read_back_ne modu ne) () ()
@@ -150,7 +150,7 @@ make_initial_env modu ((atom, t):env) = (atom, d):env'
     d :: Semantic () () (Map.Key ph m) ()
     d = NeutralSem (eval modu (normalizeExprMetadata t) env') (VarSem atom)
 
-(@@) :: Expression () () m i -> [Expression () () m i] -> Expression () () m i
+(@@) :: Expression () () m i -> (NonEmpty.NonEmpty (Expression () () m i)) -> Expression () () m i
 m @@ n = FunctionApplicationExpression m n () ()
 infixl 9 @@
 
