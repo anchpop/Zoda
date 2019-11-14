@@ -14,6 +14,7 @@ import qualified Data.Set as Set
 import qualified Data.List as List
 import Text.Megaparsec.Debug
 import Control.Monad.Combinators.Expr
+import qualified Data.List.NonEmpty
 
 import Nominal hiding ((.))
 
@@ -154,7 +155,7 @@ functionLiteralP = do
   when duplicates (customFailure DuplicateFunctionArgumentNames)
   let binders = map (\(name, pos) -> with_fresh_named (unpack name) (\(x :: Atom) -> (NoBind name, (x, NoBind pos)))) identifierInfo
   express <- (withEnvInState binders expressionP)
-  pure $ FunctionLiteralExpression (binders :. express) Untyped
+  pure $ FunctionLiteralExpression ((Data.List.NonEmpty.fromList binders) :. express) Untyped
 
 getEnv :: StateT ParserState (Parsec ZodaParseError String) [(NoBind Text, (Atom, NoBind SourcePosition))]
 getEnv = do

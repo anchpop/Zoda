@@ -12,6 +12,7 @@ import Nominal hiding ((.))
 import Data.Void
 import Data.Ratio
 import Parser
+import qualified Data.List.NonEmpty as NonEmpty
 
 data Metavariable = TypechecksOkay{-MetavariableApplication Int [Metavariable] 
                   | Metavariable Int 
@@ -73,9 +74,8 @@ eval modu = eval'
     eval' (AddExpression t1 t2                                     _ _) env = do_add modu (eval' t1 env) (eval' t2 env)
     eval' (TArrowNonbinding src dest                               _ _) env = with_fresh (\x -> PiTypeSem (eval' src env) (Clos ((NoBind (), (x, NoBind ())) :. dest) env))
     eval' (TArrowBinding src dest                                  _ _) env = PiTypeSem (eval' src env) (Clos dest env)
-    eval' (FunctionLiteralExpression ([] :. express)               _ _) env = eval' express env
-    eval' (FunctionLiteralExpression ((t:[]) :. express)           _ _) env = LamSem (Clos (t :. express) env)
-    eval' (FunctionLiteralExpression (((_, (a, _)):ts) :. express) _ _) env = LamSem (Clos ((NoBind (), (a, NoBind ())) :. (FunctionLiteralExpression (ts :. express) () ())) (env))
+    eval' (FunctionLiteralExpression ((t NonEmpty.:| []) :. express)        _ _) env = LamSem (Clos (t :. express) env)
+    eval' (FunctionLiteralExpression ((t NonEmpty.:| (t1:ts)) :. express)        _ _) env = LamSem (Clos (t :. (FunctionLiteralExpression ((t1 NonEmpty.:| ts) :. express) () ())) (env))
     eval' (FunctionApplicationExpression func args                 _ _) env = foldl' (do_ap modu) (eval' func env) $ fmap (flip eval' env) args
     eval' (UniverseExpression  i                                   _ _) _   = UniSem i
     eval' (TSigmaBinding    t1 t2                                  _ _) env = SigTypeSem (eval' t1 env) (Clos t2 env)
@@ -95,7 +95,7 @@ eval modu = eval'
 --   - one for neutral terms
 --   - one for types. 
 read_back_nf :: (Bindable m, Ord m, Show m) => JustifiedModule () () ph m () ->  Nf () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
-read_back_nf modu (Normal (PiTypeSem src dest) f)                 = FunctionLiteralExpression ([(NoBind (), (atom, NoBind ()))] :. (read_back_nf modu nf)) () ()
+read_back_nf modu (Normal (PiTypeSem src dest) f)                 = FunctionLiteralExpression ((NonEmpty.fromList [(NoBind (), (atom, NoBind ()))]) :. (read_back_nf modu nf)) () ()
                                                             where Clos ((_, (atom, _)) :. _) _ = dest
                                                                   arg = mk_var src atom 
                                                                   nf  = Normal (do_clos modu dest arg) (do_ap modu f arg)  
@@ -103,8 +103,6 @@ read_back_nf modu (Normal (SigTypeSem f s) p)                     = PairExpressi
                                                                       (read_back_nf modu (Normal f                                (do_fst modu p)))
                                                                       (read_back_nf modu (Normal (do_clos modu s (do_fst modu p)) (do_snd modu p))) () ()
 read_back_nf _    (Normal NatTypeSem (NatValueSem i))             = NumberLiteral (fromInteger i) () ()
---read_back_nf modu (Normal NatTypeSem (AddSem (NatValueSem i1) (NatValueSem i2)))  = 
---  read_back_nf modu (Normal NatTypeSem (NatValueSem $ i1 + i2))
 read_back_nf modu (Normal NatTypeSem (NeutralSem _ ne))           = read_back_ne modu ne
 read_back_nf modu (Normal (UniSem i) (PiTypeSem src dest))        = TArrowBinding
                                                                       (read_back_nf modu (Normal (UniSem i) src))
@@ -157,9 +155,9 @@ m @@ n = FunctionApplicationExpression m n () ()
 infixl 9 @@
 
 make_lam :: Nominal m1 => (Expression () () m2 () -> Expression () () m1 ()) -> Expression () () m1 ()
-make_lam         f = with_fresh         (\x -> FunctionLiteralExpression ([(NoBind (), (x, NoBind ()))] :. f (LambdaVariable ((), x) () ())) () ())
+make_lam         f = with_fresh         (\x -> FunctionLiteralExpression (NonEmpty.fromList ([(NoBind (), (x, NoBind ()))]) :. f (LambdaVariable ((), x) () ())) () ())
 make_lam_named :: Nominal m1 => String -> (Expression () () m2 () -> Expression () () m1 ()) -> Expression () () m1 ()
-make_lam_named n f = with_fresh_named n (\x -> FunctionLiteralExpression ([(NoBind (), (x, NoBind ()))] :. f (LambdaVariable ((), x) () ())) () ())
+make_lam_named n f = with_fresh_named n (\x -> FunctionLiteralExpression ((NonEmpty.fromList [(NoBind (), (x, NoBind ()))]) :. f (LambdaVariable ((), x) () ())) () ())
 
 normalize :: forall t p i ph m. (Bindable t, Bindable p, Bindable i, Bindable m, Ord m, Show m) => JustifiedModule t p ph m i -> SurfaceEnv t p (Map.Key ph m) i -> Expression t p (Map.Key ph m) i -> Expression t p (Map.Key ph m) i -> Expression () () (Map.Key ph m) ()
 normalize modu env term tp = read_back_nf modu' (Normal tp' term')
@@ -170,21 +168,6 @@ normalize modu env term tp = read_back_nf modu' (Normal tp' term')
         term' ::  Semantic () () (Map.Key ph m) ()
         term' = eval modu' (normalizeExprMetadata term) env' 
         modu' = fmap normalizeExprMetadata modu
-
-
-normalized :: Expression () () (Map.Key ph Text) ()
-normalized = normalize undefined testenv testterm testtype
-  where testterm :: Expression () () (Map.Key ph Text) ()
-        testterm = (make_lam $ \x -> (AddExpression (NumberLiteral 4 () ()) x () ())) @@ [NumberLiteral 1 () ()] --(make_lam $ \x -> (make_lam $ \y -> y @@ x)) @@ ((make_lam $ \x -> SuccSurf x) @@ ZeroSurf) @@ (make_lam $ \x -> SuccSurf x)
-        testtype = NatTypeExpression () () 
-        testenv  = []
-  
-
-listLookup :: Eq t => t -> [(t, a)] -> Maybe a
-listLookup _ [] = Nothing
-listLookup toLookup ((k, v):xs)
-    | k == toLookup = Just v
-    | otherwise = listLookup toLookup xs
 
 copyPropagated :: forall i p t m o. (Ord i, Bindable i, Bindable p, Bindable t, Nominal m) => Module t p m i -> (forall ph. JustifiedModule t p ph i i -> o) -> Either (ProductionError t p m i) o
 copyPropagated (Module _ declarations _) f = Map.withMap dUMap (\m -> f <$> dJmapToJustifiedModule m)

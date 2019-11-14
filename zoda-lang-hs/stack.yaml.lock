@@ -26,12 +26,12 @@ packages:
     version: 0.2.0.0
     git: https://github.com/anchpop/Nominal.git
     pantry-tree:
-      size: 1378
-      sha256: 2ff192510dc8f6b85cc284ff7c25c8043b8fe1f6cfaf103a2db17e0e8384e488
-    commit: ddff82855e8d2ffb55858dc0330cfc02efb1aa04
+      size: 1379
+      sha256: 7a53a4d2b51ec6945a7faa0490f92daecb1ca75b18af38dead60412d122fe423
+    commit: 6b06377d65fa26f450493a04df275b28db492ef1
   original:
     git: https://github.com/anchpop/Nominal.git
-    commit: ddff82855e8d2ffb55858dc0330cfc02efb1aa04
+    commit: 6b06377d65fa26f450493a04df275b28db492ef1
 snapshots:
 - completed:
     size: 414284

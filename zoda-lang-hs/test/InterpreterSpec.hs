@@ -19,7 +19,7 @@ import Interpreter
 
 test :: SpecWith ()
 test = parallel $ do
-  describe "CopyPropagatedProgramConverter.evaluateMain" $ do
+  describe "Interpreter.produceProgram" $ do
     it "evaluates simplest possible program" $ do
       let example = "module i `test module`\n\
                     \main = 3\n\
@@ -77,6 +77,16 @@ test = parallel $ do
                     \func = |a| (a + 4) \n\
                     \ho = |a| (|b| a.b)\n\
                     \main = func.(test.ho)\n\
+                    \"
+                    
+      (getRightZSE $ produceProgram example) `shouldBe` 8
+
+    it "evaluates functions with multiple arguments " $ do
+      let example = "module i `test module`\n\
+                    \test = 3 + 1 \n\
+                    \func = |a| (a + 4) \n\
+                    \ho = |a, b| (a.b)\n\
+                    \main = test.ho(func)\n\
                     \"
                     
       (getRightZSE $ produceProgram example) `shouldBe` 8

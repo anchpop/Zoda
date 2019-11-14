@@ -24,13 +24,13 @@ data Expression t p m i = ParenthesizedExpression (Expression t p m i)          
                         | FirstExpression (Expression t p m i)                                             t p 
                         | SecondExpression (Expression t p m i)                                            t p 
                         | PairExpression (Expression t p m i) (Expression t p m i)                         t p 
-                        | TSigmaBinding (Expression t p m i) (Bind (NoBind i, (Atom, NoBind p)) (Expression t p m i))    t p 
+                        | TSigmaBinding (Expression t p m i) (Bind (NoBind i, (Atom, NoBind p)) (Expression t p m i)) t p 
                         | UniverseExpression Integer                                                       t p 
                         | NumberLiteral Rational                                                           t p 
                         | AddExpression (Expression t p m i) (Expression t p m i)                          t p 
                         | ReferenceVariable i m                                                            t p 
                         | LambdaVariable (i, Atom)                                                         t p 
-                        | FunctionLiteralExpression (Bind [(NoBind i, (Atom, NoBind p))] (Expression t p m i))           t p 
+                        | FunctionLiteralExpression (Bind (NonEmpty (NoBind i, (Atom, NoBind p))) (Expression t p m i)) t p 
                         | FunctionApplicationExpression (Expression t p m i) [Expression t p m i]          t p 
                         | TArrowNonbinding (Expression t p m i)                    (Expression t p m i)    t p 
                         | TArrowBinding    (Expression t p m i) (Bind (NoBind i, (Atom, NoBind p)) (Expression t p m i)) t p
@@ -40,8 +40,8 @@ data Expression t p m i = ParenthesizedExpression (Expression t p m i)          
 
 
 data Tinydoc t p m i = Tinydoc Text p deriving (Show, Read, Eq, Ord, Generic, Typeable)
---data Identifier t p i = Identifier { getIdentifier :: i, getIdentifierSourcePos :: p } deriving (Show, Read, Eq, Ord, NominalSupport, NominalShow, Generic, Nominal, Typeable)
- 
+
+
 
 data Untyped = Untyped deriving (Show, Read, Eq, Ord, NominalSupport, NominalShow, Generic, Nominal, Bindable)
 
