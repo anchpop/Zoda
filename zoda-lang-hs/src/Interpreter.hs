@@ -53,13 +53,13 @@ do_clos :: forall m ph. (Bindable m, Ord m, Show m)
         -> Clos () () (Map.Key ph m) ()        -- ^ The closure to evaluate
         -> Semantic () () (Map.Key ph m) ()    -- ^ What to pass to the closure
         -> Semantic () () (Map.Key ph m) () -- ^ The evaluated closure
-do_clos modu (Clos ((_, (atom, _)) :. term) env) bound = eval modu term ((atom, bound) : env)
+do_clos modu (Clos (atom :. term) env) bound = eval modu term ((atom, bound) : env)
 
 
 mk_var :: Semantic t p ph i -> Atom -> Semantic t p ph i
 mk_var tp atom = NeutralSem tp (VarSem atom)
  
-
+ 
 -- |This converts the surface syntax into a semantic term with no beta redexes.
 eval :: forall ph m. (Bindable m, Ord m, Show m) => JustifiedModule () () ph m () -> Expression () () (Map.Key ph m) () -> SemanticEnv () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
 eval modu = eval'
@@ -72,13 +72,12 @@ eval modu = eval'
     eval' (NatTypeExpression                                       _ _) _   = NatTypeSem
     eval' (NumberLiteral i                                         _ _) _   = if denominator i == 1 then NatValueSem $ numerator i else error "We do not yet support fractional number literals!"
     eval' (AddExpression t1 t2                                     _ _) env = do_add modu (eval' t1 env) (eval' t2 env)
-    eval' (TArrowNonbinding src dest                               _ _) env = with_fresh (\x -> PiTypeSem (eval' src env) (Clos ((NoBind (), (x, NoBind ())) :. dest) env))
-    eval' (TArrowBinding src dest                                  _ _) env = PiTypeSem (eval' src env) (Clos dest env)
-    eval' (FunctionLiteralExpression ((t NonEmpty.:| []) :. express)      _ _) env = LamSem (Clos (t :. express) env)
-    eval' (FunctionLiteralExpression ((t NonEmpty.:| (t1:ts)) :. express) _ _) env = LamSem (Clos (t :. (FunctionLiteralExpression ((t1 NonEmpty.:| ts) :. express) () ())) (env))
+    eval' (TArrowBinding t        _ _)                                  env = evalPi env t
+    eval' (FunctionLiteralExpression (((_, (a, _)) NonEmpty.:| []) :. express)      _ _) env = LamSem (Clos (a :. express) env)
+    eval' (FunctionLiteralExpression (((_, (a, _)) NonEmpty.:| (t1:ts)) :. express) _ _) env = LamSem (Clos (a :. (FunctionLiteralExpression ((t1 NonEmpty.:| ts) :. express) () ())) (env))
     eval' (FunctionApplicationExpression func args                 _ _) env = foldl' (do_ap modu) (eval' func env) $ fmap (flip eval' env) args
     eval' (UniverseExpression  i                                   _ _) _   = UniSem i
-    eval' (TSigmaBinding    t1 t2                                  _ _) env = SigTypeSem (eval' t1 env) (Clos t2 env)
+    eval' (TSigmaBinding    t1 ((_, (a, _)) :. t2)                                  _ _) env = SigTypeSem (eval' t1 env) (Clos (a :. t2) env)
     eval' (PairExpression   t1 t2                                  _ _) env = PairSem (eval' t1 env) (eval' t2 env)
     eval' (FirstExpression  t                                      _ _) env = do_fst modu (eval' t env)
     eval' (SecondExpression t                                      _ _) env = do_snd modu (eval' t env)
@@ -86,8 +85,12 @@ eval modu = eval'
     eval' (Annotation  t _                                         _ _) env = eval' t env
     eval' (ReferenceVariable _ m                                   _ _) env = eval' (m `Map.lookup` modu) env
 
+    evalPi env (Scope ((Just (_, (a, _)), NoBind src) :. dest)) =  PiTypeSem (eval' src env) (Clos (a :. (TArrowBinding dest () ())) env)
+    evalPi env (Scope ((Nothing         , NoBind src) :. dest)) =  PiTypeSem (eval' src env) (Clos ((with_fresh id) :. (TArrowBinding dest () ())) env)
+    evalPi env (Pi    ((Just (_, (a, _)), NoBind src) :. dest)) =  PiTypeSem (eval' src env) (Clos (a :.                              dest       ) env)
+    evalPi env (Pi    ((Nothing         , NoBind src) :. dest)) =  PiTypeSem (eval' src env) (Clos ((with_fresh id) :.                dest       ) env)
 
-
+    
 -- |This is the "quotation" side of the algorithm. 
 -- It is a function converting semantic terms back to syntactic ones.
 -- These functions are the "read back" functions. We define 3 free forms of read back: 
@@ -96,7 +99,7 @@ eval modu = eval'
 --   - one for types. 
 read_back_nf :: (Bindable m, Ord m, Show m) => JustifiedModule () () ph m () ->  Nf () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
 read_back_nf modu (Normal (PiTypeSem src dest) f)                 = FunctionLiteralExpression ((NonEmpty.fromList [(NoBind (), (atom, NoBind ()))]) :. (read_back_nf modu nf)) () ()
-                                                            where Clos ((_, (atom, _)) :. _) _ = dest
+                                                            where Clos (atom :. _) _ = dest
                                                                   arg = mk_var src atom 
                                                                   nf  = Normal (do_clos modu dest arg) (do_ap modu f arg)  
 read_back_nf modu (Normal (SigTypeSem f s) p)                     = PairExpression
@@ -104,10 +107,11 @@ read_back_nf modu (Normal (SigTypeSem f s) p)                     = PairExpressi
                                                                       (read_back_nf modu (Normal (do_clos modu s (do_fst modu p)) (do_snd modu p))) () ()
 read_back_nf _    (Normal NatTypeSem (NatValueSem i))             = NumberLiteral (fromInteger i) () ()
 read_back_nf modu (Normal NatTypeSem (NeutralSem _ ne))           = read_back_ne modu ne
-read_back_nf modu (Normal (UniSem i) (PiTypeSem src dest))        = TArrowBinding
-                                                                      (read_back_nf modu (Normal (UniSem i) src))
-                                                                      ((NoBind (), (atom, NoBind ())) :. (read_back_nf modu (Normal (UniSem i) (do_clos modu dest var)))) () ()
-                                                                      where Clos ((_, (atom, _)) :. _) _ = dest
+read_back_nf modu (Normal (UniSem i) (PiTypeSem src dest))        = TArrowBinding (Pi ((
+                                                                      Just (NoBind (), (atom, NoBind ()))
+                                                                    , NoBind (read_back_nf modu (Normal (UniSem i) src))
+                                                                    ) :. (read_back_nf modu (Normal (UniSem i) (do_clos modu dest var))))) () ()
+                                                                      where Clos (atom :. _) _ = dest
                                                                             var = mk_var src atom
 read_back_nf modu (Normal (NeutralSem _ _) (NeutralSem _ ne)) = read_back_ne modu ne
 read_back_nf _     v                                          = error $ "Ill-typed read_back_nf - " <> show v
@@ -119,20 +123,20 @@ read_back_nf _     v                                          = error $ "Ill-typ
 read_back_tp :: forall m ph. (Bindable m, Ord m, Show m) => JustifiedModule () () ph m () -> Semantic () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
 read_back_tp modu (NeutralSem _ term)  = read_back_ne modu term
 read_back_tp _    NatTypeSem           = NatTypeExpression () ()
-read_back_tp modu (PiTypeSem src dest) = TArrowBinding (read_back_tp modu src) ((NoBind (), (atom, NoBind ())) :. (read_back_tp modu (do_clos modu dest var))) () ()
-    where Clos ((_, (atom, _)) :. _) _ = dest
+read_back_tp modu (PiTypeSem src dest) = TArrowBinding (Pi (((Just (NoBind (), (atom, NoBind ()))), NoBind $ read_back_tp modu src) :. (read_back_tp modu (do_clos modu dest var)))) () () --(Pi (((NoBind (), (atom, NoBind ())) :. (read_back_tp modu (do_clos modu dest var)))) (read_back_tp modu src)) () ()
+    where Clos (atom :. _) _ = dest
           var = mk_var src atom
 read_back_tp modu (SigTypeSem f s)     = TSigmaBinding (read_back_tp modu f) ((NoBind (), (atom, NoBind ())) :. (read_back_tp modu (do_clos modu s var))) () ()
-    where Clos ((_, (atom, _)) :. _) _ = s
+    where Clos (atom :. _) _ = s
           var = mk_var f atom 
 read_back_tp _ (UniSem k)              = UniverseExpression k () ()
 read_back_tp _ _                       = error "Nbe_failed - Not a type in read_back_tp"
 
 read_back_ne :: forall m ph.  (Bindable m, Ord m, Show m) => JustifiedModule () () ph m () -> Ne () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
-read_back_ne _    (VarSem x)     = LambdaVariable ((), x) () ()
-read_back_ne modu (ApSem ne arg) = FunctionApplicationExpression (read_back_ne modu ne) (read_back_nf modu arg NonEmpty.:| []) () ()
-read_back_ne modu (FstSem ne)    = FirstExpression (read_back_ne modu ne) () ()
-read_back_ne modu (SndSem ne)    = SecondExpression (read_back_ne modu ne) () ()
+read_back_ne _    (VarSem x)        = LambdaVariable ((), x) () ()
+read_back_ne modu (ApSem ne arg)    = FunctionApplicationExpression (read_back_ne modu ne) (read_back_nf modu arg NonEmpty.:| []) () ()
+read_back_ne modu (FstSem ne)       = FirstExpression (read_back_ne modu ne) () ()
+read_back_ne modu (SndSem ne)       = SecondExpression (read_back_ne modu ne) () ()
 read_back_ne modu (AddSem1 nf ne)   = AddExpression (read_back_nf modu nf) (read_back_ne modu ne) () ()
 read_back_ne modu (AddSem2 ne nf)   = AddExpression (read_back_ne modu ne) (read_back_nf modu nf) () ()
 read_back_ne modu (AddSem3 ne1 ne2) = AddExpression (read_back_ne modu ne1) (read_back_ne modu ne2) () ()
@@ -169,7 +173,7 @@ normalize modu env term tp = read_back_nf modu' (Normal tp' term')
         term' = eval modu' (normalizeExprMetadata term) env' 
         modu' = fmap normalizeExprMetadata modu
 
-copyPropagated :: forall i p t m o. (Ord i, Bindable i, Bindable p, Bindable t, Nominal m) => Module t p m i -> (forall ph. JustifiedModule t p ph i i -> o) -> Either (ProductionError t p m i) o
+copyPropagated :: forall i p t m o. (Ord i, Bindable i, Bindable p, Bindable t, Bindable m) => Module t p m i -> (forall ph. JustifiedModule t p ph i i -> o) -> Either (ProductionError t p m i) o
 copyPropagated (Module _ declarations _) f = Map.withMap dUMap (\m -> f <$> dJmapToJustifiedModule m)
   where
     dUMap = UMap.fromList (fmap (\(Declaration identifier expression _) -> (identifier, expression)) declarations)

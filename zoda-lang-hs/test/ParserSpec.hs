@@ -70,15 +70,17 @@ test = parallel $ do
           ]) :. (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 11 1 12))))
           Untyped (SourcePosition "no_file" 1 1 1 12)
 
-
-
     it "parses function applications" $ do
       parseSomething "3.b" expressionP `shouldParseTo` FunctionApplicationExpression (ReferenceVariable "b" () Untyped (SourcePosition "no_file" 1 3 1 4))
         (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 1 1 2) NonEmpty.:| [])
         Untyped (SourcePosition "no_file" 1 1 1 4)
+
+    it "parses telescopes applications" $ do
+      parseSomething "(a : 3, b : a) -> b" expressionP `shouldParseTo` with_fresh_named "a" (\a -> with_fresh_named "b" (\b -> (TArrowBinding (Scope ((Just (NoBind "a",(a,NoBind (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 2, _sourceLineEnd = 1, _sourceColumnEnd = 3}))),NoBind (NumberLiteral (3 % 1) Untyped (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 6, _sourceLineEnd = 1, _sourceColumnEnd = 7}))) :. Pi ((Just (NoBind "b",(b,NoBind (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 9, _sourceLineEnd = 1, _sourceColumnEnd = 10}))),NoBind (LambdaVariable ("a",a) Untyped (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 13, _sourceLineEnd = 1, _sourceColumnEnd = 14}))) :. LambdaVariable ("b",b) Untyped (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 19, _sourceLineEnd = 1, _sourceColumnEnd = 20})))) Untyped  (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 1, _sourceLineEnd = 1, _sourceColumnEnd = 20}))))
 
   describe "Parser.declarationP" $ do
     it "allows assignment to number literals" $ do
       parseSomething "i = 3" declarationP `shouldParseTo` Declaration
         "i" (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 5 1 6))
         (SourcePosition "no_file" 1 1 1 6)
+

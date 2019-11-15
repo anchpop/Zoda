@@ -14,6 +14,7 @@ import qualified Data.Set as Set
 import qualified Data.List as List
 import Text.Megaparsec.Debug
 import Control.Monad.Combinators.Expr
+import qualified Data.Maybe as Maybe
 
 import Nominal hiding ((.))
 
@@ -66,16 +67,12 @@ expressionP = expParser
                           [InfixR . try $ do 
                             padded $ string "+"
                             pure (\expr1 expr2 -> AddExpression expr1 expr2 Untyped (combineSourcePos expr1 expr2))
-                          ],
-                          [InfixR . try $ do
-                            padded $ string "->"
-                            pure (\expr1 expr2 -> TArrowNonbinding expr1 expr2 Untyped (combineSourcePos expr1 expr2))
                           ]
                         ]
                         
     basicP = foldl' (<|>) empty basicParsers
     leftRecP = foldl' (<|>) empty leftRecParsers
-    basicParsers = [functionLiteralP, numbP, parenthesizedExpression, identifierExpP, tarrow2]
+    basicParsers = [tarrow2, functionLiteralP, numbP, parenthesizedExpression, identifierExpP]
     leftRecParsers = [funcApp, annotation]
     parenthesizedExpression = try $ do
       char '('
@@ -86,14 +83,30 @@ expressionP = expParser
       numb <- numberLiteralP
       pure (NumberLiteral numb Untyped)
     tarrow2 = try $ do
-      (name, namepos) <- sourcePosWrapper identifierP
-      let atom = with_fresh_named (unpack name) $ \(x :: Atom) -> x
-      many separatorChar
-      string ":"
-      expr1 <- padded expressionP
+      char '('
+      s <- get
+      binders <- fmap (NonEmpty.fromList) $ (binder1P <|> binder2P) `sepBy1` (padded $ string ",")
+      char ')'
       padded $ string "->"
-      expr2 <- (withEnvInState [(NoBind name, (atom, NoBind namepos))] expressionP)
-      pure (TArrowBinding expr1 ((NoBind name, (atom, NoBind namepos)) :. expr2) Untyped) 
+      expr2 <- expressionP
+      put s
+      
+      pure (TArrowBinding (makeTelescope binders expr2) Untyped) 
+        where 
+          makeTelescope (a NonEmpty.:| [])        expr2 = Pi (a :. expr2)
+          makeTelescope (a NonEmpty.:| (a1 : as)) expr2 = Scope (a :. (makeTelescope (a1 NonEmpty.:| as) expr2))
+          binder1P = do 
+            (name, namepos) <- padded $ sourcePosWrapper identifierP
+            let atom = with_fresh_named (unpack name) id
+            modify ([(NoBind name, (atom, NoBind namepos))]:)
+            many separatorChar
+            string ":"
+            expr <- padded expressionP
+            pure (Just (NoBind name, (atom, NoBind namepos)), NoBind expr)
+          binder2P = do 
+            padded $ string ","
+            expr <- padded expressionP
+            pure (Nothing, NoBind expr)
     
 
     -- these parsers are left recursive, meaning they start with trying to return an expression and return an expression
@@ -187,11 +200,10 @@ identifierP = do
 
 identifierExpP :: ASTParser Expression
 identifierExpP = do (ident, _) <- sourcePosWrapper identifierP
-
                     env  <- getEnv
                     case (NoBind ident) `lookup` env of
-                      Just (fresh_name, _) -> pure $ LambdaVariable (ident, fresh_name) Untyped 
-                      Nothing         -> pure $ ReferenceVariable ident () Untyped
+                      Just (atom, _) -> pure $ LambdaVariable (ident, atom) Untyped 
+                      Nothing        -> pure $ ReferenceVariable ident () Untyped
 
 
 identifierCharacter :: Parser Char
@@ -202,8 +214,8 @@ type Parser a = StateT ParserState (Parsec ZodaParseError String) a
 type ASTParser a = Parser (SourcePosition -> a Untyped SourcePosition () Text)
 data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
 instance Show SourcePosition where
-  show (SourcePosition _ _ _ _ _) = ""
-  --show (SourcePosition f l1 c1 l2 c2) = --"(SourcePosition \"" <> f <> "\" " <> (show l1) <> " " <> (show c1) <> " " <> (show l2) <> " " <> (show c2) <> ")"
+  --show (SourcePosition _ _ _ _ _) = ""
+  show (SourcePosition f l1 c1 l2 c2) = "(SourcePosition \"" <> f <> "\" " <> (show l1) <> " " <> (show c1) <> " " <> (show l2) <> " " <> (show c2) <> ")"
 
 sourcePosWrapper :: Parser (SourcePosition -> a) -> Parser a
 sourcePosWrapper f = do
@@ -256,8 +268,7 @@ getSourcePosFromExpression (ReferenceVariable _ _ _ p ) = p
 getSourcePosFromExpression (LambdaVariable _ _ p ) = p 
 getSourcePosFromExpression (FunctionLiteralExpression _ _ p ) = p 
 getSourcePosFromExpression (FunctionApplicationExpression _ _ _ p ) = p 
-getSourcePosFromExpression (TArrowNonbinding _ _ _ p ) = p 
-getSourcePosFromExpression (TArrowBinding _ _ _ p ) = p 
+getSourcePosFromExpression (TArrowBinding _ _ p ) = p 
 getSourcePosFromExpression (Annotation _ _ _ p ) = p 
 getSourcePosFromExpression (FirstExpression _ _ p ) = p  
 getSourcePosFromExpression (SecondExpression _ _ p) = p
@@ -274,3 +285,6 @@ combineSourcePos expr1 expr2 = SourcePosition filePath sourceLineStart sourceCol
 
 noNewlineOrChars :: (MonadParsec e s m, Token s ~ Char) => [Char] -> m (Token s)
 noNewlineOrChars c = noneOf ('\n' : c)
+
+testtype :: Expression Untyped SourcePosition () Text
+testtype = with_fresh_named "a" (\a -> with_fresh_named "b" (\b -> (TArrowBinding (Scope ((Just (NoBind "a",(a,NoBind (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 2, _sourceLineEnd = 1, _sourceColumnEnd = 3}))),NoBind (NumberLiteral (3 % 1) Untyped (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 6, _sourceLineEnd = 1, _sourceColumnEnd = 7}))) :. Pi ((Just (NoBind "b",(b,NoBind (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 9, _sourceLineEnd = 1, _sourceColumnEnd = 10}))),NoBind (LambdaVariable ("a",a) Untyped (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 13, _sourceLineEnd = 1, _sourceColumnEnd = 14}))) :. LambdaVariable ("b",b) Untyped (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 19, _sourceLineEnd = 1, _sourceColumnEnd = 20})))) Untyped  (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 19, _sourceLineEnd = 1, _sourceColumnEnd = 20}))))
