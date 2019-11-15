@@ -159,15 +159,21 @@ numberLiteralP = try
 functionLiteralP :: ASTParser Expression
 functionLiteralP = do
   char '|'
-  identifierInfo <- padded $ (sourcePosWrapper identifierP) `sepBy1` (padded $ char ',')
+  identifierInfo <- padded $ argument `sepBy1` (padded $ char ',')
   char '|'
   some separatorChar
-  let identifiers = map fst identifierInfo
+  let identifiers = map (fst . fst) identifierInfo
       duplicates = List.length (Set.fromList identifiers) < List.length identifiers
   when duplicates (customFailure DuplicateFunctionArgumentNames)
-  let binders = map (\(name, pos) -> with_fresh_named (unpack name) (\(x :: Atom) -> (NoBind name, (x, NoBind pos)))) identifierInfo
-  express <- (withEnvInState binders expressionP)
+  let binders = fmap (\((name, pos), typ) -> with_fresh_named (unpack name) (\(x :: Atom) -> ((NoBind name, (x, NoBind pos)), NoBind typ))) identifierInfo
+  express <- (withEnvInState (fmap fst binders) expressionP)
   pure $ FunctionLiteralExpression ((NonEmpty.fromList binders) :. express) Untyped
+  where argument = do
+                  ident <- sourcePosWrapper identifierP
+                  typ <- optional $ do 
+                    padded $ string ":"
+                    expressionP
+                  pure (ident, typ)
 
 getEnv :: StateT ParserState (Parsec ZodaParseError String) [(NoBind Text, (Atom, NoBind SourcePosition))]
 getEnv = do

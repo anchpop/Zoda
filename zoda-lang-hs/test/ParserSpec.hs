@@ -64,9 +64,9 @@ test = parallel $ do
     it "parses functions" $ do
       parseSomething "|a, b, c| 3" expressionP `shouldParseTo` FunctionLiteralExpression
           (with_fresh_named "a" $ \a -> with_fresh_named "b" $ \b -> with_fresh_named "c" $ \c ->   
-          (((NoBind "a", (a, NoBind $ SourcePosition "no_file" 1 2 1 3)) NonEmpty.:|
-          [ (NoBind "b", (b, NoBind $  SourcePosition "no_file" 1 5 1 6))
-          , (NoBind "c", (c, NoBind $ SourcePosition "no_file" 1 8 1 9))
+          ((((NoBind "a", (a, NoBind $ SourcePosition "no_file" 1 2 1 3)), NoBind Nothing) NonEmpty.:|
+          [ ((NoBind "b", (b, NoBind $  SourcePosition "no_file" 1 5 1 6)), NoBind Nothing)
+          , ((NoBind "c", (c, NoBind $ SourcePosition "no_file" 1 8 1 9)), NoBind Nothing)
           ]) :. (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 11 1 12))))
           Untyped (SourcePosition "no_file" 1 1 1 12)
 

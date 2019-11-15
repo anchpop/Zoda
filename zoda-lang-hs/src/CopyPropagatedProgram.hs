@@ -84,7 +84,7 @@ mapExpr1 _ (NumberLiteral i1 t p)                        = NumberLiteral i1 t p
 mapExpr1 f (AddExpression e1 e2 t p)                     = AddExpression (mapExpr1 f e1) (mapExpr1 f e2) t p
 mapExpr1 f (ReferenceVariable i m t p)                   = ReferenceVariable (f i) m t p 
 mapExpr1 f (LambdaVariable (i, a) t p)                   = LambdaVariable ((f i), a) t p
-mapExpr1 f (FunctionLiteralExpression (a :. e) t p)      = FunctionLiteralExpression ((fmap (Data.Bifunctor.first (fmap f)) a) :. (mapExpr1 f e)) t p
+mapExpr1 f (FunctionLiteralExpression (a :. e) t p)      = FunctionLiteralExpression (fmap (\((i, var), t) -> ((fmap f i, var), (fmap . fmap) (mapExpr1 f) t)) a :. (mapExpr1 f e)) t p
 mapExpr1 f (FunctionApplicationExpression func args t p) = FunctionApplicationExpression (mapExpr1 f func) (fmap (mapExpr1 f) args) t p
 mapExpr1 f (TArrowBinding telescope t p)                 = TArrowBinding (mapTelescope1 f telescope) t p
 mapExpr1 f (Annotation e1 e2 t p)                        = Annotation (mapExpr1 f e1) (mapExpr1 f e2) t p
@@ -102,7 +102,7 @@ mapExpr2 _ (NumberLiteral i1 t p)                        = NumberLiteral i1 t p
 mapExpr2 f (AddExpression e1 e2 t p)                     = AddExpression (mapExpr2 f e1) (mapExpr2 f e2) t p
 mapExpr2 f (ReferenceVariable i m t p)                   = ReferenceVariable i (f m) t p 
 mapExpr2 _ (LambdaVariable i t p)                        = LambdaVariable i t p
-mapExpr2 f (FunctionLiteralExpression (a :. e) t p)      = FunctionLiteralExpression (a :. (mapExpr2 f e)) t p
+mapExpr2 f (FunctionLiteralExpression (a :. e) t p)      = FunctionLiteralExpression (fmap (\(e, t) -> (e, (fmap . fmap) (mapExpr2 f) t)) a :. (mapExpr2 f e)) t p
 mapExpr2 f (FunctionApplicationExpression func args t p) = FunctionApplicationExpression (mapExpr2 f func) (fmap (mapExpr2 f) args) t p
 mapExpr2 f (TArrowBinding telescope t p)                 = TArrowBinding (mapTelescope2 f telescope) t p
 mapExpr2 f (Annotation e1 e2 t p)                        = Annotation (mapExpr2 f e1) (mapExpr2 f e2) t p
@@ -140,7 +140,12 @@ traverseExpr2 f (ReferenceVariable i m t p)                   = do
 traverseExpr2 _ (LambdaVariable i t p)                        = pure $ LambdaVariable i t p
 traverseExpr2 f (FunctionLiteralExpression (a :. e) t p)      = do
   e' <- traverseExpr2 f e
-  pure $ FunctionLiteralExpression (a :. e') t p
+  a' <- for a $ \case 
+    (e, NoBind (Just t)) -> do
+      t' <- traverseExpr2 f t
+      pure (e, NoBind (Just t'))
+    (e, NoBind Nothing) -> pure (e, NoBind Nothing)  
+  pure $ FunctionLiteralExpression (a' :. e') t p
 traverseExpr2 f (FunctionApplicationExpression func args t p) = do
   func' <- traverseExpr2 f func
   args' <- traverse (traverseExpr2 f) args 
@@ -180,7 +185,7 @@ copyIdentifierOntoMetadata (NumberLiteral i1 t p)                        = Numbe
 copyIdentifierOntoMetadata (AddExpression e1 e2 t p)                     = AddExpression (copyIdentifierOntoMetadata e1) (copyIdentifierOntoMetadata e2) t p
 copyIdentifierOntoMetadata (ReferenceVariable i _ t p)                   = ReferenceVariable i (i, p) t p 
 copyIdentifierOntoMetadata (LambdaVariable i t p)                        = LambdaVariable i t p
-copyIdentifierOntoMetadata (FunctionLiteralExpression (a :. e) t p)      = FunctionLiteralExpression (a :. (copyIdentifierOntoMetadata e)) t p
+copyIdentifierOntoMetadata (FunctionLiteralExpression (a :. e) t p)      = FunctionLiteralExpression (fmap (\(e, t) -> (e, (fmap . fmap) copyIdentifierOntoMetadata t)) a :. (copyIdentifierOntoMetadata e)) t p
 copyIdentifierOntoMetadata (FunctionApplicationExpression func args t p) = FunctionApplicationExpression (copyIdentifierOntoMetadata func) (fmap (copyIdentifierOntoMetadata) args) t p
 copyIdentifierOntoMetadata (TArrowBinding telescope t p)                 = TArrowBinding (copyIdentifierOntoTelescopeMetadata telescope) t p
 copyIdentifierOntoMetadata (Annotation e1 e2 t p)                        = Annotation (copyIdentifierOntoMetadata e1) (copyIdentifierOntoMetadata e2) t p
@@ -202,7 +207,7 @@ mapExpr3 f (NumberLiteral i1 t p)                        = NumberLiteral i1 t (f
 mapExpr3 f (AddExpression e1 e2 t p)                     = AddExpression (mapExpr3 f e1) (mapExpr3 f e2) t (f p)
 mapExpr3 f (ReferenceVariable i m t p)                   = ReferenceVariable i m t (f p) 
 mapExpr3 f (LambdaVariable i t p)                        = LambdaVariable i t (f p)
-mapExpr3 f (FunctionLiteralExpression (a :. e) t p)      = FunctionLiteralExpression ((fmap (Data.Bifunctor.second (Data.Bifunctor.second (fmap f))) a) :. (mapExpr3 f e)) t (f p)
+mapExpr3 f (FunctionLiteralExpression (a :. e) t p)      = FunctionLiteralExpression ((fmap (\((i, (atom, p)), t) -> ((i, (atom, fmap f p)), (fmap . fmap) (mapExpr3 f) t)) a) :. (mapExpr3 f e)) t (f p)
 mapExpr3 f (FunctionApplicationExpression func args t p) = FunctionApplicationExpression (mapExpr3 f func) (fmap (mapExpr3 f) args) t (f p)
 mapExpr3 f (TArrowBinding telescope t p)                 = TArrowBinding (mapTelescope3 f telescope) t (f p)
 mapExpr3 f (Annotation e1 e2 t p)                        = Annotation (mapExpr3 f e1) (mapExpr3 f e2) t (f p)
@@ -220,7 +225,7 @@ mapExpr4 f (NumberLiteral i1 t p)                        = NumberLiteral i1 (f t
 mapExpr4 f (AddExpression e1 e2 t p)                     = AddExpression (mapExpr4 f e1) (mapExpr4 f e2) (f t) p
 mapExpr4 f (ReferenceVariable i m t p)                   = ReferenceVariable i m (f t) p 
 mapExpr4 f (LambdaVariable i t p)                        = LambdaVariable i (f t) p
-mapExpr4 f (FunctionLiteralExpression (a :. e) t p)      = FunctionLiteralExpression (a :. (mapExpr4 f e)) (f t) p
+mapExpr4 f (FunctionLiteralExpression (a :. e) t p)      = FunctionLiteralExpression (fmap (\(e, NoBind t) -> (e, NoBind $ fmap (mapExpr4 f) t)) a :. (mapExpr4 f e)) (f t) p
 mapExpr4 f (FunctionApplicationExpression func args t p) = FunctionApplicationExpression (mapExpr4 f func) (fmap (mapExpr4 f) args) (f t) p
 mapExpr4 f (TArrowBinding telescope t p)                 = TArrowBinding (mapTelescope4 f telescope) (f t) p
 mapExpr4 f (Annotation e1 e2 t p)                        = Annotation (mapExpr4 f e1) (mapExpr4 f e2) (f t) p

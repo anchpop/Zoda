@@ -73,8 +73,8 @@ eval modu = eval'
     eval' (NumberLiteral i                                         _ _) _   = if denominator i == 1 then NatValueSem $ numerator i else error "We do not yet support fractional number literals!"
     eval' (AddExpression t1 t2                                     _ _) env = do_add modu (eval' t1 env) (eval' t2 env)
     eval' (TArrowBinding t        _ _)                                  env = evalPi env t
-    eval' (FunctionLiteralExpression (((_, (a, _)) NonEmpty.:| []) :. express)      _ _) env = LamSem (Clos (a :. express) env)
-    eval' (FunctionLiteralExpression (((_, (a, _)) NonEmpty.:| (t1:ts)) :. express) _ _) env = LamSem (Clos (a :. (FunctionLiteralExpression ((t1 NonEmpty.:| ts) :. express) () ())) (env))
+    eval' (FunctionLiteralExpression ((((_, (a, _)), _) NonEmpty.:| []) :. express)      _ _) env = LamSem (Clos (a :. express) env)
+    eval' (FunctionLiteralExpression ((((_, (a, _)), _) NonEmpty.:| (t1:ts)) :. express) _ _) env = LamSem (Clos (a :. (FunctionLiteralExpression ((t1 NonEmpty.:| ts) :. express) () ())) (env))
     eval' (FunctionApplicationExpression func args                 _ _) env = foldl' (do_ap modu) (eval' func env) $ fmap (flip eval' env) args
     eval' (UniverseExpression  i                                   _ _) _   = UniSem i
     eval' (TSigmaBinding    t1 ((_, (a, _)) :. t2)                                  _ _) env = SigTypeSem (eval' t1 env) (Clos (a :. t2) env)
@@ -98,7 +98,7 @@ eval modu = eval'
 --   - one for neutral terms
 --   - one for types. 
 read_back_nf :: (Bindable m, Ord m, Show m) => JustifiedModule () () ph m () ->  Nf () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
-read_back_nf modu (Normal (PiTypeSem src dest) f)                 = FunctionLiteralExpression ((NonEmpty.fromList [(NoBind (), (atom, NoBind ()))]) :. (read_back_nf modu nf)) () ()
+read_back_nf modu (Normal (PiTypeSem src dest) f)                 = FunctionLiteralExpression ((NonEmpty.fromList [((NoBind (), (atom, NoBind ())), NoBind Nothing)]) :. (read_back_nf modu nf)) () ()
                                                             where Clos (atom :. _) _ = dest
                                                                   arg = mk_var src atom 
                                                                   nf  = Normal (do_clos modu dest arg) (do_ap modu f arg)  
@@ -157,11 +157,6 @@ make_initial_env modu ((atom, t):env) = (atom, d):env'
 (@@) :: Expression () () m i -> (NonEmpty.NonEmpty (Expression () () m i)) -> Expression () () m i
 m @@ n = FunctionApplicationExpression m n () ()
 infixl 9 @@
-
-make_lam :: Nominal m1 => (Expression () () m2 () -> Expression () () m1 ()) -> Expression () () m1 ()
-make_lam         f = with_fresh         (\x -> FunctionLiteralExpression (NonEmpty.fromList ([(NoBind (), (x, NoBind ()))]) :. f (LambdaVariable ((), x) () ())) () ())
-make_lam_named :: Nominal m1 => String -> (Expression () () m2 () -> Expression () () m1 ()) -> Expression () () m1 ()
-make_lam_named n f = with_fresh_named n (\x -> FunctionLiteralExpression ((NonEmpty.fromList [(NoBind (), (x, NoBind ()))]) :. f (LambdaVariable ((), x) () ())) () ())
 
 normalize :: forall t p i ph m. (Bindable t, Bindable p, Bindable i, Bindable m, Ord m, Show m) => JustifiedModule t p ph m i -> SurfaceEnv t p (Map.Key ph m) i -> Expression t p (Map.Key ph m) i -> Expression t p (Map.Key ph m) i -> Expression () () (Map.Key ph m) ()
 normalize modu env term tp = read_back_nf modu' (Normal tp' term')

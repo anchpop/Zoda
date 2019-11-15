@@ -20,19 +20,19 @@ data ModuleHeader t p m i = ModuleHeader i (Tinydoc t p m i) p deriving (Show, R
 
 data Declaration t p m i = Declaration i (Expression t p m i) p deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal, Typeable)
 
-data Expression t p m i = ParenthesizedExpression (Expression t p m i)                                                  t p 
-                        | FirstExpression (Expression t p m i)                                                          t p 
-                        | SecondExpression (Expression t p m i)                                                         t p 
-                        | PairExpression (Expression t p m i) (Expression t p m i)                                      t p 
+data Expression t p m i = ParenthesizedExpression       (Expression t p m i)                                            t p 
+                        | FirstExpression               (Expression t p m i)                                            t p 
+                        | SecondExpression              (Expression t p m i)                                            t p 
+                        | PairExpression                (Expression t p m i)           (Expression t p m i)             t p 
                         | TSigmaBinding (Expression t p m i) (Bind (NoBind i, (Atom, NoBind p)) (Expression t p m i))   t p 
                         | UniverseExpression Integer                                                                    t p 
                         | NumberLiteral Rational                                                                        t p 
-                        | AddExpression (Expression t p m i) (Expression t p m i)                                       t p 
+                        | AddExpression                 (Expression t p m i)           (Expression t p m i)             t p 
                         | ReferenceVariable i m                                                                         t p 
                         | LambdaVariable (i, Atom)                                                                      t p 
-                        | FunctionLiteralExpression (Bind (NonEmpty (NoBind i, (Atom, NoBind p))) (Expression t p m i)) t p 
+                        | FunctionLiteralExpression (Bind (NonEmpty ((NoBind i, (Atom, NoBind p)), NoBind (Maybe (Expression t p m i)))) (Expression t p m i)) t p 
                         | FunctionApplicationExpression (Expression t p m i) (NonEmpty (Expression t p m i))            t p 
-                        | TArrowBinding (Telescope t p m i)                                                             t p
+                        | TArrowBinding                 (Telescope  t p m i)                                            t p
                         | Annotation                    (Expression t p m i)           (Expression t p m i)             t p 
                         | NatTypeExpression                                                                             t p 
                         deriving (Show, Eq, Typeable, NominalSupport, NominalShow, Generic, Nominal)
