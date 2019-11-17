@@ -58,20 +58,17 @@ test = parallel $ do
       parseSomething "3" expressionP `shouldParseTo` (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 1 1 2)) 
 
     it "parses identifiers" $ do
-      parseSomething "test" expressionP `shouldParseTo` (ReferenceVariable "test" () Untyped (SourcePosition "no_file" 1 1 1 5))
+      parseSomething "test" expressionP `shouldParseTo` (ReferenceVariable "test" ("test", SourcePosition "no_file" 1 1 1 5) Untyped (SourcePosition "no_file" 1 1 1 5))
 
 
-    it "parses functions" $ do
-      parseSomething "|a, b, c| 3" expressionP `shouldParseTo` FunctionLiteralExpression
-          (with_fresh_named "a" $ \a -> with_fresh_named "b" $ \b -> with_fresh_named "c" $ \c ->   
-          ((((NoBind "a", (a, NoBind $ SourcePosition "no_file" 1 2 1 3)), NoBind Nothing) NonEmpty.:|
-          [ ((NoBind "b", (b, NoBind $  SourcePosition "no_file" 1 5 1 6)), NoBind Nothing)
-          , ((NoBind "c", (c, NoBind $ SourcePosition "no_file" 1 8 1 9)), NoBind Nothing)
-          ]) :. (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 11 1 12))))
-          Untyped (SourcePosition "no_file" 1 1 1 12)
+    it "parses single argument functions" $ do
+      parseSomething "|a : 0| a" expressionP `shouldParseTo` (with_fresh_named "a" $ \a -> FunctionLiteralExpression (LastArg (((NoBind "a",(a,NoBind (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 2, _sourceLineEnd = 1, _sourceColumnEnd = 3}))),NoBind (NumberLiteral (0 % 1) Untyped (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 6, _sourceLineEnd = 1, _sourceColumnEnd = 7}))) :. LambdaVariable ("a",a) Untyped (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 9, _sourceLineEnd = 1, _sourceColumnEnd = 10}))) Untyped (SourcePosition "no_file" 1 1 1 10))
+
+    it "parses multi argument functions" $ do
+      parseSomething "|a : 1, b : a, c : b| 3" expressionP `shouldParseTo` (with_fresh_named "a" $ \a -> with_fresh_named "b" $ \b -> with_fresh_named "c" $ \c -> (FunctionLiteralExpression (Arg (((NoBind "a",(a,NoBind (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 2, _sourceLineEnd = 1, _sourceColumnEnd = 3}))),NoBind (NumberLiteral (1 % 1) Untyped (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 6, _sourceLineEnd = 1, _sourceColumnEnd = 7}))) :. Arg (((NoBind "b",(b,NoBind (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 9, _sourceLineEnd = 1, _sourceColumnEnd = 10}))),NoBind (LambdaVariable ("a",a) Untyped (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 13, _sourceLineEnd = 1, _sourceColumnEnd = 14}))) :. LastArg (((NoBind "c",(c,NoBind (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 16, _sourceLineEnd = 1, _sourceColumnEnd = 17}))),NoBind (LambdaVariable ("b",b) Untyped (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 20, _sourceLineEnd = 1, _sourceColumnEnd = 21}))) :. NumberLiteral (3 % 1) Untyped (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 23, _sourceLineEnd = 1, _sourceColumnEnd = 24}))))) Untyped (SourcePosition "no_file" 1 1 1 24)))
 
     it "parses function applications" $ do
-      parseSomething "3.b" expressionP `shouldParseTo` FunctionApplicationExpression (ReferenceVariable "b" () Untyped (SourcePosition "no_file" 1 3 1 4))
+      parseSomething "3.b" expressionP `shouldParseTo` FunctionApplicationExpression (ReferenceVariable "b" ("b", SourcePosition "no_file" 1 3 1 4) Untyped (SourcePosition "no_file" 1 3 1 4))
         (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 1 1 2) NonEmpty.:| [])
         Untyped (SourcePosition "no_file" 1 1 1 4)
 

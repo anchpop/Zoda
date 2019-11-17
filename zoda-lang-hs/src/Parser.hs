@@ -18,21 +18,21 @@ import qualified Data.Maybe as Maybe
 
 import Nominal hiding ((.))
 
-parseModule :: Text -> Either (ProductionError Untyped p () Text) (Module Untyped SourcePosition () Text)
+parseModule :: Text -> Either (ProductionError Untyped p (Text, SourcePosition) Text) (Module Untyped SourcePosition (Text, SourcePosition) Text)
 parseModule text = handleResult result
  where
   result = Data.Bifunctor.first ZodaSyntaxError (runParser (evalStateT moduleP []) "module" (unpack text))
   handleResult (Left  e) = Left e
   handleResult (Right r) = pure r
 
-moduleP :: Parser (Module Untyped SourcePosition () Text)
+moduleP :: Parser (Module Untyped SourcePosition (Text, SourcePosition) Text)
 moduleP = sourcePosWrapperWithNewlines $ do
   header       <- moduleHeaderP
   declarations <- many declarationP
   pure (Module header declarations)
 
 
-moduleHeaderP :: Parser (ModuleHeader Untyped SourcePosition () Text)
+moduleHeaderP :: Parser (ModuleHeader Untyped SourcePosition (Text, SourcePosition) Text)
 moduleHeaderP = sourcePosWrapperWithNewlines $ do
   string "module"
   some separatorChar
@@ -42,7 +42,7 @@ moduleHeaderP = sourcePosWrapperWithNewlines $ do
   pure (ModuleHeader ident doc)
 
 
-declarationP :: Parser (Declaration Untyped SourcePosition () Text)
+declarationP :: Parser (Declaration Untyped SourcePosition (Text, SourcePosition) Text)
 declarationP = sourcePosWrapperWithNewlines $ do
   (ident, _) <- sourcePosWrapper identifierP
   some separatorChar
@@ -55,7 +55,7 @@ padded :: (MonadParsec e s f, Token s ~ Char) => f a -> f a
 padded s = many separatorChar *> s <* many separatorChar 
 
 
-expressionP :: Parser (Expression Untyped SourcePosition () Text)
+expressionP :: Parser (Expression Untyped SourcePosition (Text, SourcePosition) Text)
 expressionP = expParser
   where 
     expParser = try $ makeExprParser (leftRec basicP leftRecP) 
@@ -67,13 +67,18 @@ expressionP = expParser
                           [InfixR . try $ do 
                             padded $ string "+"
                             pure (\expr1 expr2 -> AddExpression expr1 expr2 Untyped (combineSourcePos expr1 expr2))
+                          ],
+                          [
+                            InfixR . try $ do 
+                              padded $ string "::"
+                              pure (\expr1 expr2 -> Annotation expr1 expr2 Untyped (combineSourcePos expr1 expr2))
                           ]
                         ]
                         
     basicP = foldl' (<|>) empty basicParsers
     leftRecP = foldl' (<|>) empty leftRecParsers
     basicParsers = [tarrow2, functionLiteralP, numbP, parenthesizedExpression, identifierExpP]
-    leftRecParsers = [funcApp, annotation]
+    leftRecParsers = [funcApp]
     parenthesizedExpression = try $ do
       char '('
       expression <- padded expressionP
@@ -110,10 +115,6 @@ expressionP = expParser
     
 
     -- these parsers are left recursive, meaning they start with trying to return an expression and return an expression
-    annotation = try $ do
-      padded $ string ":"
-      expr2 <- expressionP
-      pure (\expr1 -> Annotation expr1 expr2 Untyped) 
     funcApp = try $ typedotexp
       where
         typedotexp = do
@@ -147,10 +148,13 @@ numberLiteralP = try
     <|> ( do
           sign   <- try (string "-" *> pure False) <|> (pure True)
           majorS <- some' (digitChar)
-          guard $ NonEmpty.head majorS /= '0'
-          let major :: Rational
-              major = justUnsafe (readMay ((toList majorS) <> " % 1"))
-          pure $ if sign then major else negate major
+          if majorS == '0' NonEmpty.:| [] 
+            then pure 0
+            else do
+              guard $ NonEmpty.head majorS /= '0'
+              let major :: Rational
+                  major = justUnsafe (readMay ((toList majorS) <> " % 1"))
+              pure $ if sign then major else negate major
         )
   where 
     justUnsafe (Just x) = x
@@ -158,22 +162,29 @@ numberLiteralP = try
 
 functionLiteralP :: ASTParser Expression
 functionLiteralP = do
+  s <- get
   char '|'
-  identifierInfo <- padded $ argument `sepBy1` (padded $ char ',')
+  binders <- padded $ binderP `sepBy1` (padded $ char ',')
   char '|'
   some separatorChar
-  let identifiers = map (fst . fst) identifierInfo
+  let identifiers = map (fst . fst) binders
       duplicates = List.length (Set.fromList identifiers) < List.length identifiers
   when duplicates (customFailure DuplicateFunctionArgumentNames)
-  let binders = fmap (\((name, pos), typ) -> with_fresh_named (unpack name) (\(x :: Atom) -> ((NoBind name, (x, NoBind pos)), NoBind typ))) identifierInfo
-  express <- (withEnvInState (fmap fst binders) expressionP)
-  pure $ FunctionLiteralExpression ((NonEmpty.fromList binders) :. express) Untyped
-  where argument = do
-                  ident <- sourcePosWrapper identifierP
-                  typ <- optional $ do 
-                    padded $ string ":"
-                    expressionP
-                  pure (ident, typ)
+  express <- expressionP
+  put s
+  pure $ FunctionLiteralExpression (makeFlit (NonEmpty.fromList binders) express) Untyped
+  where makeFlit :: NonEmpty.NonEmpty ((NoBind Text, (Atom, NoBind SourcePosition)), NoBind (Expression Untyped SourcePosition (Text, SourcePosition) Text)) -> Expression Untyped SourcePosition (Text, SourcePosition) Text -> FunctionLiteral Untyped SourcePosition (Text, SourcePosition) Text
+        makeFlit (a NonEmpty.:| [])        expr2 = LastArg  (a :. expr2)
+        makeFlit (a NonEmpty.:| (a1 : as)) expr2 = Arg     (a :. (makeFlit (a1 NonEmpty.:| as) expr2))
+                  
+        binderP = do 
+          (name, namepos) <- padded $ sourcePosWrapper identifierP
+          let atom = with_fresh_named (unpack name) id
+          modify ([(NoBind name, (atom, NoBind namepos))]:)
+          many separatorChar
+          string ":"
+          expr <- padded expressionP
+          pure ((NoBind name, (atom, NoBind namepos)), NoBind expr)
 
 getEnv :: StateT ParserState (Parsec ZodaParseError String) [(NoBind Text, (Atom, NoBind SourcePosition))]
 getEnv = do
@@ -209,7 +220,7 @@ identifierExpP = do (ident, _) <- sourcePosWrapper identifierP
                     env  <- getEnv
                     case (NoBind ident) `lookup` env of
                       Just (atom, _) -> pure $ LambdaVariable (ident, atom) Untyped 
-                      Nothing        -> pure $ ReferenceVariable ident () Untyped
+                      Nothing        -> pure $ (\s -> ReferenceVariable ident (ident, s) Untyped s)
 
 
 identifierCharacter :: Parser Char
@@ -217,7 +228,7 @@ identifierCharacter = try letterChar <|> try alphaNumChar <|> try (char '\'') <|
 
 type ParserState = [[(NoBind Text, (Atom, NoBind SourcePosition))]]
 type Parser a = StateT ParserState (Parsec ZodaParseError String) a
-type ASTParser a = Parser (SourcePosition -> a Untyped SourcePosition () Text)
+type ASTParser a = Parser (SourcePosition -> a Untyped SourcePosition (Text, SourcePosition) Text)
 data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
 instance Show SourcePosition where
   --show (SourcePosition _ _ _ _ _) = ""
@@ -291,6 +302,3 @@ combineSourcePos expr1 expr2 = SourcePosition filePath sourceLineStart sourceCol
 
 noNewlineOrChars :: (MonadParsec e s m, Token s ~ Char) => [Char] -> m (Token s)
 noNewlineOrChars c = noneOf ('\n' : c)
-
-testtype :: Expression Untyped SourcePosition () Text
-testtype = with_fresh_named "a" (\a -> with_fresh_named "b" (\b -> (TArrowBinding (Scope ((Just (NoBind "a",(a,NoBind (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 2, _sourceLineEnd = 1, _sourceColumnEnd = 3}))),NoBind (NumberLiteral (3 % 1) Untyped (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 6, _sourceLineEnd = 1, _sourceColumnEnd = 7}))) :. Pi ((Just (NoBind "b",(b,NoBind (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 9, _sourceLineEnd = 1, _sourceColumnEnd = 10}))),NoBind (LambdaVariable ("a",a) Untyped (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 13, _sourceLineEnd = 1, _sourceColumnEnd = 14}))) :. LambdaVariable ("b",b) Untyped (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 19, _sourceLineEnd = 1, _sourceColumnEnd = 20})))) Untyped  (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 19, _sourceLineEnd = 1, _sourceColumnEnd = 20}))))

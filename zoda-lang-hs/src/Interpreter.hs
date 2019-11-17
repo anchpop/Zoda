@@ -73,8 +73,8 @@ eval modu = eval'
     eval' (NumberLiteral i                                         _ _) _   = if denominator i == 1 then NatValueSem $ numerator i else error "We do not yet support fractional number literals!"
     eval' (AddExpression t1 t2                                     _ _) env = do_add modu (eval' t1 env) (eval' t2 env)
     eval' (TArrowBinding t        _ _)                                  env = evalPi env t
-    eval' (FunctionLiteralExpression ((((_, (a, _)), _) NonEmpty.:| []) :. express)      _ _) env = LamSem (Clos (a :. express) env)
-    eval' (FunctionLiteralExpression ((((_, (a, _)), _) NonEmpty.:| (t1:ts)) :. express) _ _) env = LamSem (Clos (a :. (FunctionLiteralExpression ((t1 NonEmpty.:| ts) :. express) () ())) (env))
+    eval' (FunctionLiteralExpression (LastArg (((_, (a, _)), _) :. express)) _ _) env = LamSem (Clos (a :. express) env)
+    eval' (FunctionLiteralExpression (Arg     (((_, (a, _)), _) :. moreArg)) _ _) env = LamSem (Clos (a :. (FunctionLiteralExpression moreArg () ())) (env))
     eval' (FunctionApplicationExpression func args                 _ _) env = foldl' (do_ap modu) (eval' func env) $ fmap (flip eval' env) args
     eval' (UniverseExpression  i                                   _ _) _   = UniSem i
     eval' (TSigmaBinding    t1 ((_, (a, _)) :. t2)                                  _ _) env = SigTypeSem (eval' t1 env) (Clos (a :. t2) env)
@@ -98,10 +98,16 @@ eval modu = eval'
 --   - one for neutral terms
 --   - one for types. 
 read_back_nf :: (Bindable m, Ord m, Show m) => JustifiedModule () () ph m () ->  Nf () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
-read_back_nf modu (Normal (PiTypeSem src dest) f)                 = FunctionLiteralExpression ((NonEmpty.fromList [((NoBind (), (atom, NoBind ())), NoBind Nothing)]) :. (read_back_nf modu nf)) () ()
+read_back_nf modu (Normal (PiTypeSem src dest) f)                  = FunctionLiteralExpression (LastArg ((((NoBind (), (atom, NoBind ())), NoBind srcType) :. (read_back_nf modu nf)))) () ()
+                                                                      where Clos (atom :. _) _ = dest
+                                                                            srcType = read_back_tp modu src 
+                                                                            arg = mk_var src atom 
+                                                                            nf  = Normal (do_clos modu dest arg) (do_ap modu f arg)
+  
+  {-FunctionLiteralExpression ((NonEmpty.fromList [((NoBind (), (atom, NoBind ())), NoBind Nothing)]) :. (read_back_nf modu nf)) () ()
                                                             where Clos (atom :. _) _ = dest
                                                                   arg = mk_var src atom 
-                                                                  nf  = Normal (do_clos modu dest arg) (do_ap modu f arg)  
+                                                                  nf  = Normal (do_clos modu dest arg) (do_ap modu f arg)  -}
 read_back_nf modu (Normal (SigTypeSem f s) p)                     = PairExpression
                                                                       (read_back_nf modu (Normal f                                (do_fst modu p)))
                                                                       (read_back_nf modu (Normal (do_clos modu s (do_fst modu p)) (do_snd modu p))) () ()
@@ -168,21 +174,21 @@ normalize modu env term tp = read_back_nf modu' (Normal tp' term')
         term' = eval modu' (normalizeExprMetadata term) env' 
         modu' = fmap normalizeExprMetadata modu
 
-copyPropagated :: forall i p t m o. (Ord i, Bindable i, Bindable p, Bindable t, Bindable m) => Module t p m i -> (forall ph. JustifiedModule t p ph i i -> o) -> Either (ProductionError t p m i) o
+copyPropagated :: forall i p t o. (Ord i, Bindable i, Bindable p, Bindable t) => Module t p (i, p) i -> (forall ph. JustifiedModule t p ph i i -> o) -> Either (ProductionError t p (i, p) i) o
 copyPropagated (Module _ declarations _) f = Map.withMap dUMap (\m -> f <$> dJmapToJustifiedModule m)
   where
     dUMap = UMap.fromList (fmap (\(Declaration identifier expression _) -> (identifier, expression)) declarations)
-    dJmapToJustifiedModule :: (Map.Map ph i (Expression t p m i)) -> Either (ProductionError t p m i) (Map.Map ph i (JustifiedExpression t p ph i i))
+    dJmapToJustifiedModule :: (Map.Map ph i (Expression t p (i, p) i)) -> Either (ProductionError t p (i, p) i) (Map.Map ph i (JustifiedExpression t p ph i i))
     dJmapToJustifiedModule m = 
-      for duped (\e -> forExpr2 e (justifyReferences m))
-      where duped = fmap copyIdentifierOntoMetadata m
+      for m (\e -> forExpr2 e (justifyReferences m))
+      --where duped = fmap copyIdentifierOntoMetadata m
     justifyReferences :: Map.Map ph i c -> (i, p)->  Either (ProductionError t p m i) (Map.Key ph i)
     justifyReferences referenceMap (iJustified, pJustified) = case iJustified `Map.member` referenceMap of 
       Nothing -> Left $ UndeclaredValuesReferenced [(iJustified, pJustified)] 
       Just k  -> pure k 
 
 
-produceProgram :: Text -> Either (ProductionError Untyped SourcePosition () Text) Rational
+produceProgram :: Text -> Either (ProductionError Untyped SourcePosition (Text, SourcePosition) Text) Rational
 produceProgram input = join (parsedModule >>= (\x -> copyPropagated x (applicant x)))
   where
     parsedModule = parseModule input
@@ -191,10 +197,3 @@ produceProgram input = join (parsedModule >>= (\x -> copyPropagated x (applicant
       _                 -> Left $ NoMain moduOriginal
       where modu' = fmap normalizeExprMetadata modu
 
-
-example :: Text
-example = "module i `test module`\n\
-          \test = 3 + 1 \n\
-          \func = |a| (a + 4) \n\
-          \main = test.func\n\
-          \"
