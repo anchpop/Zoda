@@ -58,4 +58,9 @@ instance Representational (Module t p) where rep Coercion = Coercion
 type JustifiedModule     t p ph m i = Map.Map ph m (Expression t p (Map.Key ph m) i)
 type JustifiedExpression t p ph m i = Expression t p (Map.Key ph m) i
 type JustifiedTelescope  t p ph m i = Telescope t p (Map.Key ph m) i
+type JustifiedFunctionLiteral  t p ph m i = FunctionLiteral t p (Map.Key ph m) i
 
+
+getOutputOfScope :: (Nominal t, Nominal p, Nominal m, Nominal i) => Telescope t p m i -> Expression t p m i 
+getOutputOfScope (Scope (_ :. scope) ) = getOutputOfScope scope
+getOutputOfScope (Pi    (_ :. e) ) = e

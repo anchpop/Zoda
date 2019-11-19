@@ -20,17 +20,39 @@ doTelescope context (arg :| []) (Pi ((Just (_, (a, _)), NoBind typ) :. result)) 
 doTelescope context (arg :| []) (Pi ((Nothing         , NoBind typ) :. result)) = undefined
 
 
-makeTelescope :: Env t p ph m i -> (NonEmpty (JustifiedExpression t p ph m i)) -> JustifiedExpression t p ph m i ->  JustifiedExpression t p ph m i
-makeTelescope = undefined
+makeTelescope :: (Nominal t, Nominal p, Nominal m, Nominal i) => Env t p ph m i -> JustifiedFunctionLiteral t p ph m i -> JustifiedTelescope t p ph m i
+makeTelescope context (LastArg ((a, t) :. e)) = Pi ((Just a, t) :. typ)
+  where typ = inferType context e 
+makeTelescope context (Arg (((i, (a, p)), NoBind t) :. scope)) = Scope ((Just (i, (a, p)), NoBind t) :. (makeTelescope context' scope))  
+  where context' = (a, t):context 
 
-findType :: (Nominal t, Nominal p, Nominal m, Nominal i) => Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i
-findType context (LambdaVariable (_, x) _ _) = 
-  case x `lookup` context of
-    Just t -> t 
-    _      -> error "type error!"
-findType context (FunctionApplicationExpression func args _ _) = 
-  case findType context func of
-    TArrowBinding scope _ _ -> doTelescope context args scope 
+extendContextWithScope = undefined
+
+checkScope = undefined
+
+inferType :: (Nominal t, Nominal p, Nominal m, Nominal i) => Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i
+inferType context (Annotation expr typ t p) = 
+  (checkType context expr typ) `seq` typ -- also need to check that it's a valid type!!!
+inferType context (FunctionLiteralExpression flit t p) = 
+  TArrowBinding (makeTelescope context flit) t p
+inferType context (FunctionApplicationExpression func args t p) = 
+  case inferType context func of 
+    TArrowBinding scope _ _ -> (checkScope scope args) `seq` (getOutputOfScope scope) 
     _                       -> error "type error!"
-findType context (FunctionLiteralExpression flit _ _) = undefined--makeTelescope context args bodyType
-  --where bodyType = findType (context <> (NonEmpty.toList $ fmap (\((_, (a, _)), NoBind (Just v)) -> (a, v)) args)) body 
+inferType context (LambdaVariable (_, x) _ _) = 
+  case x `lookup` context of
+    Just t -> t
+    _      -> error "value not in context, this is bad!"
+inferType context (AddExpression e1 e2 t p) = 
+  (checkType context e1 (NatTypeExpression t p)) `seq` (checkType context e2 (NatTypeExpression t p)) `seq` (NatTypeExpression t p)
+inferType context (NumberLiteral _ t p) = NatTypeExpression t p
+inferType context (ParenthesizedExpression e _ _) = inferType context e
+
+checkType :: (Nominal t, Nominal p, Nominal m, Nominal i) => Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> ()
+checkType context (FunctionLiteralExpression flit _ _) shouldBe = 
+  case shouldBe of 
+    TArrowBinding scope _ _ -> undefined
+    
+checkType context (ParenthesizedExpression e _ _) shouldBe = checkType context e shouldBe
+checkType context other shouldBe = if sameValue context t shouldBe then () else error "type error!" 
+    where t = inferType context other
