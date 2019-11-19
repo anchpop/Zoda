@@ -64,3 +64,7 @@ type JustifiedFunctionLiteral  t p ph m i = FunctionLiteral t p (Map.Key ph m) i
 getOutputOfScope :: (Nominal t, Nominal p, Nominal m, Nominal i) => Telescope t p m i -> Expression t p m i 
 getOutputOfScope (Scope (_ :. scope) ) = getOutputOfScope scope
 getOutputOfScope (Pi    (_ :. e) ) = e
+
+getBodyOfFlit :: (Nominal t, Nominal p, Nominal m, Nominal i) => FunctionLiteral t p m i -> Expression t p m i 
+getBodyOfFlit (Arg     (_ :. scope) ) = getBodyOfFlit scope
+getBodyOfFlit (LastArg (_ :. e) ) = e

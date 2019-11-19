@@ -24,11 +24,11 @@ makeTelescope :: (Nominal t, Nominal p, Nominal m, Nominal i) => Env t p ph m i 
 makeTelescope context (LastArg ((a, t) :. e)) = Pi ((Just a, t) :. typ)
   where typ = inferType context e 
 makeTelescope context (Arg (((i, (a, p)), NoBind t) :. scope)) = Scope ((Just (i, (a, p)), NoBind t) :. (makeTelescope context' scope))  
-  where context' = (a, t):context 
+  where context' = (a, t):context
 
-extendContextWithScope = undefined
+extendContextWithScope context scope = undefined -- adds all the (binding:type)s from the telescope to the context
+checkScope context scope args = undefined -- takes a list of args and a telescope and checks thet all the args' types match the associated types of the telescope
 
-checkScope = undefined
 
 inferType :: (Nominal t, Nominal p, Nominal m, Nominal i) => Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i
 inferType context (Annotation expr typ t p) = 
@@ -37,7 +37,7 @@ inferType context (FunctionLiteralExpression flit t p) =
   TArrowBinding (makeTelescope context flit) t p
 inferType context (FunctionApplicationExpression func args t p) = 
   case inferType context func of 
-    TArrowBinding scope _ _ -> (checkScope scope args) `seq` (getOutputOfScope scope) 
+    TArrowBinding scope _ _ -> (checkScope context scope args) `seq` (getOutputOfScope scope) 
     _                       -> error "type error!"
 inferType context (LambdaVariable (_, x) _ _) = 
   case x `lookup` context of
@@ -51,7 +51,7 @@ inferType context (ParenthesizedExpression e _ _) = inferType context e
 checkType :: (Nominal t, Nominal p, Nominal m, Nominal i) => Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> ()
 checkType context (FunctionLiteralExpression flit _ _) shouldBe = 
   case shouldBe of 
-    TArrowBinding scope _ _ -> undefined
+    TArrowBinding scope _ _ -> checkType (extendContextWithScope context scope) (getBodyOfFlit flit) (getOutputOfScope scope)
     
 checkType context (ParenthesizedExpression e _ _) shouldBe = checkType context e shouldBe
 checkType context other shouldBe = if sameValue context t shouldBe then () else error "type error!" 
