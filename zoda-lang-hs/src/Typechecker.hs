@@ -30,46 +30,88 @@ makeTelescope context (Arg (((i, (a, p)), NoBind t) :. scope)) = do
     pure $ Scope ((Just (i, (a, p)), NoBind t) :. scope')  
   where context' = (a, t):context
 
+mergFlitAndScope :: (Nominal t, Nominal p, Nominal m, Nominal i) => FunctionLiteral t p m i -> Telescope t p m i -> Either () (FunctionLiteral t p m i, Telescope t p m i)
+mergFlitAndScope (Arg (((ia, (aa, pa)), ea) :. argsInner)) (Scope ((Just (is, (as, ps)), es) :. scopeInner)) = do 
+  (mergedArgsInner, mergedScopeInner) <- mergFlitAndScope argsInner scopeInner
+  let (a' :. (argsMerged, scopeMerged)) = merge (aa :. mergedArgsInner) (as :. mergedScopeInner)
+  pure $ (Arg (((ia, (a', pa)), ea) :. argsMerged), Scope ((Just (is, (a', ps)), es):. scopeMerged))
+
+mergFlitAndScope (Arg (((ia, (aa, pa)), ea) :. argsInner)) (Scope ((Nothing, es) :. scopeInner)) = do
+  (mergedArgsInner, mergedScopeInner) <- mergFlitAndScope argsInner scopeInner
+  pure $ (Arg (((ia, (aa, pa)), ea) :. mergedArgsInner), Scope ((Nothing, es) :. mergedScopeInner))
+
+mergFlitAndScope (LastArg (((ia, (aa, pa)), ea) :. body)) (Pi ((Just (is, (as, ps)), es) :. outputType)) = do
+  let (a' :. (bodyMerged, outputMerged)) = merge (aa :. body) (as :. outputType)
+  pure $ (LastArg (((ia, (a', pa)), ea) :. bodyMerged), Pi ((Just (is, (a', ps)), es):. outputMerged))
+
+mergFlitAndScope lastArg@(LastArg _) pi@(Pi ((Nothing, _) :. _)) = do
+  pure $ (lastArg, pi)
+
+mergFlitAndScope (LastArg _) (Scope _) = Left () 
+
+mergFlitAndScope (Arg _) (Pi _) = Left ()
+
 extendContextWithScope context scope = undefined -- adds all the (binding:type)s from the telescope to the context
 checkScope context scope args = undefined -- takes a list of args and a telescope and checks thet all the args' types match the associated types of the telescope
 
 
 inferType :: (Nominal t, Nominal p, Nominal m, Nominal i) => Env t p ph m i -> JustifiedExpression t p ph m i -> Either () (JustifiedExpression t p ph m i)
-inferType context (Annotation expr typ t p) = checkType context expr typ *> pure typ -- also need to check that it's a valid type!!!
-inferType context (FunctionLiteralExpression flit t p) = do 
-  scope <- makeTelescope context flit
-  pure $ TArrowBinding scope t p
-inferType context (FunctionApplicationExpression func args t p) = do
+-- Typing rule for annotations
+--       t is a type     context ⊢ e <= t
+-- -----------------------------------------
+--       context ⊢ (Annotation e t) => t
+inferType context (Annotation expr typ t p) = checkType context expr typ *> pure typ -- TODO: also check that it's a valid type
+-- Typing rule for variables
+--            x : t ∈ context
+-- -----------------------------------------
+--           context ⊢ x => t
+inferType context (LambdaVariable (_, x) _ _) = 
+  case x `lookup` context of
+    Just t -> pure t
+    _      -> Left ()
+-- Typing rule for function application
+--  context ⊢ func => (Pi inT (x.outT))  context |- inT <= Type     context ⊢ in <= inT
+-- --------------------------------------------------------------------------------------
+--           context ⊢ (App func in) => (outT)    
+inferType context (FunctionApplicationExpression func args t p) = undefined{-do
   funcType <- inferType context func 
   case funcType of 
     TArrowBinding scope _ _ -> do
                                 checkScope context scope args
                                 pure $ getOutputOfScope scope
-    _                       -> Left ()
-inferType context (LambdaVariable (_, x) _ _) = 
-  case x `lookup` context of
-    Just t -> pure t
-    _      -> Left ()
+    _                       -> Left ()-}
+--inferType context (FunctionLiteralExpression flit t p) = do 
+--  scope <- makeTelescope context flit
+--  pure $ TArrowBinding scope t p
 inferType context (AddExpression e1 e2 t p) = do 
   checkType context e1 (NatTypeExpression t p) 
   checkType context e2 (NatTypeExpression t p) 
   pure $ NatTypeExpression t p
 inferType context (NumberLiteral _ t p) = pure $ NatTypeExpression t p
+-- Typing rule for parentheses
+--       context ⊢  x => t
+-- ------------------------------
+--       context ⊢ (x) => t
 inferType context (ParenthesizedExpression e _ _) = inferType context e
 
 checkType :: (Nominal t, Nominal p, Nominal m, Nominal i) => Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Either () ()
--- Typing rule for lambda abstraction
---       Gamma, x:t  |-  e : s
+-- Type checking rule for lambda abstraction
+--       context, x:t  ⊢  e <= s
 -- ------------------------------------
---   Gamma |-  Lam (x.e) : Pi t (x.s)
+--   context ⊢  Lam (x.e) <= Pi t (x.s)
 -- note that the two `x`s in the binders have to actually be the "same" to correctly type it
 -- since `x` might be mentioned in both `e` and `s`
 -- the `merge` function in nominal is used for this
+-- of couse, because we use telescopes instead of pi types it is a trickier
 checkType context (FunctionLiteralExpression flit _ _) shouldBe = 
   case shouldBe of 
-    TArrowBinding scope _ _ -> let (megedScope, mergedFlit) = undefined  
-                               in checkType (extendContextWithScope context scope) (getBodyOfFlit flit) (getOutputOfScope scope)
-checkType context (ParenthesizedExpression e _ _) shouldBe = checkType context e shouldBe
+    TArrowBinding scope _ _ -> do (mergedFlit, mergedScope) <- mergFlitAndScope flit scope
+                                  checkType (extendContextWithScope context mergedScope) (getBodyOfFlit mergedFlit) (getOutputOfScope mergedScope)
+-- Type checking rule for everything else
+--       context ⊢ e => t 
+-- ------------------------------------
+--       context ⊢ e <= t 
+-- Just infer a type and check that the type we inferred is the same as the one we want it to be
 checkType context toCheck shouldBe = do
   toCheckType <- inferType context toCheck
   if sameValue context toCheckType shouldBe then Right () else Left ()
