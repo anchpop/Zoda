@@ -98,20 +98,20 @@ expressionP = expParser
       
       pure (TArrowBinding (makeTelescope binders expr2) Untyped) 
         where 
-          makeTelescope (a NonEmpty.:| [])        expr2 = Pi (a :. expr2)
-          makeTelescope (a NonEmpty.:| (a1 : as)) expr2 = Scope (a :. (makeTelescope (a1 NonEmpty.:| as) expr2))
+          makeTelescope ((a, e) NonEmpty.:| [])        expr2 = Pi e (a :. expr2)
+          makeTelescope ((a, e) NonEmpty.:| (a1 : as)) expr2 = Scope e (a :. (makeTelescope (a1 NonEmpty.:| as) expr2))
           binder1P = do 
             (name, namepos) <- padded $ sourcePosWrapper identifierP
             let atom = with_fresh_named (unpack name) id
-            modify ([(NoBind name, (atom, NoBind namepos))]:)
+            modify ([(name, (atom, namepos))]:)
             many separatorChar
             string ":"
             expr <- padded expressionP
-            pure (Just (NoBind name, (atom, NoBind namepos)), NoBind expr)
+            pure (Just (atom, NoBind name, NoBind namepos), expr)
           binder2P = do 
             padded $ string ","
             expr <- padded expressionP
-            pure (Nothing, NoBind expr)
+            pure (Nothing, expr)
     
 
     -- these parsers are left recursive, meaning they start with trying to return an expression and return an expression
@@ -167,26 +167,26 @@ functionLiteralP = do
   binders <- padded $ binderP `sepBy1` (padded $ char ',')
   char '|'
   some separatorChar
-  let identifiers = map (fst . fst) binders
+  let identifiers = map (\((_, name, _), _) -> name) binders
       duplicates = List.length (Set.fromList identifiers) < List.length identifiers
   when duplicates (customFailure DuplicateFunctionArgumentNames)
   express <- expressionP
   put s
   pure $ FunctionLiteralExpression (makeFlit (NonEmpty.fromList binders) express) Untyped
-  where makeFlit :: NonEmpty.NonEmpty ((NoBind Text, (Atom, NoBind SourcePosition)), NoBind (Expression Untyped SourcePosition (Text, SourcePosition) Text)) -> Expression Untyped SourcePosition (Text, SourcePosition) Text -> FunctionLiteral Untyped SourcePosition (Text, SourcePosition) Text
-        makeFlit (a NonEmpty.:| [])        expr2 = LastArg  (a :. expr2)
-        makeFlit (a NonEmpty.:| (a1 : as)) expr2 = Arg     (a :. (makeFlit (a1 NonEmpty.:| as) expr2))
+  where makeFlit :: NonEmpty.NonEmpty ((Atom, Text, SourcePosition), (Expression Untyped SourcePosition (Text, SourcePosition) Text)) -> Expression Untyped SourcePosition (Text, SourcePosition) Text -> FunctionLiteral Untyped SourcePosition (Text, SourcePosition) Text
+        makeFlit (((a, i, p), e) NonEmpty.:| [])        expr2 = LastArg e ((a, NoBind i, NoBind p) :. expr2)
+        makeFlit (((a, i, p), e) NonEmpty.:| (a1 : as)) expr2 = Arg     e ((a, NoBind i, NoBind p) :. (makeFlit (a1 NonEmpty.:| as) expr2))
                   
         binderP = do 
           (name, namepos) <- padded $ sourcePosWrapper identifierP
           let atom = with_fresh_named (unpack name) id
-          modify ([(NoBind name, (atom, NoBind namepos))]:)
+          modify ([(name, (atom, namepos))]:)
           many separatorChar
           string ":"
           expr <- padded expressionP
-          pure ((NoBind name, (atom, NoBind namepos)), NoBind expr)
+          pure ((atom, name, namepos), expr)
 
-getEnv :: StateT ParserState (Parsec ZodaParseError String) [(NoBind Text, (Atom, NoBind SourcePosition))]
+getEnv :: StateT ParserState (Parsec ZodaParseError String) [(Text, (Atom, SourcePosition))]
 getEnv = do
   s <- get
   pure (join s)
@@ -218,15 +218,15 @@ identifierP = do
 identifierExpP :: ASTParser Expression
 identifierExpP = do (ident, _) <- sourcePosWrapper identifierP
                     env  <- getEnv
-                    case (NoBind ident) `lookup` env of
-                      Just (atom, _) -> pure $ LambdaVariable (ident, atom) Untyped 
+                    case ident `lookup` env of
+                      Just (atom, _) -> pure $ LambdaVariable (atom, ident) Untyped 
                       Nothing        -> pure $ (\s -> ReferenceVariable ident (ident, s) Untyped s)
 
 
 identifierCharacter :: Parser Char
 identifierCharacter = try letterChar <|> try alphaNumChar <|> try (char '\'') <|> try (char '-')
 
-type ParserState = [[(NoBind Text, (Atom, NoBind SourcePosition))]]
+type ParserState = [[(Text, (Atom, SourcePosition))]]
 type Parser a = StateT ParserState (Parsec ZodaParseError String) a
 type ASTParser a = Parser (SourcePosition -> a Untyped SourcePosition (Text, SourcePosition) Text)
 data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)

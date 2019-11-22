@@ -18,6 +18,7 @@ import Nominal hiding ((.))
 
 --shouldParseTo :: (Show a, Eq a) => Either (ParseErrorBundle String Void) a -> a -> Expectation
 shouldParseTo a b = getRight a `shouldBe` b
+shouldParseToMD a b = ((normalizeExprMetadata $ getRight a) `shouldBe` b) 
 --shouldNotParse :: (Show a, Show b) => Either a b -> Expectation
 shouldNotParse a = a `shouldSatisfy` (isLeft)
 
@@ -62,18 +63,18 @@ test = parallel $ do
 
 
     it "parses single argument functions" $ do
-      parseSomething "|a : 0| a" expressionP `shouldParseTo` (with_fresh_named "a" $ \a -> FunctionLiteralExpression (LastArg (((NoBind "a",(a,NoBind (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 2, _sourceLineEnd = 1, _sourceColumnEnd = 3}))),NoBind (NumberLiteral (0 % 1) Untyped (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 6, _sourceLineEnd = 1, _sourceColumnEnd = 7}))) :. LambdaVariable ("a",a) Untyped (SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 9, _sourceLineEnd = 1, _sourceColumnEnd = 10}))) Untyped (SourcePosition "no_file" 1 1 1 10))
+      parseSomething "|a : 0| a" expressionP `shouldParseToMD` (with_fresh_named "a" $ \a -> FunctionLiteralExpression (LastArg (NumberLiteral (0 % 1) () ()) ((a,np,np) :. LambdaVariable (a,()) () ())) () ())
+
 
     it "parses multi argument functions" $ do
-      parseSomething "|a : 1, b : a, c : b| 3" expressionP `shouldParseTo` (with_fresh_named "a" $ \a -> with_fresh_named "b" $ \b -> with_fresh_named "c" $ \c -> (FunctionLiteralExpression (Arg (((NoBind "a",(a,NoBind (SourcePosition "no_file" 1 2 1 3))),NoBind (NumberLiteral (1 % 1) Untyped (SourcePosition "no_file" 1 6 1 7))) :. Arg (((NoBind "b",(b,NoBind (SourcePosition "no_file" 1 9 1 10))),NoBind (LambdaVariable ("a",a) Untyped (SourcePosition "no_file" 1 13 1 14))) :. LastArg (((NoBind "c",(c,NoBind (SourcePosition "no_file" 1 16 1 17))),NoBind (LambdaVariable ("b",b) Untyped (SourcePosition "no_file" 1 20 1 21))) :. NumberLiteral (3 % 1) Untyped (SourcePosition "no_file" 1 23 1 24))))) Untyped (SourcePosition "no_file" 1 1 1 24)))
+      parseSomething "|a : 1, b : a, c : b| 3" expressionP `shouldParseToMD` (with_fresh_named "a" $ \a -> with_fresh_named "b" $ \b -> with_fresh_named "c" $ \c -> (FunctionLiteralExpression (Arg (NumberLiteral (1 % 1) () ()) ((a,np,np) :. Arg (LambdaVariable (a,()) () ()) ((b,np,np) :. LastArg (LambdaVariable (b,()) () ()) ((c,np,np) :. NumberLiteral (3 % 1) () ())))) () ()))
 
     it "parses function applications" $ do
-      parseSomething "3.b" expressionP `shouldParseTo` FunctionApplicationExpression (ReferenceVariable "b" ("b", SourcePosition "no_file" 1 3 1 4) Untyped (SourcePosition "no_file" 1 3 1 4))
-        (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 1 1 2) NonEmpty.:| [])
-        Untyped (SourcePosition "no_file" 1 1 1 4)
+      parseSomething "3.b" expressionP `shouldParseToMD` FunctionApplicationExpression (ReferenceVariable () ("b",(SourcePosition "no_file" 1 3 1 4)) () ()) (NumberLiteral (3 % 1) () () NonEmpty.:| []) () ()
 
     it "parses telescopes applications" $ do
-      parseSomething "(a : 3, b : a) -> b" expressionP `shouldParseTo` with_fresh_named "a" (\a -> with_fresh_named "b" (\b -> (TArrowBinding (Scope ((Just (NoBind "a",(a,NoBind (SourcePosition "no_file" 1 2 1 3))),NoBind (NumberLiteral (3 % 1) Untyped (SourcePosition "no_file" 1 6 1 7))) :. Pi ((Just (NoBind "b",(b,NoBind (SourcePosition "no_file" 1 9 1 10))),NoBind (LambdaVariable ("a",a) Untyped (SourcePosition "no_file" 1 13 1 14))) :. LambdaVariable ("b",b) Untyped (SourcePosition "no_file" 1 19 1 20)))) Untyped  (SourcePosition "no_file" 1 1 1 20))))
+      parseSomething "(a : 3, b : a) -> b" expressionP `shouldParseToMD` with_fresh_named "a" (\a -> with_fresh_named "b" (\b -> (TArrowBinding (Scope (NumberLiteral (3 % 1) () ()) (Just (a,np,np) :. Pi (LambdaVariable (a,()) () ()) (Just (b,np,np) :. LambdaVariable (b,()) () ()))) () ())))
+
 
   describe "Parser.declarationP" $ do
     it "allows assignment to number literals" $ do
@@ -81,3 +82,4 @@ test = parallel $ do
         "i" (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 5 1 6))
         (SourcePosition "no_file" 1 1 1 6)
 
+np = NoBind ()

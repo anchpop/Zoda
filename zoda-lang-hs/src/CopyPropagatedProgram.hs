@@ -8,7 +8,6 @@ import Control.Applicative (liftA, liftA2, liftA3)
 import qualified Data.Bifunctor as Data.Bifunctor
 import Data.Functor.Identity
 
-liftA4 f a b c d = liftA3 f a b c <*> d
  
 -- |Semantic values contain terms which have evaluated to a constructor which does not need to be 
 -- reduced further. So for instance, Lam and Pair may contain computation further inside the term 
@@ -61,57 +60,6 @@ data Clos t p m i = Clos {termClos :: (Bind Atom (Expression t p m i)), envClos 
   deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal) 
 
 
-
-
-traverseExpr :: forall t1 p1 m1 i1 t2 p2 m2 i2 a. (Bindable t1, Bindable t2, Bindable p1, Bindable p2, Bindable i1, Bindable i2, Bindable m1, Bindable m2, Applicative a) => (t1 -> a t2) -> (p1 -> a p2) -> (m1 -> a m2) ->  (i1 -> a i2) -> Expression t1 p1 m1 i1 -> a (Expression t2 p2 m2 i2)
-traverseExpr ft fp fm fi = me
-  where me :: Expression t1 p1 m1 i1 -> a (Expression t2 p2 m2 i2)
-        me (ParenthesizedExpression e t p) = liftA3 ParenthesizedExpression (me e) (ft t) (fp p)
-        me (FirstExpression e t p)         = (liftA3 FirstExpression) (me e) (ft t) (fp p)
-        me (SecondExpression e t p)        = (liftA3 SecondExpression) (me e) (ft t) (fp p)
-        me (PairExpression e1 e2 t p)      = (liftA4 PairExpression) (me e1) (me e2) (ft t) (fp p) -- 
-        me (TSigmaBinding e1 ((NoBind i, (a, NoBind p1)) :. e2) t p2) = liftA4 TSigmaBinding (me e1) (liftA2 abst (liftA2 (\x y -> (NoBind x, (a, NoBind y))) (fi i) (fp p1)) (me e2)) (ft t) (fp p2)
-        me (UniverseExpression i t p)      = (liftA2 (UniverseExpression i)) (ft t) (fp p)
-        me (NumberLiteral i t p)           = (liftA2 (NumberLiteral i)) (ft t) (fp p)
-        me (AddExpression e1 e2 t p)       = (liftA4 AddExpression) (me e1) (me e2) (ft t) (fp p)
-        me (ReferenceVariable i m t p)     = (liftA4 ReferenceVariable) (fi i) (fm m) (ft t) (fp p)
-        me (LambdaVariable (i, a) t p)     = (liftA3 LambdaVariable) ((\x -> (x, a)) <$> fi i) (ft t) (fp p)
-        me (FunctionLiteralExpression flit t p) = (liftA3 FunctionLiteralExpression) (traverseFunctionLiteral ft fp fm fi flit) (ft t) (fp p)
-        me (FunctionApplicationExpression func args t p) = liftA4 FunctionApplicationExpression (me func) (traverse me args) (ft t) (fp p)
-        me (TArrowBinding telescope t p) = (liftA3 TArrowBinding) (traverseTelescope ft fp fm fi telescope) (ft t) (fp p)
-        me (Annotation e1 e2 t p) = (liftA4 Annotation) (me e1) (me e2) (ft t) (fp p)
-        me (NatTypeExpression t p) = (liftA2 NatTypeExpression) (ft t) (fp p)
-
-traverseTelescope :: forall t1 p1 m1 i1 t2 p2 m2 i2 a. (Bindable t1, Bindable t2, Bindable p1, Bindable p2, Bindable i1, Bindable i2, Bindable m1, Bindable m2, Applicative a) => (t1 -> a t2) -> (p1 -> a p2) -> (m1 -> a m2) ->  (i1 -> a i2) -> Telescope t1 p1 m1 i1 -> a (Telescope t2 p2 m2 i2)
-traverseTelescope ft fp fm fi = te
-  where te (Scope ((Just (NoBind i, (a, NoBind p)), NoBind e)  :. scope))  = liftA Scope (liftA2 abst (liftA3 (\x y z -> (Just (NoBind x, (a, NoBind y)), NoBind z)) (fi i) (fp p) (traverseExpr ft fp fm fi e)) (te scope))
-        te (Scope ((Nothing                       , NoBind e)  :. scope))  = liftA Scope (liftA2 abst (liftA (\x -> (Nothing, NoBind x)) (traverseExpr ft fp fm fi e)) (te scope)) 
-        te (Pi    ((Just (NoBind i, (a, NoBind p)), NoBind e)  :. eBound)) = liftA Pi    (liftA2 abst (liftA3 (\x y z -> (Just (NoBind x, (a, NoBind y)), NoBind z)) (fi i) (fp p) (traverseExpr ft fp fm fi e)) (traverseExpr ft fp fm fi eBound))
-        te (Pi    ((Nothing                       , NoBind e)  :. eBound)) = liftA Pi    (liftA2 abst (liftA (\x -> (Nothing, NoBind x)) (traverseExpr ft fp fm fi e)) (traverseExpr ft fp fm fi eBound)) 
-
-
-traverseFunctionLiteral :: forall t1 p1 m1 i1 t2 p2 m2 i2 a. (Bindable t1, Bindable t2, Bindable p1, Bindable p2, Bindable i1, Bindable i2, Bindable m1, Bindable m2, Applicative a) => (t1 -> a t2) -> (p1 -> a p2) -> (m1 -> a m2) ->  (i1 -> a i2) -> FunctionLiteral t1 p1 m1 i1 -> a (FunctionLiteral t2 p2 m2 i2)
-traverseFunctionLiteral ft fp fm fi = fe
-  where fe :: FunctionLiteral t1 p1 m1 i1 -> a (FunctionLiteral t2 p2 m2 i2)
-        fe (Arg     (((NoBind i, (a, NoBind p)), NoBind e) :. nxtArg)) = liftA Arg     (liftA2 abst (liftA3 (\x y z -> ((NoBind x, (a, NoBind y)), NoBind z)) (fi i) (fp p) (traverseExpr ft fp fm fi e)) (fe nxtArg))
-        fe (LastArg (((NoBind i, (a, NoBind p)), NoBind e) :. eBound)) = liftA LastArg (liftA2 abst (liftA3 (\x y z -> ((NoBind x, (a, NoBind y)), NoBind z)) (fi i) (fp p) (traverseExpr ft fp fm fi e)) (traverseExpr ft fp fm fi eBound))
-
-traverseExpr2 :: (Bindable t, Bindable p, Bindable i, Bindable m1, Bindable m2, Monad mo) => (m1 -> mo m2) -> Expression t p m1 i -> mo (Expression t p m2 i)
-traverseExpr2 fm = traverseExpr (fmap pure id) (fmap pure id) (fm) (fmap pure id)
-
-forExpr2 :: (Bindable t, Bindable p, Bindable i, Monad mo, Bindable m1, Bindable m2) => Expression t p m1 i -> (m1 -> mo m2) -> mo (Expression t p m2 i)
-forExpr2 x y = traverseExpr2 y x
-
-
-mapExpr :: forall t1 p1 m1 i1 t2 p2 m2 i2. (Bindable t1, Bindable t2, Bindable p1, Bindable p2, Bindable i1, Bindable i2, Bindable m1, Bindable m2) => (t1 -> t2) -> (p1 -> p2) -> (m1 -> m2) ->  (i1 -> i2) -> Expression t1 p1 m1 i1 -> Expression t2 p2 m2 i2
-mapExpr ft fp fm fi e = runIdentity $ traverseExpr ftm fpm fmm fim e
-  where ftm = fmap pure ft
-        fpm = fmap pure fp
-        fmm = fmap pure fm
-        fim = fmap pure fi
-
-normalizeExprMetadata :: forall t p m i . (Bindable t, Bindable p, Bindable i, Bindable m) => Expression t p m i -> Expression () () m () 
-normalizeExprMetadata = mapExpr (const ()) (const ()) id (const ())
 
 
 mapSemantic ft fp fm fi = ms 

@@ -23,12 +23,12 @@ data Expression t p m i = ParenthesizedExpression       (Expression t p m i)    
                         | FirstExpression               (Expression t p m i)                                                          t p 
                         | SecondExpression              (Expression t p m i)                                                          t p 
                         | PairExpression                (Expression t p m i)                                    (Expression t p m i)  t p 
-                        | TSigmaBinding                 (Expression t p m i) (Bind (NoBind i, (Atom, NoBind p)) (Expression t p m i)) t p 
+                        | TSigmaBinding                 (Expression t p m i) (Bind (Atom, NoBind i, NoBind p) (Expression t p m i)) t p 
                         | UniverseExpression Integer                                                                                  t p 
                         | NumberLiteral Rational                                                                                      t p 
                         | AddExpression                 (Expression t p m i)                                    (Expression t p m i)  t p 
                         | ReferenceVariable i m                                                                                       t p 
-                        | LambdaVariable (i, Atom)                                                                                    t p 
+                        | LambdaVariable (Atom, i)                                                                                    t p 
                         | FunctionLiteralExpression     (FunctionLiteral t p m i)                                                     t p 
                         | FunctionApplicationExpression (Expression t p m i)                          (NonEmpty (Expression t p m i)) t p 
                         | TArrowBinding                 (Telescope  t p m i)                                                          t p
@@ -36,16 +36,14 @@ data Expression t p m i = ParenthesizedExpression       (Expression t p m i)    
                         | NatTypeExpression                                                                                           t p 
                         deriving (Show, Eq, Typeable, NominalSupport, NominalShow, Generic, Nominal)
 
-data Telescope t p m i = Scope (Bind (Maybe (NoBind i, (Atom, NoBind p)), NoBind (Expression t p m i)) (Telescope t p m i)) 
-                       | Pi    (Bind (Maybe (NoBind i, (Atom, NoBind p)), NoBind (Expression t p m i)) (Expression t p m i)) deriving (Show, Eq, Typeable, NominalSupport, NominalShow, Generic, Nominal)
+data Telescope t p m i = Scope (Expression t p m i) (Bind (Maybe (Atom, NoBind i, NoBind p)) (Telescope t p m i)) 
+                       | Pi    (Expression t p m i) (Bind (Maybe (Atom, NoBind i, NoBind p)) (Expression t p m i)) deriving (Show, Eq, Typeable, NominalSupport, NominalShow, Generic, Nominal)
 
-data FunctionLiteral t p m i = Arg     (Bind ((NoBind i, (Atom, NoBind p)), NoBind (Expression t p m i)) (FunctionLiteral t p m i)) 
-                             | LastArg (Bind ((NoBind i, (Atom, NoBind p)), NoBind (Expression t p m i)) (Expression t p m i)) deriving (Show, Eq, Typeable, NominalSupport, NominalShow, Generic, Nominal)
+data FunctionLiteral t p m i = Arg     (Expression t p m i) (Bind (Atom, NoBind i, NoBind p) (FunctionLiteral t p m i)) 
+                             | LastArg (Expression t p m i) (Bind (Atom, NoBind i, NoBind p) (Expression t p m i)) deriving (Show, Eq, Typeable, NominalSupport, NominalShow, Generic, Nominal)
 
 
 data Tinydoc t p m i = Tinydoc Text p deriving (Show, Read, Eq, Ord, Generic, Typeable)
-
-
 
 data Untyped = Untyped deriving (Show, Read, Eq, Ord, NominalSupport, NominalShow, Generic, Nominal, Bindable)
 
@@ -62,9 +60,68 @@ type JustifiedFunctionLiteral  t p ph m i = FunctionLiteral t p (Map.Key ph m) i
 
 
 getOutputOfScope :: (Nominal t, Nominal p, Nominal m, Nominal i) => Telescope t p m i -> Expression t p m i 
-getOutputOfScope (Scope (_ :. scope) ) = getOutputOfScope scope
-getOutputOfScope (Pi    (_ :. e) ) = e
+getOutputOfScope (Scope _ (_ :. scope) ) = getOutputOfScope scope
+getOutputOfScope (Pi    _ (_ :. e) ) = e
 
 getBodyOfFlit :: (Nominal t, Nominal p, Nominal m, Nominal i) => FunctionLiteral t p m i -> Expression t p m i 
-getBodyOfFlit (Arg     (_ :. scope) ) = getBodyOfFlit scope
-getBodyOfFlit (LastArg (_ :. e) ) = e
+getBodyOfFlit (Arg     _ (_ :. scope)) = getBodyOfFlit scope
+getBodyOfFlit (LastArg _ (_ :. e)) = e
+
+
+
+
+liftA4 f a b c d = liftA3 f a b c <*> d
+
+traverseExpr :: forall t1 p1 m1 i1 t2 p2 m2 i2 a. (Bindable t1, Bindable t2, Bindable p1, Bindable p2, Bindable i1, Bindable i2, Bindable m1, Bindable m2, Applicative a) => (t1 -> a t2) -> (p1 -> a p2) -> (m1 -> a m2) ->  (i1 -> a i2) -> Expression t1 p1 m1 i1 -> a (Expression t2 p2 m2 i2)
+traverseExpr ft fp fm fi = me
+  where me :: Expression t1 p1 m1 i1 -> a (Expression t2 p2 m2 i2)
+        me (ParenthesizedExpression e t p) = liftA3 ParenthesizedExpression (me e) (ft t) (fp p)
+        me (FirstExpression e t p)         = (liftA3 FirstExpression) (me e) (ft t) (fp p)
+        me (SecondExpression e t p)        = (liftA3 SecondExpression) (me e) (ft t) (fp p)
+        me (PairExpression e1 e2 t p)      = (liftA4 PairExpression) (me e1) (me e2) (ft t) (fp p) -- 
+        me (TSigmaBinding e1 ((a, NoBind i, NoBind p1) :. e2) t p2) = liftA4 TSigmaBinding (me e1) (liftA2 abst (liftA2 (\x y -> (a, NoBind x, NoBind y)) (fi i) (fp p1)) (me e2)) (ft t) (fp p2)
+        me (UniverseExpression i t p)      = (liftA2 (UniverseExpression i)) (ft t) (fp p)
+        me (NumberLiteral i t p)           = (liftA2 (NumberLiteral i)) (ft t) (fp p)
+        me (AddExpression e1 e2 t p)       = (liftA4 AddExpression) (me e1) (me e2) (ft t) (fp p)
+        me (ReferenceVariable i m t p)     = (liftA4 ReferenceVariable) (fi i) (fm m) (ft t) (fp p)
+        me (LambdaVariable (a, i) t p)     = (liftA3 LambdaVariable) ((\x -> (a, x)) <$> fi i) (ft t) (fp p)
+        me (FunctionLiteralExpression flit t p) = (liftA3 FunctionLiteralExpression) (traverseFunctionLiteral ft fp fm fi flit) (ft t) (fp p)
+        me (FunctionApplicationExpression func args t p) = liftA4 FunctionApplicationExpression (me func) (traverse me args) (ft t) (fp p)
+        me (TArrowBinding telescope t p) = (liftA3 TArrowBinding) (traverseTelescope ft fp fm fi telescope) (ft t) (fp p)
+        me (Annotation e1 e2 t p) = (liftA4 Annotation) (me e1) (me e2) (ft t) (fp p)
+        me (NatTypeExpression t p) = (liftA2 NatTypeExpression) (ft t) (fp p)
+
+traverseTelescope :: forall t1 p1 m1 i1 t2 p2 m2 i2 a. (Bindable t1, Bindable t2, Bindable p1, Bindable p2, Bindable i1, Bindable i2, Bindable m1, Bindable m2, Applicative a) => (t1 -> a t2) -> (p1 -> a p2) -> (m1 -> a m2) ->  (i1 -> a i2) -> Telescope t1 p1 m1 i1 -> a (Telescope t2 p2 m2 i2)
+traverseTelescope ft fp fm fi = te
+  where te (Scope e ((Just (a, NoBind i, NoBind p)) :. scope))   = liftA2 Scope (me e) (liftA2 abst (liftA3 filler (pure a) (fi i) (fp p)) (te scope))
+        te (Scope e ((Nothing                       :. scope)))  = liftA2 Scope (me e) (liftA2 abst (pure Nothing)                         (te scope))
+        te (Pi    e ((Just (a, NoBind i, NoBind p)) :. eBound))  = liftA2 Pi    (me e) (liftA2 abst (liftA3 filler (pure a) (fi i) (fp p)) (me eBound))
+        te (Pi    e ((Nothing                       :. eBound))) = liftA2 Pi    (me e) (liftA2 abst (pure Nothing)                         (me eBound))
+        filler a i p = Just (a, NoBind i, NoBind p)
+        me = traverseExpr ft fp fm fi
+
+
+traverseFunctionLiteral :: forall t1 p1 m1 i1 t2 p2 m2 i2 a. (Bindable t1, Bindable t2, Bindable p1, Bindable p2, Bindable i1, Bindable i2, Bindable m1, Bindable m2, Applicative a) => (t1 -> a t2) -> (p1 -> a p2) -> (m1 -> a m2) ->  (i1 -> a i2) -> FunctionLiteral t1 p1 m1 i1 -> a (FunctionLiteral t2 p2 m2 i2)
+traverseFunctionLiteral ft fp fm fi = fe
+  where fe (Arg     e (((a, NoBind i, NoBind p)) :. scope))   = liftA2 Arg     (me e) (liftA2 abst (liftA3 filler (pure a) (fi i) (fp p)) (fe scope))
+        fe (LastArg e (((a, NoBind i, NoBind p)) :. eBound))  = liftA2 LastArg (me e) (liftA2 abst (liftA3 filler (pure a) (fi i) (fp p)) (me eBound))
+        filler a i p = (a, NoBind i, NoBind p)
+        me = traverseExpr ft fp fm fi
+
+traverseExpr2 :: (Bindable t, Bindable p, Bindable i, Bindable m1, Bindable m2, Monad mo) => (m1 -> mo m2) -> Expression t p m1 i -> mo (Expression t p m2 i)
+traverseExpr2 fm = traverseExpr (fmap pure id) (fmap pure id) (fm) (fmap pure id)
+
+forExpr2 :: (Bindable t, Bindable p, Bindable i, Monad mo, Bindable m1, Bindable m2) => Expression t p m1 i -> (m1 -> mo m2) -> mo (Expression t p m2 i)
+forExpr2 x y = traverseExpr2 y x
+
+
+mapExpr :: forall t1 p1 m1 i1 t2 p2 m2 i2. (Bindable t1, Bindable t2, Bindable p1, Bindable p2, Bindable i1, Bindable i2, Bindable m1, Bindable m2) => (t1 -> t2) -> (p1 -> p2) -> (m1 -> m2) ->  (i1 -> i2) -> Expression t1 p1 m1 i1 -> Expression t2 p2 m2 i2
+mapExpr ft fp fm fi e = runIdentity $ traverseExpr ftm fpm fmm fim e
+  where ftm = fmap pure ft
+        fpm = fmap pure fp
+        fmm = fmap pure fm
+        fim = fmap pure fi
+
+
+normalizeExprMetadata :: forall t p m i . (Bindable t, Bindable p, Bindable i, Bindable m) => Expression t p m i -> Expression () () m () 
+normalizeExprMetadata = mapExpr (const ()) (const ()) id (const ())

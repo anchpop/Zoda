@@ -91,6 +91,7 @@ default-extensions:
 - DeriveAnyClass 
 - PolyKinds
 - NoImplicitPrelude
+- UnicodeSyntax 
 
 library:
   source-dirs: src
