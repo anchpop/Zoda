@@ -70,6 +70,27 @@ getBodyOfFlit (LastArg _ (_ :. e)) = e
 
 
 
+
+substExpr lookingFor substWith = subst 
+  where subst (ParenthesizedExpression e t p) = ParenthesizedExpression (subst e) t p
+        subst (FirstExpression e t p) = FirstExpression (subst e) t p
+        subst (SecondExpression e t p) = SecondExpression (subst e) t p
+        subst (TSigmaBinding e1 (a :. e2) t p) = TSigmaBinding (subst e1) (a :. (subst e2)) t p
+        subst (UniverseExpression i t p) = UniverseExpression i t p
+        subst (NumberLiteral i t p) = NumberLiteral i t p
+        subst (AddExpression e1 e2 t p) = AddExpression (subst e1) (subst e2) t p
+        subst (ReferenceVariable i m t p) = ReferenceVariable i m t p
+        subst (LambdaVariable (a, i) t p) = if a == lookingFor then substWith else LambdaVariable (a, i) t p
+        subst (FunctionApplicationExpression func args t p) = FunctionApplicationExpression (subst func) (fmap subst args) t p
+        subst (TArrowBinding scope t p) = TArrowBinding (substTelescope lookingFor substWith scope) t p
+        subst (Annotation e1 e2 t p) = Annotation (subst e1) (subst e2) t p
+        subst (NatTypeExpression t p) = NatTypeExpression t p
+        subst (FunctionLiteralExpression flit t p) = FunctionLiteralExpression (substFlit lookingFor substWith flit) t p
+
+substFlit lookingFor substWith = undefined
+substTelescope lookingFor substWith = undefined
+
+
 liftA4 f a b c d = liftA3 f a b c <*> d
 
 traverseExpr :: forall t1 p1 m1 i1 t2 p2 m2 i2 a. (Bindable t1, Bindable t2, Bindable p1, Bindable p2, Bindable i1, Bindable i2, Bindable m1, Bindable m2, Applicative a) => (t1 -> a t2) -> (p1 -> a p2) -> (m1 -> a m2) ->  (i1 -> a i2) -> Expression t1 p1 m1 i1 -> a (Expression t2 p2 m2 i2)

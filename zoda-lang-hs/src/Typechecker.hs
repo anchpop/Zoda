@@ -58,7 +58,7 @@ mergFlitAndScope (Arg _ _) (Pi _ _) = Left ()
 -- the telescope. It then returns the normalized output type (normalized because
 -- we may need to substitute some values in the type with the arguments, i.e.
 -- if you pass `Int, 3` to `(a: Type, v: a) -> a` we actually need to do mulitple normalizations)
-checkScopeAndGetOutput context  = undefined--(LastArg (((), ) :. )) (Pi ((Just (), ) :. )) = 
+checkScopeAndGetOutput context (arg NonEmpty.:| []) (Pi argType ((Just (a, _, _)) :. bodyType)) = undefined 
 
 extendContextWithScope context (Pi e1 ((Just (a, i, p)) :. e2)) = addTypeToEnv a e1 context
 extendContextWithScope context (Pi _ (Nothing :. e2)) = context
@@ -103,7 +103,7 @@ inferType modu context (NumberLiteral _ t p) = pure $ NatTypeExpression t p
 --          context ⊢ (x) => t
 inferType modu context (ParenthesizedExpression e _ _) = inferType modu context e
 
-checkType :: (Bindable t, Bindable p, Bindable m, Bindable i, Eq t, Eq p, Eq m, Eq i, Ord m) => JustifiedModule t p ph m i ->  Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Either () ()
+checkType :: (Bindable t, Bindable p, Bindable m, Bindable i, Eq t, Eq p, Eq m, Eq i, Ord m) => JustifiedModule t p ph m i -> Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Either () ()
 -- Type checking rule for lambda abstraction
 --          context, x:t  ⊢  e <= s
 --     ------------------------------------
