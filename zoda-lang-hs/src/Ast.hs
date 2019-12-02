@@ -87,8 +87,14 @@ substExpr lookingFor substWith = subst
         subst (NatTypeExpression t p) = NatTypeExpression t p
         subst (FunctionLiteralExpression flit t p) = FunctionLiteralExpression (substFlit lookingFor substWith flit) t p
 
-substFlit lookingFor substWith = undefined
-substTelescope lookingFor substWith = undefined
+substTelescope lookingFor substWith = subst 
+  where substE = substExpr lookingFor substWith
+        subst (Scope e1 (a :. scope)) = Scope (substE e1) (a :. subst scope)
+        subst (Pi    e1 (a :. e2   )) = Pi (substE e1) (a :. substE e2)
+substFlit lookingFor substWith = subst
+  where substE = substExpr lookingFor substWith
+        subst (Arg     e1 (a :. scope)) = Arg     (substE e1) (a :. subst scope)
+        subst (LastArg e1 (a :. e2   )) = LastArg (substE e1) (a :. substE e2)
 
 
 liftA4 f a b c d = liftA3 f a b c <*> d
