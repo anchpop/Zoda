@@ -56,7 +56,7 @@ test = parallel $ do
       
     it "evaluates addition function" $ do
       let exampleModule = "module i `test module`\n\
-                      \main = 3.(|a : 0| (a + 4))\n\
+                      \main = 3.(|a : Nat| (a + 4))\n\
                       \"
                       
       (getRightZSE $ produceProgram exampleModule) `shouldBe` 7
@@ -65,7 +65,7 @@ test = parallel $ do
     it "evaluates addition function behind indirection " $ do
       let exampleModule = "module i `test module`\n\
                     \test = 3 + 1 \n\
-                    \func = |a : 0| (a + 4) \n\
+                    \func = |a : Nat| (a + 4) \n\
                     \main = test.func\n\
                     \"
                     
@@ -74,8 +74,8 @@ test = parallel $ do
     it "evaluates higher order functions " $ do
       let exampleModule = "module i `test module`\n\
                     \test = 3 + 1 \n\
-                    \func = |a : 0| (a + 4) \n\
-                    \ho = |a : 0| (|b : 0| a.b)\n\
+                    \func = |a : Nat| (a + 4) \n\
+                    \ho = |a : Nat| (|b : (Nat) -> Nat| a.b)\n\
                     \main = func.(test.ho)\n\
                     \"
                     
@@ -84,8 +84,8 @@ test = parallel $ do
     it "evaluates functions with multiple arguments " $ do
       let exampleModule = "module i `test module`\n\
                     \test = 3 + 1 \n\
-                    \func = |a : 0| (a + 4) \n\
-                    \ho = |a : 0, b : 0| (a.b)\n\
+                    \func = |a : Nat| (a + 4) \n\
+                    \ho = |a : Nat, b : (Nat) -> Nat| (a.b)\n\
                     \main = test.ho(func)\n\
                     \"
                     

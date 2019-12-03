@@ -17,7 +17,7 @@ import Parser
 import qualified Data.List.NonEmpty as NonEmpty
 
 produceProgram :: Text -> Either (ProductionError Untyped SourcePosition (Text, SourcePosition) Text) Rational
-produceProgram input = join (parsedModule >>= (\x -> copyPropagated x (applicant x)))
+produceProgram input = join (parsedModule >>= (\x -> copyPropagated primatives x (applicant x)))
   where
     parsedModule = parseModule input
     applicant moduOriginal modu = do
@@ -28,3 +28,9 @@ produceProgram input = join (parsedModule >>= (\x -> copyPropagated x (applicant
       where modu' = fmap normalizeExprMetadata modu
 
 np = NoBind ()
+
+
+primatives = [
+    ("Type", UniverseExpression 1 Untyped Base),
+    ("Nat", NatTypeExpression Untyped Base)
+  ]

@@ -6,6 +6,7 @@ import Basic
 import Data.List.NonEmpty( NonEmpty( (:|) ) )
 import Normalizer
 import qualified Data.List.NonEmpty as NonEmpty
+import qualified Data.Map.Justified as Map
 
 data Env t p ph m i = Env {types :: [(Atom, JustifiedExpression t p ph m i)], values :: [(Atom, JustifiedExpression t p ph m i)]} deriving (Eq, Show)
 addTypeToEnv a t (Env ts vs) = (Env ((a, t):ts) vs)
@@ -22,7 +23,7 @@ typecheck modu = case traverse (inferType modu mempty) modu of
   Right v -> Right ()
 
 sameValue :: Constraints t p m i => JustifiedModule t p ph m i -> Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Bool
-sameValue modu context e1 t1 e2 t2 = e1Normalized == e2Normalized
+sameValue modu context e1 t1 e2 t2 = True--e1Normalized == e2Normalized
   where e1Normalized = normalize modu (getValueMap context) e1 t1
         e2Normalized = normalize modu (getValueMap context) e2 t2
 
@@ -49,32 +50,40 @@ type Constraints t p m i = (Bindable t, Bindable p, Bindable m, Bindable i, Eq t
 mergedFlitAndScope :: Constraints t p m i => FunctionLiteral t p m i -> Telescope t p m i -> Either () (MergedFlitAndScope t p m i)
 mergedFlitAndScope (Arg ea ((aa, ia, pa) :. argsInner)) (Scope es (Just (as, is, ps) :. scopeInner)) = do 
   let (a' :. (argsMergedInner, scopeMergedInner)) = merge (aa :. argsInner) (as :. scopeInner)
-  mergedInner <- mergFlitAndScope argsInner scopeInner
+  mergedInner <- mergedFlitAndScope argsInner scopeInner
   pure $ FlitArg ea es (a'  :. mergedInner)
 
-mergFlitAndScope (Arg ea ((aa, ia, pa) :. argsInner)) (Scope es (Nothing :. scopeInner)) = do
-  mergedInner <- mergFlitAndScope argsInner scopeInner
+mergedFlitAndScope (Arg ea ((aa, ia, pa) :. argsInner)) (Scope es (Nothing :. scopeInner)) = do
+  mergedInner <- mergedFlitAndScope argsInner scopeInner
   pure $ FlitArg ea es (aa :. mergedInner)
 
-mergFlitAndScope (LastArg ea ((aa, ia, pa) :. body)) (Pi es ((Just (as, is, ps)) :. outputType)) = do
+mergedFlitAndScope (LastArg ea ((aa, ia, pa) :. body)) (Pi es ((Just (as, is, ps)) :. outputType)) = do
   let (a' :. (bodyMerged, outputTypedMerged)) = merge (aa :. body) (as :. outputType)
   pure $ PiArg ea es (a' :. (bodyMerged, outputTypedMerged))
 
-mergFlitAndScope lastArg@(LastArg ea ((aa, ia, pa) :. body)) pi@(Pi es (Nothing :. outputType)) = do
+mergedFlitAndScope lastArg@(LastArg ea ((aa, ia, pa) :. body)) pi@(Pi es (Nothing :. outputType)) = do
   pure $ PiArg ea es (aa :. (body, outputType))
 
-mergFlitAndScope (LastArg _ _) (Scope _ _) = Left () 
+mergedFlitAndScope (LastArg _ _) (Scope _ _) = Left () 
 
-mergFlitAndScope (Arg _ _) (Pi _ _) = Left ()
+mergedFlitAndScope (Arg _ _) (Pi _ _) = Left ()
 
 -- |Takes a context, a list of args, and a telescope.
 -- It checks that the input arguments' types match the types specified in 
 -- the telescope. It then returns the output type with the appropriate substitutions done.
--- if you pass `Int, 3` to `(a: Type, v: a) -> a` it should return `Right Int`
+-- if you pass `Int, 3` to `(a: Type, v: a) -> a` it should return `Int`
 checkScopeAndGetOutput modu context (arg NonEmpty.:| []) (Pi argType ((Just (a, _, _)) :. bodyType)) = do 
   checkType modu context arg argType
-  pure $ substExpr a arg bodyType 
-
+  pure $ substExpr a arg bodyType
+checkScopeAndGetOutput modu context (arg NonEmpty.:| []) (Pi argType (Nothing :. bodyType)) = do 
+  checkType modu context arg argType
+  pure bodyType 
+checkScopeAndGetOutput modu context (arg NonEmpty.:| (r':rest)) (Scope argType ((Just (a, _, _)) :. innerScope)) = do 
+  checkType modu context arg argType
+  checkScopeAndGetOutput modu context (r' NonEmpty.:| rest) (substTelescope a arg innerScope)
+checkScopeAndGetOutput modu context (arg NonEmpty.:| []) (Scope _ _) = Left ()
+checkScopeAndGetOutput modu context (arg NonEmpty.:| _) (Pi _ _) = Left () 
+  
 extendContextWithScope context (Pi e1 ((Just (a, i, p)) :. e2)) = addTypeToEnv a e1 context
 extendContextWithScope context (Pi _ (Nothing :. e2)) = context
 extendContextWithScope context (Scope e ((Just (a, i, p)) :. scope)) = addTypeToEnv a e (extendContextWithScope context scope)
@@ -82,6 +91,14 @@ extendContextWithScope context (Scope _ (Nothing :. scope)) = extendContextWithS
 
 
 inferType :: Constraints t p m i => JustifiedModule t p ph m i -> Env t p ph m i -> JustifiedExpression t p ph m i -> Either () (JustifiedExpression t p ph m i)
+-- Typing rule for universes
+--     ---------------------------------------
+--           Universe i => Universe (i + 1)
+inferType modu context (UniverseExpression i t p) = pure $ UniverseExpression (i + 1) t p
+-- Typing rule for Nat
+--     ---------------------------------------
+--           Nat => Universe 1
+inferType modu context (NatTypeExpression t p) = pure $ UniverseExpression 1 t p
 -- Typing rule for annotations
 --        t is a type      context ⊢ e <= t
 --     ---------------------------------------
@@ -116,6 +133,8 @@ inferType modu context (AddExpression e1 e2 t p) = do
   checkType modu context e2 (NatTypeExpression t p) 
   pure $ NatTypeExpression t p
 inferType modu context (NumberLiteral _ t p) = pure $ NatTypeExpression t p
+inferType modu context (ReferenceVariable i m t p) = inferType modu context (m `Map.lookup` modu)
+inferType modu context (ParenthesizedExpression e t p) = inferType modu context e
 inferType modu context other                 = error $ "couldn't infer a type for " <> show other 
 -- Typing rule for parentheses
 --          context ⊢  x => t
@@ -138,6 +157,9 @@ checkType modu context (FunctionLiteralExpression flit _ _) shouldBe =
                                   handleMerge context mergedFlitScope--checkType modu (extendContextWithScope context mergedScope) (getBodyOfFlit mergedFlit) (getOutputOfScope mergedScope)
   where handleMerge context' (FlitArg _ es (a :. inner             )) = handleMerge (addTypeToEnv a es context') inner
         handleMerge context' (PiArg   _ es (a :. (body, outputType))) = checkType modu (addTypeToEnv a es context') body outputType 
+        
+checkType modu context (ReferenceVariable i m t p) shouldBe = checkType modu context (m `Map.lookup` modu) shouldBe
+checkType modu context (ParenthesizedExpression e t p) shouldBe = checkType modu context e shouldBe
 -- Type checking rule for everything else
 --       context ⊢ e => t 
 -- ------------------------------------

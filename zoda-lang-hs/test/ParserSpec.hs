@@ -63,7 +63,7 @@ test = parallel $ do
 
 
     it "parses single argument functions" $ do
-      parseSomething "|a : 0| a" expressionP `shouldParseToMD` (with_fresh_named "a" $ \a -> FunctionLiteralExpression (LastArg (NumberLiteral (0 % 1) () ()) ((a,np,np) :. LambdaVariable (a,()) () ())) () ())
+      parseSomething "|a : Type| a" expressionP `shouldParseToMD` (with_fresh_named "a" $ \a -> FunctionLiteralExpression (LastArg (ReferenceVariable () ("Type",(SourcePosition "no_file" 1 6 1 10)) () ()) ((a,np,np) :. LambdaVariable (a,()) () ())) () ())
 
 
     it "parses multi argument functions" $ do

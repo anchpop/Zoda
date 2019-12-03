@@ -100,7 +100,7 @@ expressionP = expParser
         where 
           makeTelescope ((a, e) NonEmpty.:| [])        expr2 = Pi e (a :. expr2)
           makeTelescope ((a, e) NonEmpty.:| (a1 : as)) expr2 = Scope e (a :. (makeTelescope (a1 NonEmpty.:| as) expr2))
-          binder1P = do 
+          binder1P = try $ do 
             (name, namepos) <- padded $ sourcePosWrapper identifierP
             let atom = with_fresh_named (unpack name) id
             modify ([(name, (atom, namepos))]:)
@@ -108,8 +108,7 @@ expressionP = expParser
             string ":"
             expr <- padded expressionP
             pure (Just (atom, NoBind name, NoBind namepos), expr)
-          binder2P = do 
-            padded $ string ","
+          binder2P = try $ do 
             expr <- padded expressionP
             pure (Nothing, expr)
     
@@ -229,10 +228,13 @@ identifierCharacter = try letterChar <|> try alphaNumChar <|> try (char '\'') <|
 type ParserState = [[(Text, (Atom, SourcePosition))]]
 type Parser a = StateT ParserState (Parsec ZodaParseError String) a
 type ASTParser a = Parser (SourcePosition -> a Untyped SourcePosition (Text, SourcePosition) Text)
-data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
+data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} 
+                    | Base 
+                    deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
 instance Show SourcePosition where
-  --show (SourcePosition _ _ _ _ _) = ""
+  --show _ = ""
   show (SourcePosition f l1 c1 l2 c2) = "(SourcePosition \"" <> f <> "\" " <> (show l1) <> " " <> (show c1) <> " " <> (show l2) <> " " <> (show c2) <> ")"
+  show (Base) = "Base" 
 
 sourcePosWrapper :: Parser (SourcePosition -> a) -> Parser a
 sourcePosWrapper f = do
@@ -269,6 +271,7 @@ getRight (Left  err) = error $ errorBundlePretty err
 getRightZSE :: Either (ProductionError t p1 m i) p2 -> p2
 getRightZSE (Right b  )                   = b
 getRightZSE (Left  (ZodaSyntaxError err)) = error $ errorBundlePretty err
+getRightZSE (Left TypeErr)                = error "type error!"
 getRightZSE (Left  _)                     = error "Parse error!"
 
 
@@ -302,3 +305,6 @@ combineSourcePos expr1 expr2 = SourcePosition filePath sourceLineStart sourceCol
 
 noNewlineOrChars :: (MonadParsec e s m, Token s ~ Char) => [Char] -> m (Token s)
 noNewlineOrChars c = noneOf ('\n' : c)
+
+
+
