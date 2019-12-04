@@ -23,7 +23,7 @@ data Expression t p m i = ParenthesizedExpression       (Expression t p m i)    
                         | FirstExpression               (Expression t p m i)                                                          t p 
                         | SecondExpression              (Expression t p m i)                                                          t p 
                         | PairExpression                (Expression t p m i)                                    (Expression t p m i)  t p 
-                        | TSigmaBinding                 (Expression t p m i) (Bind (Atom, NoBind i, NoBind p) (Expression t p m i)) t p 
+                        | TSigmaBinding                 (Expression t p m i) (Bind (Atom, NoBind i, NoBind p)   (Expression t p m i)) t p 
                         | UniverseExpression Integer                                                                                  t p 
                         | NumberLiteral Rational                                                                                      t p 
                         | AddExpression                 (Expression t p m i)                                    (Expression t p m i)  t p 
@@ -75,6 +75,7 @@ substExpr lookingFor substWith = subst
   where subst (ParenthesizedExpression e t p) = ParenthesizedExpression (subst e) t p
         subst (FirstExpression e t p) = FirstExpression (subst e) t p
         subst (SecondExpression e t p) = SecondExpression (subst e) t p
+        subst (PairExpression e1 e2 t p) = PairExpression (subst e1) (subst e2) t p
         subst (TSigmaBinding e1 (a :. e2) t p) = TSigmaBinding (subst e1) (a :. (subst e2)) t p
         subst (UniverseExpression i t p) = UniverseExpression i t p
         subst (NumberLiteral i t p) = NumberLiteral i t p
