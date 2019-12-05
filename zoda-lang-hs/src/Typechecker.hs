@@ -152,11 +152,11 @@ inferType modu = inferType' where
   inferType' context (TSigmaBinding e1 (Just (a, _, _) :. e2) _ _) = do
     e1T <- inferType' context e1
     e2T <- inferType' (addTypeToEnv a e1 context) e2
-    pure $ combineUniverses e1T e2T
+    combineUniverses e1T e2T
   inferType' context (TSigmaBinding e1 (Nothing :. e2) _ _) = do
     e1T <- inferType' context e1
     e2T <- inferType' context e2
-    pure $ combineUniverses e1T e2T
+    combineUniverses e1T e2T
   inferType' context (ReferenceVariable i m _ _) = inferType' context (m `Map.lookup` modu)
   inferType' context (FirstExpression e _ _) = do 
     eT <- inferType' context e 
@@ -169,11 +169,20 @@ inferType modu = inferType' where
       TSigmaBinding e1 (Just (a, _, _) :. e2) _ _ -> pure (substExpr a e1 e2) 
       TSigmaBinding e1 (Nothing        :. e2) _ _ -> pure e2
       _                                           -> Left ()
-  inferType' context (PairExpression e1 e2 t p) = do
-    e1T <- inferType' context e1 
-    e2T <- inferType' context e2 
-    pure $ TSigmaBinding e1 (Nothing :. e2) t p
-  inferType' context (TArrowBinding _ _ _) = undefined
+  inferType' context (PairExpression e1T e2T t p) = do
+    e1TT <- inferType' context e1T 
+    e2TT <- inferType' context e2T 
+    pure $ TSigmaBinding e1TT (Nothing :. e2TT) t p
+  inferType' context (TArrowBinding flit t p) = combineArrow flit
+    where 
+      combineArrow (Scope argT (_ :. rest)) = do 
+        argTT <- inferType' context argT
+        restT <- combineArrow rest
+        combineUniverses argTT argT
+      combineArrow (Pi argT (_ :. outT)) = do 
+        argTT <- inferType' context argT
+        outTT <- inferType' context outT
+        combineUniverses argTT outTT
   inferType modu context other                 = error $ "couldn't infer a type for " <> show other 
 
 checkType :: Constraints t p m i => JustifiedModule t p ph m i -> Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Either () ()
@@ -215,4 +224,5 @@ getUniverse modu = getUniverse'
         getUniverse' (ReferenceVariable i m _ _) = m `Map.lookup` modu
         getUniverse' (ReferenceVariable i m _ _) = m `Map.lookup` modu
 -}
-combineUniverses f@(UniverseExpression i1 _ _)  s@(UniverseExpression i2 _ _) = if i1 > i2 then f else s 
+combineUniverses f@(UniverseExpression i1 t1 p1) s@(UniverseExpression i2 t2 p2) = pure $ if i1 > i2 then f else s
+combineUniverses _                           _                                   = Left ()
