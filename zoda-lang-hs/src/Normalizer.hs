@@ -108,6 +108,11 @@ read_back_nf modu (Normal NatTypeSem (NeutralSem _ ne))           = read_back_ne
 read_back_nf modu (Normal (UniSem i) (PiTypeSem src dest))        = TArrowBinding (Pi (read_back_nf modu (Normal (UniSem i) src)) ((Just (atom, np, np))  :. (read_back_nf modu (Normal (UniSem i) (do_clos modu dest var))))) () ()
                                                                       where Clos (atom :. _) _ = dest
                                                                             var = mk_var src atom
+read_back_nf modu (Normal (UniSem i) (SigTypeSem fst snd)) = TSigmaBinding (read_back_nf modu (Normal (UniSem i) fst)) ((atom, np, np) :. read_back_nf modu (Normal (UniSem i) (do_clos modu snd var))) () ()
+  where Clos (atom :. _) _ = snd
+        var = mk_var fst atom
+read_back_nf modu (Normal (UniSem _) (UniSem j)) = UniverseExpression j () ()
+read_back_nf modu (Normal (UniSem _) NatTypeSem) = NatTypeExpression () ()
 read_back_nf modu (Normal (NeutralSem _ _) (NeutralSem _ ne)) = read_back_ne modu ne
 read_back_nf _     v                                          = error $ "Ill-typed read_back_nf - " <> show v
 

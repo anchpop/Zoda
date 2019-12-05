@@ -47,7 +47,7 @@ test = parallel $ do
     it "evaluates identity function" $ do
       let exampleModule = "module i `test module`\n\
                     \test = 3 + 5\n\
-                    \func = |a : 0| a \n\
+                    \func = |a : Nat| a \n\
                     \main = test.func\n\
                     \"
                     
