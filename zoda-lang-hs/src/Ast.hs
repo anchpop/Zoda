@@ -23,7 +23,7 @@ data Expression t p m i = ParenthesizedExpression       (Expression t p m i)    
                         | FirstExpression               (Expression t p m i)                                                          t p 
                         | SecondExpression              (Expression t p m i)                                                          t p 
                         | PairExpression                (Expression t p m i)                                    (Expression t p m i)  t p 
-                        | TSigmaBinding                 (Expression t p m i) (Bind (Atom, NoBind i, NoBind p)   (Expression t p m i)) t p 
+                        | TSigmaBinding                 (Expression t p m i) (Bind (Maybe (Atom, NoBind i, NoBind p)) (Expression t p m i)) t p 
                         | UniverseExpression Integer                                                                                  t p 
                         | NumberLiteral Rational                                                                                      t p 
                         | AddExpression                 (Expression t p m i)                                    (Expression t p m i)  t p 
@@ -106,8 +106,9 @@ traverseExpr ft fp fm fi = me
         me (ParenthesizedExpression e t p) = liftA3 ParenthesizedExpression (me e) (ft t) (fp p)
         me (FirstExpression e t p)         = (liftA3 FirstExpression) (me e) (ft t) (fp p)
         me (SecondExpression e t p)        = (liftA3 SecondExpression) (me e) (ft t) (fp p)
-        me (PairExpression e1 e2 t p)      = (liftA4 PairExpression) (me e1) (me e2) (ft t) (fp p) -- 
-        me (TSigmaBinding e1 ((a, NoBind i, NoBind p1) :. e2) t p2) = liftA4 TSigmaBinding (me e1) (liftA2 abst (liftA2 (\x y -> (a, NoBind x, NoBind y)) (fi i) (fp p1)) (me e2)) (ft t) (fp p2)
+        me (PairExpression e1 e2 t p)      = (liftA4 PairExpression) (me e1) (me e2) (ft t) (fp p)
+        me (TSigmaBinding e1 (Just (a, NoBind i, NoBind p1) :. e2) t p2) = liftA4 TSigmaBinding (me e1) (liftA2 abst (liftA2 (\x y -> Just (a, NoBind x, NoBind y)) (fi i) (fp p1)) (me e2)) (ft t) (fp p2)
+        me (TSigmaBinding e1 (Nothing                       :. e2) t p2) = liftA4 TSigmaBinding (me e1) (liftA2 abst (pure Nothing) (me e2)) (ft t) (fp p2)
         me (UniverseExpression i t p)      = (liftA2 (UniverseExpression i)) (ft t) (fp p)
         me (NumberLiteral i t p)           = (liftA2 (NumberLiteral i)) (ft t) (fp p)
         me (AddExpression e1 e2 t p)       = (liftA4 AddExpression) (me e1) (me e2) (ft t) (fp p)

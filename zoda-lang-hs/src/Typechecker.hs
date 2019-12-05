@@ -149,13 +149,13 @@ inferType modu = inferType' where
   --     -----------------------------
   --          context ⊢ (x) => t
   inferType' context (ParenthesizedExpression e _ _) = inferType' context e
-  inferType' context (TSigmaBinding e1 ((a, _, _) :. e2) _ _) = do
+  inferType' context (TSigmaBinding e1 (Just (a, _, _) :. e2) _ _) = do
     e1T <- inferType' context e1
     e2T <- inferType' (addTypeToEnv a e1 context) e2
     pure $ combineUniverses e1T e2T
-  inferType' context (TSigmaBinding e1 ((a, _, _) :. e2) _ _) = do
+  inferType' context (TSigmaBinding e1 (Nothing :. e2) _ _) = do
     e1T <- inferType' context e1
-    e2T <- inferType' (addTypeToEnv a e1 context) e2
+    e2T <- inferType' context e2
     pure $ combineUniverses e1T e2T
   inferType' context (ReferenceVariable i m _ _) = inferType' context (m `Map.lookup` modu)
   inferType' context (FirstExpression e _ _) = do 
@@ -163,8 +163,16 @@ inferType modu = inferType' where
     case eT of 
       TSigmaBinding e _ _ _ -> pure e 
       _                     -> Left ()
-  inferType' context (SecondExpression _ _ _) = undefined
-  inferType' context (PairExpression _ _ _ _) = undefined
+  inferType' context (SecondExpression e _ _) = do
+    eT <- inferType' context e 
+    case eT of 
+      TSigmaBinding e1 (Just (a, _, _) :. e2) _ _ -> pure (substExpr a e1 e2) 
+      TSigmaBinding e1 (Nothing        :. e2) _ _ -> pure e2
+      _                                           -> Left ()
+  inferType' context (PairExpression e1 e2 t p) = do
+    e1T <- inferType' context e1 
+    e2T <- inferType' context e2 
+    pure $ TSigmaBinding e1 (Nothing :. e2) t p
   inferType' context (TArrowBinding _ _ _) = undefined
   inferType modu context other                 = error $ "couldn't infer a type for " <> show other 
 
