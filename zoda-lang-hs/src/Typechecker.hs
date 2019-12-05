@@ -23,24 +23,16 @@ typecheck modu = case traverse (inferType modu mempty) modu of
   Left () -> Left TypeErr
   Right v -> Right ()
 
-sameValue :: Constraints t p m i => JustifiedModule t p ph m i -> Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Bool
-sameValue modu context e1 t1 e2 t2 = e1Normalized == e2Normalized
-  where e1Normalized = normalize modu (getValueMap context) e1 t1
-        e2Normalized = normalize modu (getValueMap context) e2 t2
+isSubtype :: Constraints t p m i => JustifiedModule t p ph m i -> Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Bool
+isSubtype modu context e1 e2 = case (e1Normalized, e2Normalized) of 
+    (UniverseExpression uni1 _ _, UniverseExpression uni2 _ _) -> uni1 <= uni2
+    -- probably should do something with functions and pairs here
+    -- but not going to stress it too much since it might change soon
+    _                                                          -> e1Normalized == e2Normalized
+  where e1Normalized = normalizeType modu (getValueMap context) e1 
+        e2Normalized = normalizeType modu (getValueMap context) e2 
 
 
-{-
-makeTelescope :: (Bindable t, Bindable p, Bindable m, Bindable i, Eq t, Eq p, Eq m, Eq i, Ord m) => JustifiedModule t p ph m i -> Env t p ph m i -> JustifiedFunctionLiteral t p ph m i -> Either () (JustifiedTelescope t p ph m i)
-makeTelescope modu context (LastArg ((a, t) :. e)) = do
-    typ <- inferType context e 
-    pure $ Pi ((Just a, t) :. typ)
-makeTelescope modu context (Arg (((i, (a, p)), NoBind t) :. scope)) = do
-    scope' <- makeTelescope modu context' scope
-    pure $ Scope ((Just (i, (a, p)), NoBind t) :. scope')  
-  where context' = addTypeToEnv a t context
--}
-
- 
 
 data MergedFlitAndScope t p m i = FlitArg (Expression t p m i) (Expression t p m i) (Bind Atom (MergedFlitAndScope t p m i)) 
                                 | PiArg   (Expression t p m i) (Expression t p m i) (Bind Atom (Expression t p m i, Expression t p m i)) 
@@ -210,7 +202,7 @@ checkType modu context (ParenthesizedExpression e _ _) shouldBe = checkType modu
 -- Just infer a type and check that the type we inferred is the same as the one we want it to be
 checkType modu context toCheck shouldBe = do
   toCheckType <- inferType modu context toCheck
-  if sameValue modu context toCheckType (UniverseExpression 1 undefined undefined) shouldBe (UniverseExpression 1 undefined undefined) then Right () else Left ()
+  if isSubtype modu context toCheckType shouldBe then Right () else Left ()
 
 {-
 getUniverse modu = getUniverse'

@@ -1,4 +1,4 @@
-module Normalizer (normalize, copyPropagated) where
+module Normalizer (normalize, copyPropagated, normalizeType) where
 import ClassyPrelude hiding (lookup)
 import Data.List (lookup)
 import Basic 
@@ -176,11 +176,21 @@ normalize :: forall t p i ph m. (Bindable t, Bindable p, Bindable i, Constraints
 normalize modu env term tp = read_back_nf modu' (Normal tp' term')
   where env'  :: SemanticEnv () () (Map.Key ph m) ()
         env'  = make_initial_env modu' (normalizeExprEnv env) 
-        tp'   ::  Semantic () () (Map.Key ph m) ()
-        tp'   = eval modu' (normalizeExprMetadata tp) env' 
-        term' ::  Semantic () () (Map.Key ph m) ()
+        tp' :: Semantic () () (Map.Key ph m) ()
+        tp' = eval modu' (normalizeExprMetadata tp) env' 
+        term' :: Semantic () () (Map.Key ph m) ()
         term' = eval modu' (normalizeExprMetadata term) env' 
         modu' = fmap normalizeExprMetadata modu
+
+
+normalizeType :: forall t p i ph m. (Bindable t, Bindable p, Bindable i, Constraints m) => JustifiedModule t p ph m i -> SurfaceEnv t p (Map.Key ph m) i -> Expression t p (Map.Key ph m) i -> Expression () () (Map.Key ph m) ()
+normalizeType modu env term = read_back_tp modu' term'
+  where env'  :: SemanticEnv () () (Map.Key ph m) ()
+        env'  = make_initial_env modu' (normalizeExprEnv env) 
+        term' :: Semantic () () (Map.Key ph m) ()
+        term' = eval modu' (normalizeExprMetadata term) env' 
+        modu' = fmap normalizeExprMetadata modu
+
 
 copyPropagated :: forall i p t o. (Ord i, Bindable i, Bindable p, Bindable t) => [(i, Expression t p (i, p) i)] -> Module t p (i, p) i -> (forall ph. JustifiedModule t p ph i i -> o) -> Either (ProductionError t p (i, p) i) o
 copyPropagated primatives (Module _ declarations _) f = Map.withMap dUMap (\m -> f <$> dJmapToJustifiedModule m)
