@@ -1,4 +1,4 @@
-module Normalizer (normalize, copyPropagated, normalizeType) where
+module Normalizer (normalize, normalizeType) where
 import ClassyPrelude hiding (lookup)
 import Data.List (lookup)
 import Basic 
@@ -190,19 +190,6 @@ normalizeType modu env term = read_back_tp modu' term'
         term' :: Semantic () () (Map.Key ph m) ()
         term' = eval modu' (normalizeExprMetadata term) env' 
         modu' = fmap normalizeExprMetadata modu
-
-
-copyPropagated :: forall i p t o. (Ord i, Bindable i, Bindable p, Bindable t) => [(i, Expression t p (i, p) i)] -> Module t p (i, p) i -> (forall ph. JustifiedModule t p ph i i -> o) -> Either (ProductionError t p (i, p) i) o
-copyPropagated primatives (Module _ declarations _) f = Map.withMap dUMap (\m -> f <$> dJmapToJustifiedModule m)
-  where
-    dUMap = UMap.fromList (primatives <> (fmap (\(Declaration identifier expression _) -> (identifier, expression)) declarations))
-    dJmapToJustifiedModule :: (Map.Map ph i (Expression t p (i, p) i)) -> Either (ProductionError t p (i, p) i) (Map.Map ph i (JustifiedExpression t p ph i i))
-    dJmapToJustifiedModule m = 
-      for m (\e -> forExpr2 e (justifyReferences m))
-    justifyReferences :: Map.Map ph i c -> (i, p)->  Either (ProductionError t p m i) (Map.Key ph i)
-    justifyReferences referenceMap (iJustified, pJustified) = case iJustified `Map.member` referenceMap of 
-      Nothing -> Left $ UndeclaredValuesReferenced [(iJustified, pJustified)] 
-      Just k  -> pure k 
 
 
 

@@ -17,10 +17,44 @@ import Data.Foldable (for_)
 import Parser
 import Ast
 
+import Interpreter
 import Typechecker
+
+typcheckS str = do 
+  modu <- parseModule str
+  result <- copyPropagated primatives modu typecheck
+  result
 
 test :: SpecWith ()
 test = parallel $ do
   describe "CopyPropagatedProgramConverter.evaluateMain" $ do
-    it "typechecks on correct typing" $ do
-      3 `shouldBe` 3
+    it "typechecks numbers" $ do
+      let exampleModule = "module i `test module`\n\
+                    \test = 3 + 5\n\
+                    \main = test\n\
+                    \" :: Text
+      typcheckS exampleModule `shouldBe` Right ()
+      
+    it "typechecks functions" $ do
+      let exampleModule = "module i `test module`\n\
+                    \test = 3 + 5\n\
+                    \func = |a : Nat| a \n\
+                    \main = test.func\n\
+                    \" :: Text
+      typcheckS exampleModule `shouldBe` Right ()
+      
+    it "typechecks generic functions" $ do
+      let exampleModule = "module i `test module`\n\
+                    \test = 3 + 5\n\
+                    \func = |a : Type, b : a| b \n\
+                    \main = Nat.func(3)\n\
+                    \" :: Text
+      typcheckS exampleModule `shouldBe` Right ()
+      
+    it "doesn't allow you to use a number where a type is expected" $ do
+      let exampleModule = "module i `test module`\n\
+                    \test = 3 + 5\n\
+                    \func = |a : Type, b : a| b \n\
+                    \main = 3.func(Nat)\n\
+                    \" :: Text
+      typcheckS exampleModule `shouldSatisfy` isLeft
