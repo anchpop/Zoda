@@ -20,6 +20,7 @@ import Ast
 import Interpreter
 import Typechecker
 
+typcheckS :: Text -> Either (ProductionError Untyped SourcePosition (Text, SourcePosition) Text) ()
 typcheckS str = do 
   modu <- parseModule str
   result <- copyPropagated primatives modu typecheck

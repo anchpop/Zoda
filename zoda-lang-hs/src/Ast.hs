@@ -13,7 +13,7 @@ import Optics
 import qualified Data.Bifunctor as Data.Bifunctor
 import Data.Void
 import Data.List.NonEmpty
- 
+
 data Module t p m i = Module (ModuleHeader t p m i) [(Declaration t p m i)] p deriving (Show, Eq, Generic, Typeable)
 data ModuleHeader t p m i = ModuleHeader i (Tinydoc t p m i) p deriving (Show, Read, Eq, Ord, Generic, Typeable)
 
@@ -70,7 +70,7 @@ getBodyOfFlit (LastArg _ (_ :. e)) = e
 
 
 
-
+substExpr :: (Nominal t, Nominal p, Nominal i, Nominal m) => Atom -> Expression t p m i -> Expression t p m i -> Expression t p m i
 substExpr lookingFor substWith = subst 
   where subst (ParenthesizedExpression e t p) = ParenthesizedExpression (subst e) t p
         subst (FirstExpression e t p) = FirstExpression (subst e) t p
@@ -88,16 +88,18 @@ substExpr lookingFor substWith = subst
         subst (NatTypeExpression t p) = NatTypeExpression t p
         subst (FunctionLiteralExpression flit t p) = FunctionLiteralExpression (substFlit lookingFor substWith flit) t p
 
+substTelescope :: (Nominal t, Nominal p, Nominal i, Nominal m) => Atom -> Expression t p m i -> Telescope t p m i -> Telescope t p m i
 substTelescope lookingFor substWith = subst 
   where substE = substExpr lookingFor substWith
         subst (Scope e1 (a :. scope)) = Scope (substE e1) (a :. subst scope)
         subst (Pi    e1 (a :. e2   )) = Pi (substE e1) (a :. substE e2)
+substFlit :: (Nominal t, Nominal p, Nominal i, Nominal m) => Atom -> Expression t p m i -> FunctionLiteral t p m i -> FunctionLiteral t p m i
 substFlit lookingFor substWith = subst
   where substE = substExpr lookingFor substWith
         subst (Arg     e1 (a :. scope)) = Arg     (substE e1) (a :. subst scope)
         subst (LastArg e1 (a :. e2   )) = LastArg (substE e1) (a :. substE e2)
 
-
+liftA4 :: Applicative f => (a1 -> b1 -> c -> a2 -> b2) -> f a1 -> f b1 -> f c -> f a2 -> f b2
 liftA4 f a b c d = liftA3 f a b c <*> d
 
 traverseExpr :: forall t1 p1 m1 i1 t2 p2 m2 i2 a. (Bindable t1, Bindable t2, Bindable p1, Bindable p2, Bindable i1, Bindable i2, Bindable m1, Bindable m2, Applicative a) => (t1 -> a t2) -> (p1 -> a p2) -> (m1 -> a m2) ->  (i1 -> a i2) -> Expression t1 p1 m1 i1 -> a (Expression t2 p2 m2 i2)

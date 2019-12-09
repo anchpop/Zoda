@@ -95,7 +95,6 @@ expressionP = expParser
       padded $ string "->"
       expr2 <- expressionP
       put s
-      
       pure (TArrowBinding (makeTelescope binders expr2) Untyped) 
         where 
           makeTelescope ((a, e) NonEmpty.:| [])        expr2 = Pi e (a :. expr2)

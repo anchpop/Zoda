@@ -17,12 +17,10 @@ import Parser
 import qualified Data.List.NonEmpty as NonEmpty
 
 
-
-
 copyPropagated :: forall i p t o. (Ord i, Bindable i, Bindable p, Bindable t) => [(i, Expression t p (i, p) i)] -> Module t p (i, p) i -> (forall ph. JustifiedModule t p ph i i -> o) -> Either (ProductionError t p (i, p) i) o
-copyPropagated primatives (Module _ declarations _) f = Map.withMap dUMap (\m -> f <$> dJmapToJustifiedModule m)
+copyPropagated prims (Module _ declarations _) f = Map.withMap dUMap (\m -> f <$> dJmapToJustifiedModule m)
   where
-    dUMap = UMap.fromList (primatives <> (fmap (\(Declaration identifier expression _) -> (identifier, expression)) declarations))
+    dUMap = UMap.fromList (prims <> (fmap (\(Declaration identifier expression _) -> (identifier, expression)) declarations))
     dJmapToJustifiedModule :: (Map.Map ph i (Expression t p (i, p) i)) -> Either (ProductionError t p (i, p) i) (Map.Map ph i (JustifiedExpression t p ph i i))
     dJmapToJustifiedModule m = 
       for m (\e -> forExpr2 e (justifyReferences m))
@@ -44,9 +42,10 @@ produceProgram input = join (parsedModule >>= (\x -> copyPropagated primatives x
         _                 -> Left $ NoMain moduOriginal
       where modu' = fmap normalizeExprMetadata modu
 
+np :: NoBind ()
 np = NoBind ()
 
-
+primatives :: [(Text, Expression Untyped SourcePosition m i)]
 primatives = [
     ("Type", UniverseExpression 1 Untyped Base),
     ("Nat", NatTypeExpression Untyped Base)
