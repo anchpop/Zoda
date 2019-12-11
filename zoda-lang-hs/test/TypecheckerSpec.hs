@@ -59,3 +59,5 @@ test = parallel $ do
                     \main = 3.func(Nat)\n\
                     \" :: Text
       typcheckS exampleModule `shouldSatisfy` isLeft
+
+      
