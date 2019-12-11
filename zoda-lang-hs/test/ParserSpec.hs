@@ -76,9 +76,9 @@ test = parallel $ do
       parseSomething "(a : 3, b : a) -> b" expressionP `shouldParseToMD` with_fresh_named "a" (\a -> with_fresh_named "b" (\b -> (TArrowBinding (Scope (NumberLiteral (3 % 1) () ()) (Just (a,np,np) :. Pi (LambdaVariable (a,()) () ()) (Just (b,np,np) :. LambdaVariable (b,()) () ()))) () ())))
 
 
-  describe "Parser.declarationP" $ do
+  describe "Parser.valueDefinitionP" $ do
     it "allows assignment to number literals" $ do
-      parseSomething "i = 3" declarationP `shouldParseTo` Declaration
+      parseSomething "i = 3" valueDefinitionP `shouldParseTo` ValueDefinition
         "i" (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 5 1 6))
         (SourcePosition "no_file" 1 1 1 6)
 

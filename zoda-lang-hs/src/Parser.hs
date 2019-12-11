@@ -28,7 +28,7 @@ parseModule text = handleResult result
 moduleP :: Parser (Module Untyped SourcePosition (Text, SourcePosition) Text)
 moduleP = sourcePosWrapperWithNewlines $ do
   header       <- moduleHeaderP
-  declarations <- many declarationP
+  declarations <- many valueDefinitionP
   pure (Module header declarations)
 
 
@@ -42,14 +42,14 @@ moduleHeaderP = sourcePosWrapperWithNewlines $ do
   pure (ModuleHeader ident doc)
 
 
-declarationP :: Parser (Declaration Untyped SourcePosition (Text, SourcePosition) Text)
-declarationP = sourcePosWrapperWithNewlines $ do
+valueDefinitionP :: Parser (Declaration Untyped SourcePosition (Text, SourcePosition) Text)
+valueDefinitionP = sourcePosWrapperWithNewlines $ do
   (ident, _) <- sourcePosWrapper identifierP
   some separatorChar
   char '='
   some separatorChar
   expression <- expressionP
-  pure (Declaration ident expression)
+  pure (ValueDefinition ident expression)
 
 padded :: (MonadParsec e s f, Token s ~ Char) => f a -> f a
 padded s = many separatorChar *> s <* many separatorChar 

@@ -20,7 +20,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 copyPropagated :: forall i p t o. (Ord i, Bindable i, Bindable p, Bindable t) => [(i, Expression t p (i, p) i)] -> Module t p (i, p) i -> (forall ph. JustifiedModule t p ph i i -> o) -> Either (ProductionError t p (i, p) i) o
 copyPropagated prims (Module _ declarations _) f = Map.withMap dUMap (\m -> f <$> dJmapToJustifiedModule m)
   where
-    dUMap = UMap.fromList (prims <> (fmap (\(Declaration identifier expression _) -> (identifier, expression)) declarations))
+    dUMap = UMap.fromList (prims <> (fmap (\(ValueDefinition identifier expression _) -> (identifier, expression)) declarations))
     dJmapToJustifiedModule :: (Map.Map ph i (Expression t p (i, p) i)) -> Either (ProductionError t p (i, p) i) (Map.Map ph i (JustifiedExpression t p ph i i))
     dJmapToJustifiedModule m = 
       for m (\e -> forExpr2 e (justifyReferences m))

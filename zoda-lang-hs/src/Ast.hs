@@ -17,7 +17,7 @@ import Data.List.NonEmpty
 data Module t p m i = Module (ModuleHeader t p m i) [(Declaration t p m i)] p deriving (Show, Eq, Generic, Typeable)
 data ModuleHeader t p m i = ModuleHeader i (Tinydoc t p m i) p deriving (Show, Read, Eq, Ord, Generic, Typeable)
 
-data Declaration t p m i = Declaration i (Expression t p m i) p deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal, Typeable)
+data Declaration t p m i = ValueDefinition i (Expression t p m i) p deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal, Typeable)
 
 data Expression t p m i = ParenthesizedExpression       (Expression t p m i)                                                          t p 
                         | FirstExpression               (Expression t p m i)                                                          t p 
