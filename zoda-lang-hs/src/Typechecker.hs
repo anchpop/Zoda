@@ -24,9 +24,11 @@ instance Semigroup (Env t p ph m i) where
 instance Monoid (Env t p ph m i) where
   mempty = Env [] [] 
 typecheck :: (Bindable t1, Bindable p1, Bindable m1, Bindable i1, Eq t1, Eq p1, Eq i1, Ord m1, Show t1, Show p1, Show m1, Show i1, NominalShow t1, NominalShow p1, NominalShow m1, NominalShow i1) => JustifiedModule t1 p1 ph m1 i1 -> Either (ProductionError t2 p2 m2 i2) ()
-typecheck modu = case traverse (inferType modu mempty) modu of
+typecheck modu = case traverse typecheckDelcaration modu of
   Left () -> Left TypeErr
   Right _ -> Right ()
+  where typecheckDelcaration (value, Nothing)         = inferType modu mempty value *> pure ()
+        typecheckDelcaration (value, Just annotation) = checkType modu mempty value annotation
 
 isSubtype :: forall t p m i ph. Constraints t p m i => JustifiedModule t p ph m i -> Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Bool
 isSubtype modu context e1 e2 = case (e1Normalized, e2Normalized) of 
@@ -87,7 +89,6 @@ checkScopeAndGetOutput modu = checkScopeAndGetOutput'
       checkScopeAndGetOutput' context (r' NonEmpty.:| rest) innerScope
     checkScopeAndGetOutput' _ (_ NonEmpty.:| []) (Scope _ _) = Left ()
     checkScopeAndGetOutput' _ (_ NonEmpty.:| _) (Pi _ _) = Left () 
-
 
 inferType :: Constraints t p m i => JustifiedModule t p ph m i -> Env t p ph m i -> JustifiedExpression t p ph m i -> Either () (JustifiedExpression t p ph m i)
 inferType modu = inferType' where
@@ -155,7 +156,9 @@ inferType modu = inferType' where
     e1T <- inferType' context e1
     e2T <- inferType' context e2
     combineUniverses e1T e2T
-  inferType' context (ReferenceVariable _ m _ _) = inferType' context (m `Map.lookup` modu)
+  inferType' context (ReferenceVariable _ m _ _) = case m `Map.lookup` modu of 
+    (value, Nothing)         -> inferType' context value 
+    (value, Just annotation) -> pure annotation 
   inferType' context (FirstExpression e _ _) = do 
     eT <- inferType' context e 
     case eT of 
@@ -184,32 +187,36 @@ inferType modu = inferType' where
   inferType' _ other = error $ "couldn't infer a type for " <> show other 
 
 checkType :: Constraints t p m i => JustifiedModule t p ph m i -> Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Either () ()
--- Type checking rule for lambda abstraction
---          context, x:t ⊢ e <= s
---     ------------------------------------
---       context ⊢  Lam t (x.e) <= Pi t (x.s)
--- note that the two `x`s in the binders have to actually be the "same" to correctly type it
--- since `x` might be mentioned in both `e` and `s`
--- the `merge` function in nominal is used for this
--- of couse, because we use telescopes instead of pi types it is a trickier
-checkType modu context (FunctionLiteralExpression flit _ _) shouldBe = 
-  case shouldBe of 
-    TArrowBinding scope _ _ -> do mergedFlitScope <- mergedFlitAndScope flit scope
-                                  handleMerge context mergedFlitScope
-    _                       -> Left ()
-  where handleMerge context' (FlitArg _ es (a :. inner             )) = handleMerge (addTypeToEnv a es context') inner
-        handleMerge context' (PiArg   _ es (a :. (body, outputType))) = checkType modu (addTypeToEnv a es context') body outputType 
-        
-checkType modu context (ReferenceVariable _ m _ _) shouldBe = checkType modu context (m `Map.lookup` modu) shouldBe
-checkType modu context (ParenthesizedExpression e _ _) shouldBe = checkType modu context e shouldBe
--- Type checking rule for everything else
---       context ⊢ e => t 
--- ------------------------------------
---       context ⊢ e <= t 
--- Just infer a type and check that the type we inferred is the same as the one we want it to be
-checkType modu context toCheck shouldBe = do
-  toCheckType <- inferType modu context toCheck
-  if isSubtype modu context toCheckType shouldBe then Right () else Left ()
+checkType modu = checkType' 
+  where 
+    -- Type checking rule for lambda abstraction
+    --          context, x:t ⊢ e <= s
+    --     ------------------------------------
+    --       context ⊢  Lam t (x.e) <= Pi t (x.s)
+    -- note that the two `x`s in the binders have to actually be the "same" to correctly type it
+    -- since `x` might be mentioned in both `e` and `s`
+    -- the `merge` function in nominal is used for this
+    -- of couse, because we use telescopes instead of pi types it is a trickier
+    checkType' context (FunctionLiteralExpression flit _ _) shouldBe = 
+      case shouldBe of 
+        TArrowBinding scope _ _ -> do mergedFlitScope <- mergedFlitAndScope flit scope
+                                      handleMerge context mergedFlitScope
+        _                       -> Left ()
+      where handleMerge context' (FlitArg _ es (a :. inner             )) = handleMerge (addTypeToEnv a es context') inner
+            handleMerge context' (PiArg   _ es (a :. (body, outputType))) = checkType' (addTypeToEnv a es context') body outputType 
+            
+    checkType' context (ReferenceVariable _ m _ _) shouldBe = case m `Map.lookup` modu of 
+      (value, Nothing)         -> checkType' context value shouldBe
+      (value, Just annotation) -> if isSubtype modu context annotation shouldBe then Right () else Left ()
+    checkType' context (ParenthesizedExpression e _ _) shouldBe = checkType' context e shouldBe
+    -- Type checking rule for everything else
+    --       context ⊢ e => t 
+    -- ------------------------------------
+    --       context ⊢ e <= t 
+    -- Just infer a type and check that the type we inferred is the same as the one we want it to be
+    checkType' context toCheck shouldBe = do
+      toCheckType <- inferType modu context toCheck
+      if isSubtype modu context toCheckType shouldBe then Right () else Left ()
 
 
 combineUniverses :: Expression t p m i -> Expression t p m i -> Either () (Expression t p m i)

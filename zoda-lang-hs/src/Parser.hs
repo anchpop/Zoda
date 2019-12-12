@@ -28,7 +28,7 @@ parseModule text = handleResult result
 moduleP :: Parser (Module Untyped SourcePosition (Text, SourcePosition) Text)
 moduleP = sourcePosWrapperWithNewlines $ do
   header       <- moduleHeaderP
-  declarations <- many valueDefinitionP
+  declarations <- many (try valueDefinitionWithAnnotationP <|> try valueDefinitionP)
   pure (Module header declarations)
 
 
@@ -41,15 +41,26 @@ moduleHeaderP = sourcePosWrapperWithNewlines $ do
   doc <- sourcePosWrapper tinydocP
   pure (ModuleHeader ident doc)
 
-
 valueDefinitionP :: Parser (Declaration Untyped SourcePosition (Text, SourcePosition) Text)
-valueDefinitionP = sourcePosWrapperWithNewlines $ do
+valueDefinitionP = (uncurry3 ValueDefinition) <$> definitionP "="
+
+valueDefinitionWithAnnotationP :: Parser (Declaration Untyped SourcePosition (Text, SourcePosition) Text)
+valueDefinitionWithAnnotationP = do
+  (annotationName, annotationBody, annotationP) <- definitionP ":"
+  (valueName, valueBody, valueP) <- definitionP "="
+  guard $ annotationName == valueName
+  pure $ ValueDefinitionAnnotated annotationName valueBody valueP annotationBody annotationP
+  
+
+
+definitionP :: String -> Parser (Text, Expression Untyped SourcePosition (Text, SourcePosition) Text, SourcePosition)
+definitionP s = sourcePosWrapperWithNewlines $ do
   (ident, _) <- sourcePosWrapper identifierP
   some separatorChar
-  char '='
+  string s
   some separatorChar
-  expression <- expressionP
-  pure (ValueDefinition ident expression)
+  exp <- expressionP
+  pure $ \p -> (ident, exp, p)
 
 padded :: (MonadParsec e s f, Token s ~ Char) => f a -> f a
 padded s = many separatorChar *> s <* many separatorChar 
@@ -306,4 +317,4 @@ noNewlineOrChars :: (MonadParsec e s m, Token s ~ Char) => [Char] -> m (Token s)
 noNewlineOrChars c = noneOf ('\n' : c)
 
 
-
+uncurry3 f (a, b, c) = f a b c

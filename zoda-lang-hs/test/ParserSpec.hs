@@ -82,4 +82,11 @@ test = parallel $ do
         "i" (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 5 1 6))
         (SourcePosition "no_file" 1 1 1 6)
 
+  describe "Parser.typeDeclarationP" $ do
+    it "allows annotation and assignment to number literals" $ do
+      parseSomething "i : 4\ni = 3" valueDefinitionWithAnnotationP `shouldParseTo` ValueDefinitionAnnotated
+        "i" (NumberLiteral 3 Untyped (SourcePosition "no_file" 2 5 2 6))
+        (SourcePosition "no_file" 2 1 2 6) (NumberLiteral 4 Untyped (SourcePosition "no_file" 1 5 1 6))
+        (SourcePosition "no_file" 1 1 1 6)
+
 np = NoBind ()

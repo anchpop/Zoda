@@ -17,7 +17,8 @@ import Data.List.NonEmpty
 data Module t p m i = Module (ModuleHeader t p m i) [(Declaration t p m i)] p deriving (Show, Eq, Generic, Typeable)
 data ModuleHeader t p m i = ModuleHeader i (Tinydoc t p m i) p deriving (Show, Read, Eq, Ord, Generic, Typeable)
 
-data Declaration t p m i = ValueDefinition i (Expression t p m i) p deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal, Typeable)
+data Declaration t p m i = ValueDefinition i (Expression t p m i) p 
+                         | ValueDefinitionAnnotated i (Expression t p m i) p (Expression t p m i) p deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal, Typeable)
 
 data Expression t p m i = ParenthesizedExpression       (Expression t p m i)                                                          t p 
                         | FirstExpression               (Expression t p m i)                                                          t p 
@@ -53,7 +54,7 @@ instance Representational (Declaration t p) where rep Coercion = Coercion
 instance Representational (ModuleHeader t p) where rep Coercion = Coercion
 instance Representational (Module t p) where rep Coercion = Coercion
 
-type JustifiedModule     t p ph m i = Map.Map ph m (Expression t p (Map.Key ph m) i)
+type JustifiedModule     t p ph m i = Map.Map ph m (Expression t p (Map.Key ph m) i, Maybe (Expression t p (Map.Key ph m) i))
 type JustifiedExpression t p ph m i = Expression t p (Map.Key ph m) i
 type JustifiedTelescope  t p ph m i = Telescope t p (Map.Key ph m) i
 type JustifiedFunctionLiteral  t p ph m i = FunctionLiteral t p (Map.Key ph m) i
@@ -156,3 +157,5 @@ mapExpr ft fp fm fi e = runIdentity $ traverseExpr ftm fpm fmm fim e
 
 normalizeExprMetadata :: forall t p m i . (Bindable t, Bindable p, Bindable i, Bindable m) => Expression t p m i -> Expression () () m () 
 normalizeExprMetadata = mapExpr (const ()) (const ()) id (const ())
+normalizeExprAnnotationMetadata :: forall t p m i . (Bindable t, Bindable p, Bindable i, Bindable m) => (Expression t p m i, Maybe (Expression t p m i)) -> (Expression () () m (), Maybe (Expression () () m ())) 
+normalizeExprAnnotationMetadata = (\(v, t) -> (normalizeExprMetadata v, fmap normalizeExprMetadata t))

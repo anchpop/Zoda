@@ -61,3 +61,37 @@ test = parallel $ do
       typcheckS exampleModule `shouldSatisfy` isLeft
 
       
+      
+    it "typechecks Nat annotations" $ do
+      let exampleModule = "module i `test module`\n\
+                    \test : Nat\n\
+                    \test = 3 + 5\n\
+                    \main = test\n\
+                    \" :: Text
+      typcheckS exampleModule `shouldBe` Right ()
+
+    it "typechecks Nat annotations behind indirection" $ do
+      let exampleModule = "module i `test module`\n\
+                    \test = 3 + 5\n\
+                    \main : Nat\n\
+                    \main = test\n\
+                    \" :: Text
+      typcheckS exampleModule `shouldBe` Right ()
+
+    it "typechecks function annotations" $ do
+      let exampleModule = "module i `test module`\n\
+                    \test = 3 + 5\n\
+                    \func : (Nat) -> Nat\n\
+                    \func = |a : Nat| a \n\
+                    \main = test.func\n\
+                    \" :: Text
+      typcheckS exampleModule `shouldBe` Right ()
+
+    it "doesn't allow wrong annotations" $ do
+      let exampleModule = "module i `test module`\n\
+                    \test = 3 + 5\n\
+                    \func : Nat\n\
+                    \func = |a : Nat| a \n\
+                    \main = test.func\n\
+                    \" :: Text
+      typcheckS exampleModule `shouldSatisfy` isLeft
