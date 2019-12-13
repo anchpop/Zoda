@@ -87,6 +87,11 @@ test = parallel $ do
     it "parses function application inline" $ do
       parseSomething "3.(|a : Nat| (a + 4))" expressionP `shouldParseToMD` with_fresh_named "a" (\a -> FunctionApplicationExpression (ParenthesizedExpression (FunctionLiteralExpression (LastArg (ReferenceVariable () ("Nat",(SourcePosition "no_file" 1 9 1 12)) () ()) ((a,NoBind (),NoBind ()) :. ParenthesizedExpression (AddExpression (LambdaVariable (a,()) () ()) (NumberLiteral (4 % 1) () ()) () ()) () ())) () ()) () ()) (NumberLiteral (3 % 1) () () NonEmpty.:| []) () ())
 
+    it "doesn't leak symbols from arrows" $ do
+      parseSomething "((a : Type) -> Nat) + a" expressionP `shouldParseToMD`  (AddExpression (ParenthesizedExpression (with_fresh_named "a" (\a -> TArrowBinding (Pi (ReferenceVariable () ("Type",(SourcePosition "no_file" 1 7 1 11)) () ()) (Just (a,NoBind (),NoBind ()) :. ReferenceVariable () ("Nat",SourcePosition {_filePath = "no_file", _sourceLineStart = 1, _sourceColumnStart = 16, _sourceLineEnd = 1, _sourceColumnEnd = 19}) () ())) () ())) () ()) (ReferenceVariable () ("a",(SourcePosition "no_file" 1 23 1 24)) () ()) () ())
+
+    it "doesn't leak symbols from functions" $ do
+      parseSomething "(|a : Nat| a) + a" expressionP `shouldParseToMD`  (AddExpression (ParenthesizedExpression (with_fresh_named "a" (\a -> FunctionLiteralExpression (LastArg (ReferenceVariable () ("Nat",(SourcePosition "no_file" 1 7 1 10)) () ()) ((a,NoBind (),NoBind ()) :. LambdaVariable (a,()) () ())) () ())) () ()) (ReferenceVariable () ("a",(SourcePosition "no_file" 1 17 1 18)) () ()) () ())
 
   describe "Parser.valueDefinitionP" $ do
     it "allows assignment to number literals" $ do

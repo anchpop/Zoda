@@ -22,7 +22,7 @@ import Nominal hiding ((.))
 parseModule :: Text -> Either (ProductionError Untyped SourcePosition (Text, SourcePosition) Text) (Module Untyped SourcePosition (Text, SourcePosition) Text)
 parseModule text = handleResult result
  where
-  result = Data.Bifunctor.first ZodaSyntaxError (runParser (evalStateT moduleP []) "module" (unpack text))
+  result = Data.Bifunctor.first ZodaSyntaxError (runParser (evalStateT moduleP initialState) "module" (unpack text))
   handleResult (Left  e) = Left e
   handleResult (Right r) = pure r
 
@@ -110,7 +110,7 @@ expressionP = expParser
           binder1P = try $ do 
             (name, namepos) <- lexemeP identifierP
             let atom = with_fresh_named (unpack name) id
-            modify ([(name, (atom, namepos))]:)
+            modify $ Data.Bifunctor.second ([(name, (atom, namepos))]:)
             many separatorChar
             symbol ":"
             expr <- expressionP
@@ -186,7 +186,7 @@ functionLiteralP = lexeme . try $ do
         binderP = do 
           (name, namepos) <- lexemeP identifierP
           let atom = with_fresh_named (unpack name) id
-          modify ([(name, (atom, namepos))]:)
+          modify $ Data.Bifunctor.second ([(name, (atom, namepos))]:)
           symbol ":"
           expr <- expressionP
           pure ((atom, name, namepos), expr)
@@ -194,7 +194,7 @@ functionLiteralP = lexeme . try $ do
 getEnv :: StateT ParserState (Parsec ZodaParseError String) [(Text, (Atom, SourcePosition))]
 getEnv = do
   s <- get
-  pure (join s)
+  pure . join . snd $ s
 
 withEnvInState :: MonadState [a] m => a -> m b -> m b
 withEnvInState e a = do
@@ -248,7 +248,8 @@ blockComment = L.skipBlockComment "{-" "-}"
 
 
 
-type ParserState = [[(Text, (Atom, SourcePosition))]]
+type ParserState = ([Int], [[(Text, (Atom, SourcePosition))]])
+initialState = ([], [])
 type Parser a = StateT ParserState (Parsec ZodaParseError String) a
 type ASTParser a = Parser (SourcePosition -> a Untyped SourcePosition (Text, SourcePosition) Text)
 data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} 
@@ -300,8 +301,8 @@ getRightZSE (Left  _)                     = error "Parse error!"
 
 --parseSomething :: Stream s => s -> StateT ParserState (Parsec e s) a -> Either (ParseErrorBundle s e) a
 
-parseSomething :: (Stream s, Ord e) => s -> StateT [a1] (ParsecT e s Identity) a2 -> Either (ParseErrorBundle s e) a2
-parseSomething text parser = (runParser (evalStateT (parser <* eof) []) "no_file" text)
+parseSomething :: (Stream s, Ord e) => s -> StateT ParserState (ParsecT e s Identity) a2 -> Either (ParseErrorBundle s e) a2
+parseSomething text parser = (runParser (evalStateT (parser <* eof) initialState) "no_file" text)
 
 getSourcePosFromExpression :: Expression t p m i -> p
 getSourcePosFromExpression (ParenthesizedExpression _ _ p ) = p  
