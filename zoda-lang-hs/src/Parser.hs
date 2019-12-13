@@ -4,7 +4,8 @@ import Ast
 import Basic
 
 import Text.Megaparsec hiding (State, some)
-import Text.Megaparsec.Char
+import Text.Megaparsec.Char hiding (space)
+import qualified Text.Megaparsec.Char.Lexer as L
 import Control.Monad.State
 
 import qualified Data.List.NonEmpty as NonEmpty
@@ -18,7 +19,7 @@ import qualified Data.Maybe as Maybe
 
 import Nominal hiding ((.))
 
-parseModule :: Text -> Either (ProductionError Untyped p (Text, SourcePosition) Text) (Module Untyped SourcePosition (Text, SourcePosition) Text)
+parseModule :: Text -> Either (ProductionError Untyped SourcePosition (Text, SourcePosition) Text) (Module Untyped SourcePosition (Text, SourcePosition) Text)
 parseModule text = handleResult result
  where
   result = Data.Bifunctor.first ZodaSyntaxError (runParser (evalStateT moduleP []) "module" (unpack text))
@@ -50,15 +51,11 @@ valueDefinitionWithAnnotationP = do
   (valueName, valueBody, valueP) <- definitionP "="
   guard $ annotationName == valueName
   pure $ ValueDefinitionAnnotated annotationName valueBody valueP annotationBody annotationP
-  
-
 
 definitionP :: String -> Parser (Text, Expression Untyped SourcePosition (Text, SourcePosition) Text, SourcePosition)
 definitionP s = sourcePosWrapperWithNewlines $ do
-  (ident, _) <- sourcePosWrapper identifierP
-  some separatorChar
-  string s
-  some separatorChar
+  (ident, _) <- lexemeP identifierP
+  lexeme $ string s
   exp <- expressionP
   pure $ \p -> (ident, exp, p)
 
@@ -72,16 +69,16 @@ expressionP = expParser
     expParser = try $ makeExprParser (leftRec basicP leftRecP) 
                         [
                           [InfixL . try $ do 
-                            padded $ string "."
+                            symbol "."
                             pure (\expr1 expr2 -> FunctionApplicationExpression expr2 (expr1 NonEmpty.:| []) Untyped (combineSourcePos expr1 expr2))
                           ],
                           [InfixR . try $ do 
-                            padded $ string "+"
+                            symbol "+"
                             pure (\expr1 expr2 -> AddExpression expr1 expr2 Untyped (combineSourcePos expr1 expr2))
                           ],
                           [
                             InfixR . try $ do 
-                              padded $ string "::"
+                              symbol ":"
                               pure (\expr1 expr2 -> Annotation expr1 expr2 Untyped (combineSourcePos expr1 expr2))
                           ]
                         ]
@@ -91,19 +88,19 @@ expressionP = expParser
     basicParsers = [tarrow2, functionLiteralP, numbP, parenthesizedExpression, identifierExpP]
     leftRecParsers = [funcApp]
     parenthesizedExpression = try $ do
-      char '('
-      expression <- padded expressionP
-      char ')'
+      symbol "("
+      expression <- expressionP
+      symbol ")"
       pure (ParenthesizedExpression expression Untyped)
     numbP = try $ do
       numb <- numberLiteralP
       pure (NumberLiteral numb Untyped)
     tarrow2 = try $ do
-      char '('
+      symbol "("
       s <- get
       binders <- fmap (NonEmpty.fromList) $ (binder1P <|> binder2P) `sepBy1` (padded $ string ",")
-      char ')'
-      padded $ string "->"
+      symbol ")"
+      symbol "->"
       expr2 <- expressionP
       put s
       pure (TArrowBinding (makeTelescope binders expr2) Untyped) 
@@ -111,15 +108,15 @@ expressionP = expParser
           makeTelescope ((a, e) NonEmpty.:| [])        expr2 = Pi e (a :. expr2)
           makeTelescope ((a, e) NonEmpty.:| (a1 : as)) expr2 = Scope e (a :. (makeTelescope (a1 NonEmpty.:| as) expr2))
           binder1P = try $ do 
-            (name, namepos) <- padded $ sourcePosWrapper identifierP
+            (name, namepos) <- lexemeP identifierP
             let atom = with_fresh_named (unpack name) id
             modify ([(name, (atom, namepos))]:)
             many separatorChar
-            string ":"
-            expr <- padded expressionP
+            symbol ":"
+            expr <- expressionP
             pure (Just (atom, NoBind name, NoBind namepos), expr)
           binder2P = try $ do 
-            expr <- padded expressionP
+            expr <- expressionP
             pure (Nothing, expr)
     
 
@@ -127,21 +124,21 @@ expressionP = expParser
     funcApp = try $ typedotexp
       where
         typedotexp = do
-          padded $ string "."
-          f <- padded $ sourcePosWrapper basicP --expressionP
+          symbol "."
+          f <- lexemeP basicP --expressionP
            
-          string "("
-          furtherArgs <- padded $ expressionP `sepBy` (many separatorChar *> string "," *> many separatorChar )
-          string ")"
+          symbol "("
+          furtherArgs <- expressionP `sepBy` (symbol ",")
+          symbol ")"
 
           pure $ \applicant -> FunctionApplicationExpression f (applicant NonEmpty.:| furtherArgs) Untyped  
   
 
 numberLiteralP :: Parser Rational
-numberLiteralP = try
+numberLiteralP = lexeme' $ try
           ( do
             sign   <- try (string "-" *> pure False) <|> (pure True)
-            majorS <- some' (digitChar)
+            majorS <- some' digitChar
             minorS <- (try (char '.') *> some' (digitChar)) <|> (pure $ '0' NonEmpty.:| [])
             guard $ NonEmpty.head majorS /= '0'
             case readMay minorS of
@@ -170,10 +167,10 @@ numberLiteralP = try
     justUnsafe _        = error "shouldn't be possible"
 
 functionLiteralP :: ASTParser Expression
-functionLiteralP = do
+functionLiteralP = lexeme . try $ do
   s <- get
   char '|'
-  binders <- padded $ binderP `sepBy1` (padded $ char ',')
+  binders <- binderP `sepBy1` (symbol ",")
   char '|'
   some separatorChar
   let identifiers = map (\((_, name, _), _) -> name) binders
@@ -187,12 +184,11 @@ functionLiteralP = do
         makeFlit (((a, i, p), e) NonEmpty.:| (a1 : as)) expr2 = Arg     e ((a, NoBind i, NoBind p) :. (makeFlit (a1 NonEmpty.:| as) expr2))
                   
         binderP = do 
-          (name, namepos) <- padded $ sourcePosWrapper identifierP
+          (name, namepos) <- lexemeP identifierP
           let atom = with_fresh_named (unpack name) id
           modify ([(name, (atom, namepos))]:)
-          many separatorChar
-          string ":"
-          expr <- padded expressionP
+          symbol ":"
+          expr <- expressionP
           pure ((atom, name, namepos), expr)
 
 getEnv :: StateT ParserState (Parsec ZodaParseError String) [(Text, (Atom, SourcePosition))]
@@ -220,20 +216,37 @@ tinydocP = do
 identifierP :: Parser (SourcePosition -> (Text, SourcePosition)) 
 identifierP = do
                 c    <- letterChar 
-                rest <- many identifierCharacter
+                rest <- many identifierCharacterP
                 let ident = c:rest
                 pure $ (\x -> (fromString ident, x))
 
 identifierExpP :: ASTParser Expression
-identifierExpP = do (ident, _) <- sourcePosWrapper identifierP
-                    env  <- getEnv
-                    case ident `lookup` env of
-                      Just (atom, _) -> pure $ LambdaVariable (atom, ident) Untyped 
-                      Nothing        -> pure $ (\s -> ReferenceVariable ident (ident, s) Untyped s)
+identifierExpP = lexeme' $ do (ident, _) <- sourcePosWrapper identifierP
+                              env  <- getEnv
+                              case ident `lookup` env of
+                                Just (atom, _) -> pure $ LambdaVariable (atom, ident) Untyped 
+                                Nothing        -> pure $ (\s -> ReferenceVariable ident (ident, s) Untyped s)
 
 
-identifierCharacter :: Parser Char
-identifierCharacter = try letterChar <|> try alphaNumChar <|> try (char '\'') <|> try (char '-')
+identifierCharacterP :: Parser Char
+identifierCharacterP = try letterChar <|> try alphaNumChar <|> try (char '\'') <|> try (char '-')
+
+
+
+symbol' = L.symbol' space
+symbol = L.symbol space
+lexemeP p = lexeme (sourcePosWrapper p)
+lexeme' p = p <* (optional space) 
+lexeme = L.lexeme space
+space = L.space (some separatorChar *> pure ()) lineComment blockComment
+
+lineComment :: Parser ()
+lineComment = L.skipLineComment "--"
+
+blockComment :: Parser ()
+blockComment = L.skipBlockComment "{-" "-}"
+
+
 
 type ParserState = [[(Text, (Atom, SourcePosition))]]
 type Parser a = StateT ParserState (Parsec ZodaParseError String) a
@@ -315,6 +328,7 @@ combineSourcePos expr1 expr2 = SourcePosition filePath sourceLineStart sourceCol
 
 noNewlineOrChars :: (MonadParsec e s m, Token s ~ Char) => [Char] -> m (Token s)
 noNewlineOrChars c = noneOf ('\n' : c)
+
 
 
 uncurry3 f (a, b, c) = f a b c

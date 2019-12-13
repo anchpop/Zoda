@@ -58,6 +58,12 @@ test = parallel $ do
     it "parses number literals" $ do
       parseSomething "3" expressionP `shouldParseTo` (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 1 1 2)) 
 
+    it "parses addition" $ do
+      parseSomething "3 + 1" expressionP `shouldParseTo` (AddExpression (NumberLiteral (3 % 1) Untyped (SourcePosition "no_file" 1 1 1 3)) (NumberLiteral (1 % 1) Untyped (SourcePosition "no_file" 1 5 1 6)) Untyped (SourcePosition "no_file" 1 1 1 6)) 
+
+    it "parses addition in parentheses" $ do
+      parseSomething "(3 + 1)" expressionP `shouldParseTo` ParenthesizedExpression (AddExpression (NumberLiteral (3 % 1) Untyped (SourcePosition "no_file" 1 2 1 4)) (NumberLiteral (1 % 1) Untyped (SourcePosition "no_file" 1 6 1 7)) Untyped (SourcePosition "no_file" 1 2 1 7)) Untyped (SourcePosition "no_file" 1 1 1 8)
+
     it "parses identifiers" $ do
       parseSomething "test" expressionP `shouldParseTo` (ReferenceVariable "test" ("test", SourcePosition "no_file" 1 1 1 5) Untyped (SourcePosition "no_file" 1 1 1 5))
 
@@ -72,13 +78,27 @@ test = parallel $ do
     it "parses function applications" $ do
       parseSomething "3.b" expressionP `shouldParseToMD` FunctionApplicationExpression (ReferenceVariable () ("b",(SourcePosition "no_file" 1 3 1 4)) () ()) (NumberLiteral (3 % 1) () () NonEmpty.:| []) () ()
 
-    it "parses telescopes applications" $ do
+    it "parses telescopes " $ do
       parseSomething "(a : 3, b : a) -> b" expressionP `shouldParseToMD` with_fresh_named "a" (\a -> with_fresh_named "b" (\b -> (TArrowBinding (Scope (NumberLiteral (3 % 1) () ()) (Just (a,np,np) :. Pi (LambdaVariable (a,()) () ()) (Just (b,np,np) :. LambdaVariable (b,()) () ()))) () ())))
+    
+    it "parses function that takes a number and adds 4" $ do
+      parseSomething "|a : Nat| (a + 4)" expressionP `shouldParseToMD` with_fresh_named "a" (\a -> FunctionLiteralExpression (LastArg (ReferenceVariable () ("Nat",(SourcePosition "no_file" 1 6 1 9)) () ()) ((a,NoBind (),NoBind ()) :. ParenthesizedExpression (AddExpression (LambdaVariable (a,()) () ()) (NumberLiteral (4 % 1) () ()) () ()) () ())) () ())
+
+    it "parses function application inline" $ do
+      parseSomething "3.(|a : Nat| (a + 4))" expressionP `shouldParseToMD` with_fresh_named "a" (\a -> FunctionApplicationExpression (ParenthesizedExpression (FunctionLiteralExpression (LastArg (ReferenceVariable () ("Nat",(SourcePosition "no_file" 1 9 1 12)) () ()) ((a,NoBind (),NoBind ()) :. ParenthesizedExpression (AddExpression (LambdaVariable (a,()) () ()) (NumberLiteral (4 % 1) () ()) () ()) () ())) () ()) () ()) (NumberLiteral (3 % 1) () () NonEmpty.:| []) () ())
 
 
   describe "Parser.valueDefinitionP" $ do
     it "allows assignment to number literals" $ do
       parseSomething "i = 3" valueDefinitionP `shouldParseTo` ValueDefinition
+        "i" (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 5 1 6))
+        (SourcePosition "no_file" 1 1 1 6)
+
+        
+  describe "Parser.valueDefinitionP" $ do
+    it "parses newlines" $ do
+      parseSomething "i = \n\
+                     \  3 + 4" valueDefinitionP `shouldParseTo` ValueDefinition
         "i" (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 5 1 6))
         (SourcePosition "no_file" 1 1 1 6)
 
@@ -88,5 +108,14 @@ test = parallel $ do
         "i" (NumberLiteral 3 Untyped (SourcePosition "no_file" 2 5 2 6))
         (SourcePosition "no_file" 2 1 2 6) (NumberLiteral 4 Untyped (SourcePosition "no_file" 1 5 1 6))
         (SourcePosition "no_file" 1 1 1 6)
+    
+  describe "Parser.parseModule" $ do
+    it "parses modules with multiple declarations" $ do 
+      let exampleModule = "module i `test module`\n\
+                    \test = 3\n\
+                    \main = test\n\
+                    \" :: Text
+      parseModule exampleModule `shouldSatisfy` isRight
+      
 
 np = NoBind ()

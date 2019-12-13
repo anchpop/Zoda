@@ -10,7 +10,7 @@ import Test.Hspec
 import Test.Hspec.Runner
 
 import Data.Ratio
-
+import Data.Either
 import Data.Foldable (for_)
 
 import Parser
