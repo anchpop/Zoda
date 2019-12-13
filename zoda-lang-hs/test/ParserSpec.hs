@@ -103,9 +103,7 @@ test = parallel $ do
   describe "Parser.valueDefinitionP" $ do
     it "parses newlines" $ do
       parseSomething "i = \n\
-                     \  3 + 4" valueDefinitionP `shouldParseTo` ValueDefinition
-        "i" (NumberLiteral 3 Untyped (SourcePosition "no_file" 1 5 1 6))
-        (SourcePosition "no_file" 1 1 1 6)
+                     \  3 + 4" valueDefinitionP `shouldParseTo` ValueDefinition "i" (AddExpression (NumberLiteral (3 % 1) Untyped (SourcePosition "no_file" 2 3 2 5)) (NumberLiteral (4 % 1) Untyped (SourcePosition "no_file" 2 7 2 8)) Untyped (SourcePosition "no_file" 2 3 2 8)) (SourcePosition "no_file" 1 1 2 8)
 
   describe "Parser.typeDeclarationP" $ do
     it "allows annotation and assignment to number literals" $ do

@@ -4,9 +4,11 @@ import Ast
 import Basic
 
 import Text.Megaparsec hiding (State, some)
-import Text.Megaparsec.Char hiding (space)
+import Text.Megaparsec.Char hiding (space, space1, newline)
+import qualified Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 import Control.Monad.State
+import qualified Data.Ord
 
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Ratio
@@ -56,7 +58,9 @@ definitionP :: String -> Parser (Text, Expression Untyped SourcePosition (Text, 
 definitionP s = sourcePosWrapperWithNewlines $ do
   (ident, _) <- lexemeP identifierP
   lexeme $ string s
-  exp <- expressionP
+  exp <- withIndentationPushed 2 $ do 
+    optional $ many newline
+    expressionP
   pure $ \p -> (ident, exp, p)
 
 padded :: (MonadParsec e s f, Token s ~ Char) => f a -> f a
@@ -110,7 +114,7 @@ expressionP = expParser
           binder1P = try $ do 
             (name, namepos) <- lexemeP identifierP
             let atom = with_fresh_named (unpack name) id
-            modify $ Data.Bifunctor.second ([(name, (atom, namepos))]:)
+            pushEnv [(name, (atom, namepos))]
             many separatorChar
             symbol ":"
             expr <- expressionP
@@ -186,7 +190,7 @@ functionLiteralP = lexeme . try $ do
         binderP = do 
           (name, namepos) <- lexemeP identifierP
           let atom = with_fresh_named (unpack name) id
-          modify $ Data.Bifunctor.second ([(name, (atom, namepos))]:)
+          pushEnv [(name, (atom, namepos))]
           symbol ":"
           expr <- expressionP
           pure ((atom, name, namepos), expr)
@@ -196,13 +200,26 @@ getEnv = do
   s <- get
   pure . join . snd $ s
 
-withEnvInState :: MonadState [a] m => a -> m b -> m b
-withEnvInState e a = do
+getCurrentIndentationLevel :: StateT ParserState (Parsec ZodaParseError String) Int
+getCurrentIndentationLevel = do
   s <- get
-  put (e:s) 
-  val <- a
-  put s
-  pure val
+  pure . sum . (0:) . fst $ s
+
+pushEnv e = modify $ Data.Bifunctor.second (e:) 
+pushIndentation n = modify $ Data.Bifunctor.first (n:) 
+popEnv :: MonadState ([a], [b]) m => m ()
+popEnv = modify $ Data.Bifunctor.second (\(x:xs) -> xs)
+popIndentation :: MonadState ([a], [b]) m => m ()
+popIndentation = modify $ Data.Bifunctor.first (\(x:xs) -> xs)
+withIndentationPushed i p = pushIndentation i *> p <* popIndentation
+
+
+newline = do 
+  Text.Megaparsec.Char.newline
+  level <- getCurrentIndentationLevel
+  indentation <- length <$> many separatorChar
+  if indentation /= level then L.incorrectIndent (EQ) (mkPos $ (traceShowId level) + 1) (mkPos $ indentation + 1) else pure () -- mkPos might be wrong here
+
 
 
 tinydocP :: ASTParser Tinydoc
@@ -231,14 +248,15 @@ identifierExpP = lexeme' $ do (ident, _) <- sourcePosWrapper identifierP
 identifierCharacterP :: Parser Char
 identifierCharacterP = try letterChar <|> try alphaNumChar <|> try (char '\'') <|> try (char '-')
 
-
-
+horisontalPos :: MonadParsec e s m => m Pos
+horisontalPos = L.indentLevel 
 symbol' = L.symbol' space
 symbol = L.symbol space
 lexemeP p = lexeme (sourcePosWrapper p)
 lexeme' p = p <* (optional space) 
 lexeme = L.lexeme space
-space = L.space (some separatorChar *> pure ()) lineComment blockComment
+space = L.space spaceP lineComment blockComment
+  where spaceP = some separatorChar *> pure () 
 
 lineComment :: Parser ()
 lineComment = L.skipLineComment "--"
