@@ -28,7 +28,7 @@ typcheckS str = do
 
 test :: SpecWith ()
 test = parallel $ do
-  describe "CopyPropagatedProgramConverter.evaluateMain" $ do
+  describe "Typechecker.typecheck" $ do
     it "typechecks numbers" $ do
       let exampleModule = "module i `test module`\n\
                     \test = 3 + 5\n\
@@ -68,7 +68,7 @@ test = parallel $ do
                     \test = 3 + 5\n\
                     \main = test\n\
                     \" :: Text
-      typcheckS exampleModule `shouldBe` Right ()
+      getRightZSE (typcheckS exampleModule) `shouldBe` ()
 
     it "typechecks Nat annotations behind indirection" $ do
       let exampleModule = "module i `test module`\n\

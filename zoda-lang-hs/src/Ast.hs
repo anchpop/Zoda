@@ -14,17 +14,20 @@ import qualified Data.Bifunctor as Data.Bifunctor
 import Data.Void
 import Data.List.NonEmpty
 
+type Binder i p = (Atom, NoBind i, NoBind p)
+
 data Module t p m i = Module (ModuleHeader t p m i) [(Declaration t p m i)] p deriving (Show, Eq, Generic, Typeable)
 data ModuleHeader t p m i = ModuleHeader i (Tinydoc t p m i) p deriving (Show, Read, Eq, Ord, Generic, Typeable)
 
 data Declaration t p m i = ValueDefinition i (Expression t p m i) p 
-                         | ValueDefinitionAnnotated i (Expression t p m i) p (Expression t p m i) p deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal, Typeable)
+                         | ValueDefinitionAnnotated i (Expression t p m i) p (Expression t p m i) p p
+                         | TypeDefinition i (Expression t p m i) p [(i, (Expression t p m i), p)] p deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal, Typeable)
 
 data Expression t p m i = ParenthesizedExpression       (Expression t p m i)                                                          t p 
                         | FirstExpression               (Expression t p m i)                                                          t p 
                         | SecondExpression              (Expression t p m i)                                                          t p 
                         | PairExpression                (Expression t p m i)                                    (Expression t p m i)  t p 
-                        | TSigmaBinding                 (Expression t p m i) (Bind (Maybe (Atom, NoBind i, NoBind p)) (Expression t p m i)) t p 
+                        | TSigmaBinding                 (Expression t p m i) (Bind (Maybe (Binder i p)) (Expression t p m i)) t p 
                         | UniverseExpression Integer                                                                                  t p 
                         | NumberLiteral Rational                                                                                      t p 
                         | AddExpression                 (Expression t p m i)                                    (Expression t p m i)  t p 
@@ -37,11 +40,11 @@ data Expression t p m i = ParenthesizedExpression       (Expression t p m i)    
                         | NatTypeExpression                                                                                           t p 
                         deriving (Show, Eq, Typeable, NominalSupport, NominalShow, Generic, Nominal)
 
-data Telescope t p m i = Scope (Expression t p m i) (Bind (Maybe (Atom, NoBind i, NoBind p)) (Telescope t p m i)) 
-                       | Pi    (Expression t p m i) (Bind (Maybe (Atom, NoBind i, NoBind p)) (Expression t p m i)) deriving (Show, Eq, Typeable, NominalSupport, NominalShow, Generic, Nominal)
+data Telescope t p m i = Scope (Expression t p m i) (Bind (Maybe (Binder i p)) (Telescope t p m i)) 
+                       | Pi    (Expression t p m i) (Bind (Maybe (Binder i p)) (Expression t p m i)) deriving (Show, Eq, Typeable, NominalSupport, NominalShow, Generic, Nominal)
 
-data FunctionLiteral t p m i = Arg     (Expression t p m i) (Bind (Atom, NoBind i, NoBind p) (FunctionLiteral t p m i)) 
-                             | LastArg (Expression t p m i) (Bind (Atom, NoBind i, NoBind p) (Expression t p m i)) deriving (Show, Eq, Typeable, NominalSupport, NominalShow, Generic, Nominal)
+data FunctionLiteral t p m i = Arg     (Expression t p m i) (Bind (Binder i p) (FunctionLiteral t p m i)) 
+                             | LastArg (Expression t p m i) (Bind (Binder i p) (Expression t p m i)) deriving (Show, Eq, Typeable, NominalSupport, NominalShow, Generic, Nominal)
 
 
 data Tinydoc t p m i = Tinydoc Text p deriving (Show, Read, Eq, Ord, Generic, Typeable)

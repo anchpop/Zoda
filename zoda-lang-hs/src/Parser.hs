@@ -31,7 +31,7 @@ parseModule text = handleResult result
 moduleP :: Parser (Module Untyped SourcePosition (Text, SourcePosition) Text)
 moduleP = sourcePosWrapperWithNewlines $ do
   header       <- moduleHeaderP
-  declarations <- many (try valueDefinitionWithAnnotationP <|> try valueDefinitionP)
+  declarations <- many (try typeDefinitionP <|> try valueDefinitionWithAnnotationP <|> try valueDefinitionP)
   pure (Module header declarations)
 
 
@@ -45,20 +45,31 @@ moduleHeaderP = sourcePosWrapperWithNewlines $ do
   pure (ModuleHeader ident doc)
 
 valueDefinitionP :: Parser (Declaration Untyped SourcePosition (Text, SourcePosition) Text)
-valueDefinitionP = (uncurry3 ValueDefinition) <$> definitionP "="
+valueDefinitionP = (uncurry3 ValueDefinition) <$> definitionP "=" <* newlinesOrEof
 
 valueDefinitionWithAnnotationP :: Parser (Declaration Untyped SourcePosition (Text, SourcePosition) Text)
-valueDefinitionWithAnnotationP = do
-  (annotationName, annotationBody, annotationP) <- definitionP ":"
+valueDefinitionWithAnnotationP = sourcePosWrapper $ do
+  (annotationName, annotationBody, annotationP) <- definitionP ":" <* newlinesOrEof
   (valueName, valueBody, valueP) <- definitionP "="
   guard $ annotationName == valueName
   pure $ ValueDefinitionAnnotated annotationName valueBody valueP annotationBody annotationP
 
+typeDefinitionP :: Parser (Declaration Untyped SourcePosition (Text, SourcePosition) Text)
+typeDefinitionP = sourcePosWrapperWithNewlines $ do
+  symbol "type"
+  (typeName, typeType, typeDefSP) <- definitionP ":"
+  symbol "="
+  indentedBlock $ do 
+    optional $ many newlineExtraSpacing
+    constructors <- definitionP ":" `sepBy1` (optional newlinesOrEof *> symbol "|")
+    pure $ TypeDefinition typeName typeType typeDefSP constructors
+   
+
 definitionP :: String -> Parser (Text, Expression Untyped SourcePosition (Text, SourcePosition) Text, SourcePosition)
-definitionP s = sourcePosWrapperWithNewlines $ do
+definitionP s = sourcePosWrapper $ do
   (ident, _) <- lexemeP identifierP
   lexeme $ string s
-  exp <- withIndentationPushed 2 $ do 
+  exp <- indentedBlock $ do 
     optional $ many newline
     expressionP
   pure $ \p -> (ident, exp, p)
@@ -211,15 +222,18 @@ popEnv :: MonadState ([a], [b]) m => m ()
 popEnv = modify $ Data.Bifunctor.second (\(x:xs) -> xs)
 popIndentation :: MonadState ([a], [b]) m => m ()
 popIndentation = modify $ Data.Bifunctor.first (\(x:xs) -> xs)
+indentedBlock = withIndentationPushed 2
 withIndentationPushed i p = pushIndentation i *> p <* popIndentation
-
-
-newline = do 
+newlineHandleIndentation op = do 
   Text.Megaparsec.Char.newline
   level <- getCurrentIndentationLevel
   indentation <- length <$> many separatorChar
-  if indentation /= level then L.incorrectIndent (EQ) (mkPos $ (traceShowId level) + 1) (mkPos $ indentation + 1) else pure () -- mkPos might be wrong here
+  if (indentation `compare` level) /= op then L.incorrectIndent op (mkPos $ (traceShowId level) + 1) (mkPos $ indentation + 1) else pure ()
+newline = newlineHandleIndentation EQ
+newlineExtraSpacing = (try newline) <|> newlineHandleIndentation GT 
 
+
+newlinesOrEof = (many separatorChar *> some newline *> pure () <|> (lookAhead eof))
 
 
 tinydocP :: ASTParser Tinydoc
@@ -286,7 +300,7 @@ sourcePosWrapper f = do
   pure $ toApply (SourcePosition n (unPos l1) (unPos c1) (unPos l2) (unPos c2))
 
 sourcePosWrapperWithNewlines :: Parser (SourcePosition -> a) -> Parser a
-sourcePosWrapperWithNewlines f = sourcePosWrapper f <* (many separatorChar *> some newline *> pure () <|> (lookAhead eof))
+sourcePosWrapperWithNewlines f = sourcePosWrapper f <* newlinesOrEof 
 
 
 some' :: Parser a -> Parser (NonEmpty.NonEmpty a)

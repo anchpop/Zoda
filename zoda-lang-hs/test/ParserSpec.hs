@@ -101,17 +101,29 @@ test = parallel $ do
 
         
   describe "Parser.valueDefinitionP" $ do
-    it "parses newlines" $ do
+    it "parses indented newlines" $ do
       parseSomething "i = \n\
                      \  3 + 4" valueDefinitionP `shouldParseTo` ValueDefinition "i" (AddExpression (NumberLiteral (3 % 1) Untyped (SourcePosition "no_file" 2 3 2 5)) (NumberLiteral (4 % 1) Untyped (SourcePosition "no_file" 2 7 2 8)) Untyped (SourcePosition "no_file" 2 3 2 8)) (SourcePosition "no_file" 1 1 2 8)
+      parseSomething "i = \n\
+                     \3 + 4" valueDefinitionP `shouldSatisfy` isLeft
 
-  describe "Parser.typeDeclarationP" $ do
+  describe "Parser.valueDefinitionWithAnnotationP" $ do
     it "allows annotation and assignment to number literals" $ do
-      parseSomething "i : 4\ni = 3" valueDefinitionWithAnnotationP `shouldParseTo` ValueDefinitionAnnotated
-        "i" (NumberLiteral 3 Untyped (SourcePosition "no_file" 2 5 2 6))
-        (SourcePosition "no_file" 2 1 2 6) (NumberLiteral 4 Untyped (SourcePosition "no_file" 1 5 1 6))
-        (SourcePosition "no_file" 1 1 1 6)
+      parseSomething "i : \n\
+                     \  3 + 4\n\
+                     \i = 3" valueDefinitionWithAnnotationP `shouldParseTo` ValueDefinitionAnnotated "i" (NumberLiteral (3 % 1) Untyped (SourcePosition "no_file" 3 5 3 6)) (SourcePosition "no_file" 3 1 3 6) (AddExpression (NumberLiteral (3 % 1) Untyped (SourcePosition "no_file" 2 3 2 5)) (NumberLiteral (4 % 1) Untyped (SourcePosition "no_file" 2 7 2 8)) Untyped (SourcePosition "no_file" 2 3 2 8)) (SourcePosition "no_file" 1 1 2 8) (SourcePosition "no_file" 1 1 3 6)
+      parseSomething "i : 3 + 4\n\
+                     \i = 3" valueDefinitionWithAnnotationP `shouldParseTo` ValueDefinitionAnnotated "i" (NumberLiteral (3 % 1) Untyped (SourcePosition "no_file" 2 5 2 6)) (SourcePosition "no_file" 2 1 2 6) (AddExpression (NumberLiteral (3 % 1) Untyped (SourcePosition "no_file" 1 5 1 7)) (NumberLiteral (4 % 1) Untyped (SourcePosition "no_file" 1 9 1 10)) Untyped (SourcePosition "no_file" 1 5 1 10)) (SourcePosition "no_file" 1 1 1 10) (SourcePosition "no_file" 1 1 2 6)
+      parseSomething "i : \n\
+                     \  3 + 4" valueDefinitionWithAnnotationP `shouldSatisfy` isLeft
     
+  describe "Parser.typeDefinitionP" $ do
+    it "allows the creation of a type to represent booleans" $ do
+      parseSomething "type Bool : Type = \n\
+                     \    True : Bool\n\
+                     \  | False : Bool" typeDefinitionP `shouldParseTo` (TypeDefinition "Bool" (ReferenceVariable "Type" ("Type",(SourcePosition "no_file" 1 13 1 18)) Untyped (SourcePosition "no_file" 1 13 1 18)) (SourcePosition "no_file" 1 6 1 18) [("True",ReferenceVariable "Bool" ("Bool",(SourcePosition "no_file" 2 12 2 16)) Untyped (SourcePosition "no_file" 2 12 2 16),(SourcePosition "no_file" 2 5 2 16)),("False",ReferenceVariable "Bool" ("Bool",(SourcePosition "no_file" 3 13 3 17)) Untyped (SourcePosition "no_file" 3 13 3 17),(SourcePosition "no_file" 3 5 3 17))] (SourcePosition "no_file" 1 1 3 17))
+
+
   describe "Parser.parseModule" $ do
     it "parses modules with multiple declarations" $ do 
       let exampleModule = "module i `test module`\n\

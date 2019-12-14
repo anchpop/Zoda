@@ -21,7 +21,7 @@ copyPropagated prims (Module _ declarations _) f = Map.withMap dUMap (\m -> f <$
   where
     dUMap = UMap.fromList (prims <> catMaybes (fmap (\case 
         ValueDefinition          identifier expression _              -> Just (identifier, (expression, Nothing))
-        ValueDefinitionAnnotated identifier expression _ annotation _ -> Just (identifier, (expression, Just annotation))
+        ValueDefinitionAnnotated identifier expression _ annotation _ _ -> Just (identifier, (expression, Just annotation))
         _                                       -> Nothing
       ) declarations))
     dJmapToJustifiedModule :: (Map.Map ph i (Expression t p (i, p) i, Maybe (Expression t p (i, p) i))) -> Either (ProductionError t p (i, p) i) (JustifiedModule t p ph i i)
