@@ -131,6 +131,25 @@ test = parallel $ do
                     \main = test\n\
                     \" :: Text
       parseModule exampleModule `shouldSatisfy` isRight
+
+    it "parses modules with multiple declarations and annotations" $ do 
+      let exampleModule = "module i `test module`\n\
+                    \test : Nat\n\
+                    \test = 3\n\
+                    \main = test\n\
+                    \" :: Text
+      parseModule exampleModule `shouldSatisfy` isRight
       
+    it "parses modules with multiple declarations and type definitions " $ do 
+      let exampleModule = "module i `test module`\n\
+                    \test = 3\n\
+                    \main = test\n\
+                    \type Bool : Type = \n\
+                    \    True : Bool\n\
+                    \  | False : Bool\n\
+                    \type Dool : Type = \n\
+                    \    True : Dool\n\
+                    \  | False : Dool" :: Text
+      parseModule exampleModule `shouldSatisfy` isRight
 
 np = NoBind ()

@@ -45,23 +45,23 @@ moduleHeaderP = sourcePosWrapperWithNewlines $ do
   pure (ModuleHeader ident doc)
 
 valueDefinitionP :: Parser (Declaration Untyped SourcePosition (Text, SourcePosition) Text)
-valueDefinitionP = (uncurry3 ValueDefinition) <$> definitionP "=" <* newlinesOrEof
+valueDefinitionP = (uncurry3 ValueDefinition) <$> (definitionP "=" <* newlinesOrEof)
 
 valueDefinitionWithAnnotationP :: Parser (Declaration Untyped SourcePosition (Text, SourcePosition) Text)
 valueDefinitionWithAnnotationP = sourcePosWrapper $ do
   (annotationName, annotationBody, annotationP) <- definitionP ":" <* newlinesOrEof
-  (valueName, valueBody, valueP) <- definitionP "="
+  (valueName, valueBody, valueP) <- definitionP "=" <* newlinesOrEof
   guard $ annotationName == valueName
   pure $ ValueDefinitionAnnotated annotationName valueBody valueP annotationBody annotationP
 
 typeDefinitionP :: Parser (Declaration Untyped SourcePosition (Text, SourcePosition) Text)
-typeDefinitionP = sourcePosWrapperWithNewlines $ do
+typeDefinitionP = sourcePosWrapper $ do
   symbol "type"
   (typeName, typeType, typeDefSP) <- definitionP ":"
   symbol "="
   indentedBlock $ do 
     optional $ many newlineExtraSpacing
-    constructors <- definitionP ":" `sepBy1` (optional newlinesOrEof *> symbol "|")
+    constructors <- definitionP ":" `sepBy1` (try $ optional newlinesOrEof *> symbol "|")
     pure $ TypeDefinition typeName typeType typeDefSP constructors
    
 
@@ -74,8 +74,6 @@ definitionP s = sourcePosWrapper $ do
     expressionP
   pure $ \p -> (ident, exp, p)
 
-padded :: (MonadParsec e s f, Token s ~ Char) => f a -> f a
-padded s = many separatorChar *> s <* many separatorChar 
 
 
 expressionP :: Parser (Expression Untyped SourcePosition (Text, SourcePosition) Text)
@@ -113,7 +111,7 @@ expressionP = expParser
     tarrow2 = try $ do
       symbol "("
       s <- get
-      binders <- fmap (NonEmpty.fromList) $ (binder1P <|> binder2P) `sepBy1` (padded $ string ",")
+      binders <- fmap (NonEmpty.fromList) $ (binder1P <|> binder2P) `sepBy1` (symbol ",")
       symbol ")"
       symbol "->"
       expr2 <- expressionP
@@ -264,11 +262,11 @@ identifierCharacterP = try letterChar <|> try alphaNumChar <|> try (char '\'') <
 
 horisontalPos :: MonadParsec e s m => m Pos
 horisontalPos = L.indentLevel 
-symbol' = L.symbol' space
-symbol = L.symbol space
-lexemeP p = lexeme (sourcePosWrapper p)
-lexeme' p = p <* (optional space) 
-lexeme = L.lexeme space
+symbol' = try . L.symbol' space
+symbol = try . L.symbol space
+lexemeP p = try $ lexeme (sourcePosWrapper p)
+lexeme' p = try $ p <* (optional space)
+lexeme = try . L.lexeme space
 space = L.space spaceP lineComment blockComment
   where spaceP = some separatorChar *> pure () 
 
