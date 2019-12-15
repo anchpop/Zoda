@@ -138,7 +138,14 @@ test = parallel $ do
                     \test = 3\n\
                     \main = test\n\
                     \" :: Text
-      parseModule exampleModule `shouldSatisfy` isRight
+      let exampleModule2 = "module i `test module`\n\
+                    \test : Nat\n\
+                    \test = 3\n\
+                    \main : Nat\n\
+                    \main = test\n\
+                    \" :: Text
+      parseModule exampleModule  `shouldSatisfy` isRight
+      parseModule exampleModule2 `shouldSatisfy` isRight
       
     it "parses modules with multiple declarations and type definitions " $ do 
       let exampleModule = "module i `test module`\n\
