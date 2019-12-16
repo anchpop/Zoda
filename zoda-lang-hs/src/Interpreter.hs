@@ -16,14 +16,14 @@ import Parser
 import qualified Data.List.NonEmpty as NonEmpty
 
 
-copyPropagated :: forall i p t o. (Ord i, Bindable i, Bindable p, Bindable t) => [(i, DelcarationInfo t p (i, p) i)] -> Module t p (i, p) i -> (forall ph. JustifiedModule t p ph i i -> o) -> Either (ProductionError t p (i, p) i) o
+copyPropagated :: forall i p t o. (Show i, Show t, Show p, NominalShow i, NominalShow t, NominalShow p, Ord i, Bindable i, Bindable p, Bindable t) => [(i, DelcarationInfo t p (i, p) i)] -> Module t p (i, p) i -> (forall ph. JustifiedModule t p ph i i -> o) -> Either (ProductionError t p (i, p) i) o
 copyPropagated prims (Module _ declarations _) f = Map.withMap dUMap (\m -> f <$> dJmapToJustifiedModule m)
   where
-    dUMap = UMap.fromList (prims <> (join . fmap (\case 
+    dUMap = UMap.fromList $ traceShowId (prims <> (declarations >>= (\case 
         ValueDefinition          identifier expression _                -> [(identifier, Value expression)]
         ValueDefinitionAnnotated identifier expression _ annotation _ _ -> [(identifier, ValueAndAnnotation expression annotation)]
         _                                                               -> []
-      ) $ declarations))
+      )))
     dJmapToJustifiedModule :: (Map.Map ph i (DelcarationInfo t p (i, p) i)) -> Either (ProductionError t p (i, p) i) (JustifiedModule t p ph i i)
     dJmapToJustifiedModule m = 
       for m justifyDeclarationInfo

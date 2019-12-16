@@ -95,3 +95,25 @@ test = parallel $ do
                     \main = test.func\n\
                     \" :: Text
       typcheckS exampleModule `shouldSatisfy` isLeft
+
+    it "doesn't allow you to add functions" $ do
+      let exampleModule = "module i `test module`\n\
+                    \test = 3 + 5\n\
+                    \func = |a : Nat| a \n\
+                    \main = 3 + func\n\
+                    \" :: Text
+      typcheckS exampleModule `shouldSatisfy` isLeft
+
+
+      
+
+    it "works with ADTs" $ do
+      let exampleModule = "module i `test module`\n\
+                    \type Bool : Type = \n\
+                    \    True : Bool\n\
+                    \  | False : Bool\n\
+                    \test = 3 + 5\n\
+                    \func = |a : Nat, b : Bool| a \n\
+                    \main = test.func(True)\n\
+                    \" :: Text
+      typcheckS exampleModule `shouldSatisfy` isRight

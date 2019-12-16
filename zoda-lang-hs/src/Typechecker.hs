@@ -23,13 +23,14 @@ instance Semigroup (Env t p ph m i) where
   (Env t1 v1) <> (Env t2 v2) = Env (t1 <> t2) (v1 <> v2)
 instance Monoid (Env t p ph m i) where
   mempty = Env [] [] 
+
 typecheck :: (Bindable t1, Bindable p1, Bindable m1, Bindable i1, Eq t1, Eq p1, Eq i1, Ord m1, Show t1, Show p1, Show m1, Show i1, NominalShow t1, NominalShow p1, NominalShow m1, NominalShow i1) => JustifiedModule t1 p1 ph m1 i1 -> Either (ProductionError t2 p2 m2 i2) ()
 typecheck modu = case traverse typecheckDelcaration modu of
   Left () -> Left TypeErr
   Right _ -> Right ()
-  where typecheckDelcaration (Value v)         = inferType modu mempty v *> pure ()
+  where typecheckDelcaration (Value v)                = inferType modu mempty v *> pure ()
         typecheckDelcaration (ValueAndAnnotation v t) = checkType modu mempty v t
-        typecheckDelcaration (Constructor _) = pure ()
+        typecheckDelcaration (Constructor _)          = pure ()
 
 isSubtype :: forall t p m i ph. Constraints t p m i => JustifiedModule t p ph m i -> Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Bool
 isSubtype modu context e1 e2 = case (e1Normalized, e2Normalized) of 
@@ -208,9 +209,9 @@ checkType modu = checkType'
             handleMerge context' (PiArg   _ es (a :. (body, outputType))) = checkType' (addTypeToEnv a es context') body outputType 
             
     checkType' context (ReferenceVariable _ m _ _) shouldBe = case m `Map.lookup` modu of 
-      Value v                 -> checkType' context v shouldBe
+      Value v                -> checkType' context v shouldBe
       ValueAndAnnotation _ t -> if isSubtype modu context t shouldBe then Right () else Left ()
-      Constructor           t -> if isSubtype modu context t shouldBe then Right () else Left ()
+      Constructor          t -> if isSubtype modu context t shouldBe then Right () else Left ()
     checkType' context (ParenthesizedExpression e _ _) shouldBe = checkType' context e shouldBe
     -- Type checking rule for everything else
     --       context ⊢ e => t 

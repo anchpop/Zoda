@@ -150,13 +150,20 @@ test = parallel $ do
     it "parses modules with multiple declarations and type definitions " $ do 
       let exampleModule = "module i `test module`\n\
                     \test = 3\n\
-                    \main = test\n\
                     \type Bool : Type = \n\
                     \    True : Bool\n\
                     \  | False : Bool\n\
                     \type Dool : Type = \n\
                     \    True : Dool\n\
-                    \  | False : Dool" :: Text
-      parseModule exampleModule `shouldSatisfy` isRight
+                    \  | False : Dool\n\
+                    \main = test\n" :: Text
+      parseModule exampleModule `shouldBe` Right (
+          Module (ModuleHeader "i" (Tinydoc "test module" (SourcePosition "module" 1 10 1 23)) (SourcePosition "module" 1 1 1 23)) [
+              ValueDefinition "test" (NumberLiteral (3 % 1) Untyped (SourcePosition "module" 2 8 2 9)) (SourcePosition "module" 2 1 2 9),
+              TypeDefinition "Bool" (ReferenceVariable "Type" ("Type",(SourcePosition "module" 3 13 3 18)) Untyped (SourcePosition "module" 3 13 3 18)) (SourcePosition "module" 3 6 3 18) [("True",ReferenceVariable "Bool" ("Bool",(SourcePosition "module" 4 12 4 16)) Untyped (SourcePosition "module" 4 12 4 16),(SourcePosition "module" 4 5 4 16)),("False",ReferenceVariable "Bool" ("Bool",(SourcePosition "module" 5 13 5 17)) Untyped (SourcePosition "module" 5 13 5 17),(SourcePosition "module" 5 5 5 17))] (SourcePosition "module" 3 1 5 17),
+              TypeDefinition "Dool" (ReferenceVariable "Type" ("Type",(SourcePosition "module" 6 13 6 18)) Untyped (SourcePosition "module" 6 13 6 18)) (SourcePosition "module" 6 6 6 18) [("True",ReferenceVariable "Dool" ("Dool",(SourcePosition "module" 7 12 7 16)) Untyped (SourcePosition "module" 7 12 7 16),(SourcePosition "module" 7 5 7 16)),("False",ReferenceVariable "Dool" ("Dool",(SourcePosition "module" 8 13 8 17)) Untyped (SourcePosition "module" 8 13 8 17),(SourcePosition "module" 8 5 8 17))] (SourcePosition "module" 6 1 8 17),
+              ValueDefinition "main" (ReferenceVariable "test" ("test",(SourcePosition "module" 9 8 9 12)) Untyped (SourcePosition "module" 9 8 9 12)) (SourcePosition "module" 9 1 9 12)
+            ] (SourcePosition "module" 1 1 10 1)
+        )
 
 np = NoBind ()

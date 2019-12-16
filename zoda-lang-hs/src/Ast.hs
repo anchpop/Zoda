@@ -62,7 +62,7 @@ type JustifiedExpression t p ph m i = Expression t p (Map.Key ph m) i
 type JustifiedTelescope  t p ph m i = Telescope t p (Map.Key ph m) i
 type JustifiedFunctionLiteral  t p ph m i = FunctionLiteral t p (Map.Key ph m) i
 
-data DelcarationInfo t p m i = Value (Expression t p m i) | ValueAndAnnotation (Expression t p m i) (Expression t p m i) | Constructor (Expression t p m i) 
+data DelcarationInfo t p m i = Value (Expression t p m i) | ValueAndAnnotation (Expression t p m i) (Expression t p m i) | Constructor (Expression t p m i) deriving (Show, Eq,  NominalSupport, NominalShow, Generic, Nominal)
 
 getOutputOfScope :: (Nominal t, Nominal p, Nominal m, Nominal i) => Telescope t p m i -> Expression t p m i 
 getOutputOfScope (Scope _ (_ :. scope) ) = getOutputOfScope scope

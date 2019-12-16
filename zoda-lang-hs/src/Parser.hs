@@ -55,7 +55,7 @@ valueDefinitionWithAnnotationP = sourcePosWrapper $ do
   pure $ ValueDefinitionAnnotated annotationName valueBody valueP annotationBody annotationP
 
 typeDefinitionP :: Parser (Declaration Untyped SourcePosition (Text, SourcePosition) Text)
-typeDefinitionP = sourcePosWrapper $ do
+typeDefinitionP = sourcePosWrapperWithNewlines $ do
   symbol "type"
   (typeName, typeType, typeDefSP) <- definitionP ":"
   symbol "="
