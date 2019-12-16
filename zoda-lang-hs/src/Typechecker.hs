@@ -27,8 +27,9 @@ typecheck :: (Bindable t1, Bindable p1, Bindable m1, Bindable i1, Eq t1, Eq p1, 
 typecheck modu = case traverse typecheckDelcaration modu of
   Left () -> Left TypeErr
   Right _ -> Right ()
-  where typecheckDelcaration (value, Nothing)         = inferType modu mempty value *> pure ()
-        typecheckDelcaration (value, Just annotation) = checkType modu mempty value annotation
+  where typecheckDelcaration (Value v)         = inferType modu mempty v *> pure ()
+        typecheckDelcaration (ValueAndAnnotation v t) = checkType modu mempty v t
+        typecheckDelcaration (Constructor _) = pure ()
 
 isSubtype :: forall t p m i ph. Constraints t p m i => JustifiedModule t p ph m i -> Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Bool
 isSubtype modu context e1 e2 = case (e1Normalized, e2Normalized) of 
@@ -157,8 +158,9 @@ inferType modu = inferType' where
     e2T <- inferType' context e2
     combineUniverses e1T e2T
   inferType' context (ReferenceVariable _ m _ _) = case m `Map.lookup` modu of 
-    (value, Nothing)         -> inferType' context value 
-    (value, Just annotation) -> pure annotation 
+    Value v                -> inferType' context v 
+    ValueAndAnnotation _ t -> pure t 
+    Constructor t          -> pure t 
   inferType' context (FirstExpression e _ _) = do 
     eT <- inferType' context e 
     case eT of 
@@ -206,8 +208,9 @@ checkType modu = checkType'
             handleMerge context' (PiArg   _ es (a :. (body, outputType))) = checkType' (addTypeToEnv a es context') body outputType 
             
     checkType' context (ReferenceVariable _ m _ _) shouldBe = case m `Map.lookup` modu of 
-      (value, Nothing)         -> checkType' context value shouldBe
-      (value, Just annotation) -> if isSubtype modu context annotation shouldBe then Right () else Left ()
+      Value v                 -> checkType' context v shouldBe
+      ValueAndAnnotation _ t -> if isSubtype modu context t shouldBe then Right () else Left ()
+      Constructor           t -> if isSubtype modu context t shouldBe then Right () else Left ()
     checkType' context (ParenthesizedExpression e _ _) shouldBe = checkType' context e shouldBe
     -- Type checking rule for everything else
     --       context ⊢ e => t 

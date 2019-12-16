@@ -76,7 +76,11 @@ eval modu = eval'
     eval' (SecondExpression t                                      _ _) env = do_snd modu (eval' t env)
     eval' (ParenthesizedExpression  t                              _ _) env = eval' t env
     eval' (Annotation  t _                                         _ _) env = eval' t env
-    eval' (ReferenceVariable _ m                                   _ _) env = eval' (fst $ m `Map.lookup` modu) env
+    eval' (ReferenceVariable _ m                                   _ _) env = eval' (getValue referent) env
+      where referent = m `Map.lookup` modu
+            getValue (Value e) = e 
+            getValue (ValueAndAnnotation e _) = e 
+            getValue (Constructor t) = error "Constructors not yet supported" `seq` undefined
 
     evalPi env (Scope src ((Just (a, _, _)) :. dest)) =  PiTypeSem (eval' src env) (Clos (a :. (TArrowBinding dest () ())) env)
     evalPi env (Scope src ((Nothing       ) :. dest)) =  PiTypeSem (eval' src env) (Clos ((with_fresh id) :. (TArrowBinding dest () ())) env)
@@ -180,7 +184,7 @@ normalize modu env term tp = read_back_nf modu' (Normal tp' term')
         tp' = eval modu' (normalizeExprMetadata tp) env' 
         term' :: Semantic () () (Map.Key ph m) ()
         term' = eval modu' (normalizeExprMetadata term) env' 
-        modu' = fmap normalizeExprAnnotationMetadata modu
+        modu' = fmap normalizeDelcarationInfoMetadata modu
 
 
 normalizeType :: forall t p i ph m. (Bindable t, Bindable p, Bindable i, Constraints m) => JustifiedModule t p ph m i -> SurfaceEnv t p (Map.Key ph m) i -> Expression t p (Map.Key ph m) i -> Expression () () (Map.Key ph m) ()
@@ -189,7 +193,7 @@ normalizeType modu env term = read_back_tp modu' term'
         env'  = make_initial_env modu' (normalizeExprEnv env) 
         term' :: Semantic () () (Map.Key ph m) ()
         term' = eval modu' (normalizeExprMetadata term) env' 
-        modu' = fmap normalizeExprAnnotationMetadata modu
+        modu' = fmap normalizeDelcarationInfoMetadata modu
 
 
 

@@ -16,21 +16,28 @@ import Parser
 import qualified Data.List.NonEmpty as NonEmpty
 
 
-copyPropagated :: forall i p t o. (Ord i, Bindable i, Bindable p, Bindable t) => [(i, (Expression t p (i, p) i, Maybe (Expression t p (i, p) i)))] -> Module t p (i, p) i -> (forall ph. JustifiedModule t p ph i i -> o) -> Either (ProductionError t p (i, p) i) o
+copyPropagated :: forall i p t o. (Ord i, Bindable i, Bindable p, Bindable t) => [(i, DelcarationInfo t p (i, p) i)] -> Module t p (i, p) i -> (forall ph. JustifiedModule t p ph i i -> o) -> Either (ProductionError t p (i, p) i) o
 copyPropagated prims (Module _ declarations _) f = Map.withMap dUMap (\m -> f <$> dJmapToJustifiedModule m)
   where
-    dUMap = UMap.fromList (prims <> catMaybes (fmap (\case 
-        ValueDefinition          identifier expression _              -> Just (identifier, (expression, Nothing))
-        ValueDefinitionAnnotated identifier expression _ annotation _ _ -> Just (identifier, (expression, Just annotation))
-        _                                       -> Nothing
-      ) declarations))
-    dJmapToJustifiedModule :: (Map.Map ph i (Expression t p (i, p) i, Maybe (Expression t p (i, p) i))) -> Either (ProductionError t p (i, p) i) (JustifiedModule t p ph i i)
+    dUMap = UMap.fromList (prims <> (join . fmap (\case 
+        ValueDefinition          identifier expression _                -> [(identifier, Value expression)]
+        ValueDefinitionAnnotated identifier expression _ annotation _ _ -> [(identifier, ValueAndAnnotation expression annotation)]
+        _                                                               -> []
+      ) $ declarations))
+    dJmapToJustifiedModule :: (Map.Map ph i (DelcarationInfo t p (i, p) i)) -> Either (ProductionError t p (i, p) i) (JustifiedModule t p ph i i)
     dJmapToJustifiedModule m = 
-      for m (\(v, annotation) -> do 
-        v' <- justifyExpression v
-        annotation' <- traverse justifyExpression annotation
-        pure (v', annotation'))
+      for m justifyDeclarationInfo
       where justifyExpression e = forExpr2 e (justifyReferences m)
+            justifyDeclarationInfo (Value v) = do 
+              v' <- justifyExpression v
+              pure $ Value v'
+            justifyDeclarationInfo (ValueAndAnnotation v t) = do 
+              v' <- justifyExpression v
+              t' <- justifyExpression t
+              pure $ ValueAndAnnotation v' t'
+            justifyDeclarationInfo (Constructor t) = do 
+              t' <- justifyExpression t
+              pure $ Constructor t'
     justifyReferences :: Map.Map ph i c -> (i, p) ->  Either (ProductionError t p m i) (Map.Key ph i)
     justifyReferences referenceMap (iJustified, pJustified) = case iJustified `Map.member` referenceMap of 
       Nothing -> Left $ UndeclaredValuesReferenced [(iJustified, pJustified)] 
@@ -45,15 +52,15 @@ produceProgram input = join (parsedModule >>= (\x -> copyPropagated primatives x
     applicant moduOriginal modu = do
       typecheck modu
       case "main" `Map.member` modu of
-        Just mainValueKey -> fmap (\(NumberLiteral r _ _) -> r) (pure $ normalize modu' [] (normalizeExprMetadata . fst $ mainValueKey `Map.lookup` modu) (NatTypeExpression () ())) 
+        Just mainValueKey -> fmap (\(NumberLiteral r _ _) -> r) (pure $ normalize modu' [] (normalizeExprMetadata . getValueFromDelcarationInfo $ mainValueKey `Map.lookup` modu) (NatTypeExpression () ())) 
         _                 -> Left $ NoMain moduOriginal
-      where modu' = fmap normalizeExprAnnotationMetadata modu
+      where modu' = fmap normalizeDelcarationInfoMetadata modu
 
 np :: NoBind ()
 np = NoBind ()
 
-primatives :: [(Text, (Expression Untyped SourcePosition m i, Maybe (Expression Untyped SourcePosition m i)))]
+primatives :: [(Text, DelcarationInfo Untyped SourcePosition m i)]
 primatives = [
-    ("Type", (UniverseExpression 1 Untyped Base, Nothing)),
-    ("Nat", (NatTypeExpression Untyped Base, Nothing))
+    ("Type", Value (UniverseExpression 1 Untyped Base)),
+    ("Nat", Value (NatTypeExpression Untyped Base))
   ]
