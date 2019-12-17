@@ -105,8 +105,6 @@ test = parallel $ do
       typcheckS exampleModule `shouldSatisfy` isLeft
 
 
-      
-
     it "works with ADTs" $ do
       let exampleModule = "module i `test module`\n\
                     \type Bool : Type = \n\

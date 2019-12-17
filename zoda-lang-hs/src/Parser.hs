@@ -226,7 +226,7 @@ newlineHandleIndentation op = do
   Text.Megaparsec.Char.newline
   level <- getCurrentIndentationLevel
   indentation <- length <$> many separatorChar
-  if (indentation `compare` level) /= op then L.incorrectIndent op (mkPos $ (traceShowId level) + 1) (mkPos $ indentation + 1) else pure ()
+  if (indentation `compare` level) /= op then L.incorrectIndent op (mkPos $ level + 1) (mkPos $ indentation + 1) else pure ()
 newline = newlineHandleIndentation EQ
 newlineExtraSpacing = (try newline) <|> newlineHandleIndentation GT 
 

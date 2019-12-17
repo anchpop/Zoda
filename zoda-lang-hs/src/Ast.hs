@@ -57,12 +57,12 @@ instance Representational (Declaration t p) where rep Coercion = Coercion
 instance Representational (ModuleHeader t p) where rep Coercion = Coercion
 instance Representational (Module t p) where rep Coercion = Coercion
 
-type JustifiedModule     t p ph m i = Map.Map ph m (DelcarationInfo t p (Map.Key ph m) i)
+type JustifiedModule     t p ph m i i' = Map.Map ph m (DelcarationInfo t p (Map.Key ph m) i i')
 type JustifiedExpression t p ph m i = Expression t p (Map.Key ph m) i
 type JustifiedTelescope  t p ph m i = Telescope t p (Map.Key ph m) i
 type JustifiedFunctionLiteral  t p ph m i = FunctionLiteral t p (Map.Key ph m) i
 
-data DelcarationInfo t p m i = Value (Expression t p m i) | ValueAndAnnotation (Expression t p m i) (Expression t p m i) | TypeConstructor (Expression t p m i) | DataConstructor (Expression t p m i) deriving (Show, Eq,  NominalSupport, NominalShow, Generic, Nominal)
+data DelcarationInfo t p m i i' = Value (Expression t p m i) | ValueAndAnnotation (Expression t p m i) (Expression t p m i) | TypeConstructor i' (Expression t p m i) | DataConstructor Int (Expression t p m i) deriving (Show, Eq,  NominalSupport, NominalShow, Generic, Nominal)
 
 getOutputOfScope :: (Nominal t, Nominal p, Nominal m, Nominal i) => Telescope t p m i -> Expression t p m i 
 getOutputOfScope (Scope _ (_ :. scope) ) = getOutputOfScope scope
@@ -161,13 +161,13 @@ mapExpr ft fp fm fi e = runIdentity $ traverseExpr ftm fpm fmm fim e
 
 normalizeExprMetadata :: forall t p m i . (Bindable t, Bindable p, Bindable i, Bindable m) => Expression t p m i -> Expression () () m () 
 normalizeExprMetadata = mapExpr (const ()) (const ()) id (const ())
-normalizeDelcarationInfoMetadata :: forall t p m i . (Bindable t, Bindable p, Bindable i, Bindable m) => (DelcarationInfo t p m i) -> (DelcarationInfo () () m ())
+normalizeDelcarationInfoMetadata :: forall t p m i i'. (Bindable t, Bindable p, Bindable i, Bindable m) => (DelcarationInfo t p m i i') -> (DelcarationInfo () () m () i')
 normalizeDelcarationInfoMetadata (Value e) = Value $ normalizeExprMetadata e
 normalizeDelcarationInfoMetadata (ValueAndAnnotation e t) = ValueAndAnnotation (normalizeExprMetadata e) (normalizeExprMetadata t)
-normalizeDelcarationInfoMetadata (TypeConstructor e) = TypeConstructor $ normalizeExprMetadata e
-normalizeDelcarationInfoMetadata (DataConstructor e) = DataConstructor $ normalizeExprMetadata e
+normalizeDelcarationInfoMetadata (TypeConstructor i e) = TypeConstructor i $ normalizeExprMetadata e
+normalizeDelcarationInfoMetadata (DataConstructor i e) = DataConstructor i $ normalizeExprMetadata e
 
 getValueFromDelcarationInfo (Value v) = v 
 getValueFromDelcarationInfo (ValueAndAnnotation v _) = v 
-getValueFromDelcarationInfo (TypeConstructor _) = error "Expected value, got constructor!" 
-getValueFromDelcarationInfo (DataConstructor _) = error "Expected value, got constructor!" 
+getValueFromDelcarationInfo (TypeConstructor _ _) = error "Expected value, got constructor!" 
+getValueFromDelcarationInfo (DataConstructor _ _) = error "Expected value, got constructor!" 

@@ -24,17 +24,16 @@ instance Semigroup (Env t p ph m i) where
 instance Monoid (Env t p ph m i) where
   mempty = Env [] [] 
 
-typecheck :: (Bindable t1, Bindable p1, Bindable m1, Bindable i1, Eq t1, Eq p1, Eq i1, Ord m1, Show t1, Show p1, Show m1, Show i1, NominalShow t1, NominalShow p1, NominalShow m1, NominalShow i1) => JustifiedModule t1 p1 ph m1 i1 -> Either (ProductionError t2 p2 m2 i2) ()
 typecheck modu = case traverse typecheckDelcaration modu of
   Left () -> Left TypeErr
   Right _ -> Right ()
   where typecheckDelcaration (Value v)                = inferType modu mempty v *> pure ()
         typecheckDelcaration (ValueAndAnnotation v t) = checkType modu mempty v t
-        typecheckDelcaration (TypeConstructor _)      = pure () -- TODO: Check type is well formed
-        typecheckDelcaration (DataConstructor _)      = pure () -- TODO: Check type is well formed
+        typecheckDelcaration (TypeConstructor _ _)      = pure () -- TODO: Check type is well formed
+        typecheckDelcaration (DataConstructor _ _)    = pure () -- TODO: Check type is well formed
 
 
-isSubtype :: forall t p m i ph. Constraints t p m i => JustifiedModule t p ph m i -> Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Bool
+isSubtype :: forall t p m i i' ph. Constraints t p m i => JustifiedModule t p ph m i i' -> Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Bool
 isSubtype modu context e1 e2 = case (e1Normalized, e2Normalized) of 
     (UniverseExpression uni1 _ _, UniverseExpression uni2 _ _) -> uni1 <= uni2
     -- probably should do something with functions and pairs here
@@ -76,7 +75,7 @@ mergedFlitAndScope (Arg _ _) (Pi _ _) = Left ()
 -- It checks that the input arguments' types match the types specified in 
 -- the telescope. It then returns the output type with the appropriate substitutions done.
 -- if you pass `Int, 3` to `(a: Type, v: a) -> a` it should return `Int`
-checkScopeAndGetOutput :: forall t p m i ph. (Bindable t, Bindable p, Bindable m, Bindable i, Eq t, Eq p, Eq i, Ord m, Show t, Show p, Show m, Show i, NominalShow t, NominalShow p, NominalShow m, NominalShow i) => JustifiedModule t p ph m i -> Env t p ph m i -> NonEmpty (JustifiedExpression t p ph m i) -> Telescope t p (Map.Key ph m) i -> Either () (Expression t p (Map.Key ph m) i)
+checkScopeAndGetOutput :: forall t p m i i' ph. (Bindable t, Bindable p, Bindable m, Bindable i, Eq t, Eq p, Eq i, Ord m, Show t, Show p, Show m, Show i, NominalShow t, NominalShow p, NominalShow m, NominalShow i) => JustifiedModule t p ph m i i' -> Env t p ph m i -> NonEmpty (JustifiedExpression t p ph m i) -> Telescope t p (Map.Key ph m) i -> Either () (Expression t p (Map.Key ph m) i)
 checkScopeAndGetOutput modu = checkScopeAndGetOutput'
   where
     checkScopeAndGetOutput' context (arg NonEmpty.:| []) (Pi argType ((Just (a, _, _)) :. bodyType)) = do 
@@ -94,7 +93,7 @@ checkScopeAndGetOutput modu = checkScopeAndGetOutput'
     checkScopeAndGetOutput' _ (_ NonEmpty.:| []) (Scope _ _) = Left ()
     checkScopeAndGetOutput' _ (_ NonEmpty.:| _) (Pi _ _) = Left () 
 
-inferType :: Constraints t p m i => JustifiedModule t p ph m i -> Env t p ph m i -> JustifiedExpression t p ph m i -> Either () (JustifiedExpression t p ph m i)
+inferType :: Constraints t p m i => JustifiedModule t p ph m i i' -> Env t p ph m i -> JustifiedExpression t p ph m i -> Either () (JustifiedExpression t p ph m i)
 inferType modu = inferType' where
   -- Typing rule for universes
   --     ---------------------------------------
@@ -163,8 +162,8 @@ inferType modu = inferType' where
   inferType' context (ReferenceVariable _ m _ _) = case m `Map.lookup` modu of 
     Value v                -> inferType' context v 
     ValueAndAnnotation _ t -> pure t 
-    TypeConstructor t      -> pure t 
-    DataConstructor t      -> pure t 
+    TypeConstructor    _ t -> pure t 
+    DataConstructor    _ t -> pure t 
   inferType' context (FirstExpression e _ _) = do 
     eT <- inferType' context e 
     case eT of 
@@ -192,7 +191,7 @@ inferType modu = inferType' where
         combineUniverses argTT outTT
   inferType' _ other = error $ "couldn't infer a type for " <> show other 
 
-checkType :: Constraints t p m i => JustifiedModule t p ph m i -> Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Either () ()
+checkType :: Constraints t p m i => JustifiedModule t p ph m i i' -> Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Either () ()
 checkType modu = checkType' 
   where 
     -- Type checking rule for lambda abstraction
@@ -214,8 +213,8 @@ checkType modu = checkType'
     checkType' context (ReferenceVariable _ m _ _) shouldBe = case m `Map.lookup` modu of 
       Value v                -> checkType' context v shouldBe
       ValueAndAnnotation _ t -> checkAgainstKnownType t
-      TypeConstructor      t -> checkAgainstKnownType t
-      DataConstructor      t -> checkAgainstKnownType t
+      TypeConstructor    _ t -> checkAgainstKnownType t
+      DataConstructor    _ t -> checkAgainstKnownType t
       where checkAgainstKnownType t = if isSubtype modu context t shouldBe then Right () else Left ()
     checkType' context (ParenthesizedExpression e _ _) shouldBe = checkType' context e shouldBe
     -- Type checking rule for everything else
