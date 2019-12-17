@@ -80,7 +80,8 @@ eval modu = eval'
       where referent = m `Map.lookup` modu
             getValue (Value e) = e 
             getValue (ValueAndAnnotation e _) = e 
-            getValue (Constructor t) = error "Constructors not yet supported" `seq` undefined
+            getValue (TypeConstructor t) = error "Constructors not yet supported" `seq` undefined
+            getValue (DataConstructor t) = error "Constructors not yet supported" `seq` undefined
 
     evalPi env (Scope src ((Just (a, _, _)) :. dest)) =  PiTypeSem (eval' src env) (Clos (a :. (TArrowBinding dest () ())) env)
     evalPi env (Scope src ((Nothing       ) :. dest)) =  PiTypeSem (eval' src env) (Clos ((with_fresh id) :. (TArrowBinding dest () ())) env)

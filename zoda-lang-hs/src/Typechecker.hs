@@ -30,7 +30,9 @@ typecheck modu = case traverse typecheckDelcaration modu of
   Right _ -> Right ()
   where typecheckDelcaration (Value v)                = inferType modu mempty v *> pure ()
         typecheckDelcaration (ValueAndAnnotation v t) = checkType modu mempty v t
-        typecheckDelcaration (Constructor _)          = pure ()
+        typecheckDelcaration (TypeConstructor _)      = pure () -- TODO: Check type is well formed
+        typecheckDelcaration (DataConstructor _)      = pure () -- TODO: Check type is well formed
+
 
 isSubtype :: forall t p m i ph. Constraints t p m i => JustifiedModule t p ph m i -> Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Bool
 isSubtype modu context e1 e2 = case (e1Normalized, e2Normalized) of 
@@ -161,7 +163,8 @@ inferType modu = inferType' where
   inferType' context (ReferenceVariable _ m _ _) = case m `Map.lookup` modu of 
     Value v                -> inferType' context v 
     ValueAndAnnotation _ t -> pure t 
-    Constructor t          -> pure t 
+    TypeConstructor t      -> pure t 
+    DataConstructor t      -> pure t 
   inferType' context (FirstExpression e _ _) = do 
     eT <- inferType' context e 
     case eT of 
@@ -210,8 +213,10 @@ checkType modu = checkType'
             
     checkType' context (ReferenceVariable _ m _ _) shouldBe = case m `Map.lookup` modu of 
       Value v                -> checkType' context v shouldBe
-      ValueAndAnnotation _ t -> if isSubtype modu context t shouldBe then Right () else Left ()
-      Constructor          t -> if isSubtype modu context t shouldBe then Right () else Left ()
+      ValueAndAnnotation _ t -> checkAgainstKnownType t
+      TypeConstructor      t -> checkAgainstKnownType t
+      DataConstructor      t -> checkAgainstKnownType t
+      where checkAgainstKnownType t = if isSubtype modu context t shouldBe then Right () else Left ()
     checkType' context (ParenthesizedExpression e _ _) shouldBe = checkType' context e shouldBe
     -- Type checking rule for everything else
     --       context ⊢ e => t 

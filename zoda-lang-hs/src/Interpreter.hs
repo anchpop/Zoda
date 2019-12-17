@@ -22,7 +22,7 @@ copyPropagated prims (Module _ declarations _) f = Map.withMap dUMap (\m -> f <$
     dUMap = UMap.fromList $ traceShowId (prims <> (declarations >>= (\case 
         ValueDefinition          identifier expression _                -> [(identifier, Value expression)]
         ValueDefinitionAnnotated identifier expression _ annotation _ _ -> [(identifier, ValueAndAnnotation expression annotation)]
-        _                                                               -> []
+        TypeDefinition typName typType _ constructors _                 -> (typName, TypeConstructor typType):(fmap (\(constName, constType, _) -> (constName, DataConstructor constType)) constructors)
       )))
     dJmapToJustifiedModule :: (Map.Map ph i (DelcarationInfo t p (i, p) i)) -> Either (ProductionError t p (i, p) i) (JustifiedModule t p ph i i)
     dJmapToJustifiedModule m = 
@@ -35,9 +35,12 @@ copyPropagated prims (Module _ declarations _) f = Map.withMap dUMap (\m -> f <$
               v' <- justifyExpression v
               t' <- justifyExpression t
               pure $ ValueAndAnnotation v' t'
-            justifyDeclarationInfo (Constructor t) = do 
+            justifyDeclarationInfo (TypeConstructor t) = do 
               t' <- justifyExpression t
-              pure $ Constructor t'
+              pure $ TypeConstructor t'
+            justifyDeclarationInfo (DataConstructor t) = do 
+              t' <- justifyExpression t
+              pure $ DataConstructor t'
     justifyReferences :: Map.Map ph i c -> (i, p) ->  Either (ProductionError t p m i) (Map.Key ph i)
     justifyReferences referenceMap (iJustified, pJustified) = case iJustified `Map.member` referenceMap of 
       Nothing -> Left $ UndeclaredValuesReferenced [(iJustified, pJustified)] 
