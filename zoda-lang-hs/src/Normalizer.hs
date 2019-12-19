@@ -148,19 +148,10 @@ read_back_ne modu (AddSem2 ne nf)   = AddExpression (read_back_ne modu ne) (read
 read_back_ne modu (AddSem3 ne1 ne2) = AddExpression (read_back_ne modu ne1) (read_back_ne modu ne2) () ()
 
 
-{-
--- |The environment is a list of types associated with variables which are supposed to be a member of that type.
--- For each entry we use eval to convert it to a semantic type, tp and then add a neutral term Var i at 
--- type tp where i is the variable at that type. 
--- Notice that we don't need to worry about eta expanding them; all of that will be handled in read back.
-make_initial_env :: forall ph m. (Constraints m, Show m) => JustifiedModule () () ph m () i -> [(Atom, Expression () () (Map.Key ph m) ())] -> SemanticEnv () () (Map.Key ph m) ()
-make_initial_env _    [] = []
-make_initial_env modu ((atom, t):env) = (atom, d):env'
-  where
-    env' :: SemanticEnv () () (Map.Key ph m) ()
-    env' = make_initial_env modu env 
-    d :: Semantic () () (Map.Key ph m) ()
-    d = NeutralSem (eval modu (normalizeExprMetadata t) env') (VarSem atom)
+{- ice!
+type T ph = [ph]
+err :: forall ph i. T ph i -> Int
+err = undefined :: ph
 -}
 
 make_initial_env :: forall ph m i i'. (Constraints m) => JustifiedModule () () ph m () i' -> [(Atom, Expression () () (Map.Key ph m) ())] -> SemanticEnv () () (Map.Key ph m) () i'
