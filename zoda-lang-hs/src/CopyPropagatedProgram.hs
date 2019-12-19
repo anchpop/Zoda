@@ -13,15 +13,15 @@ import Data.Functor.Identity
 -- reduced further. So for instance, Lam and Pair may contain computation further inside the term 
 -- but at least the outermost constructor is stable and fully evaluated. 
 -- Essentially, this contains the introduction forms.
-data Semantic t p m i =
-    LamSem (Clos t p m i)
-  | NeutralSem {tpNeutral   :: Semantic t p m i,  -- ^This should be the type of the neutral term
-                termNeutral :: Ne       t p m i}  -- ^This should be the neutral term iteslf
+data Semantic t p m i i' =
+    LamSem (Clos t p m i i')
+  | NeutralSem {tpNeutral   :: Semantic t p m i i',  -- ^This should be the type of the neutral term
+                termNeutral :: Ne       t p m i i'}  -- ^This should be the neutral term iteslf
   | NatTypeSem
   | NatValueSem Integer
-  | PiTypeSem (Semantic t p m i) (Clos t p m i)
-  | SigTypeSem (Semantic t p m i) (Clos t p m i) 
-  | PairSem (Semantic t p m i) (Semantic t p m i)
+  | PiTypeSem (Semantic t p m i i') (Clos t p m i i')
+  | SigTypeSem (Semantic t p m i i') (Clos t p m i i') 
+  | PairSem (Semantic t p m i i') (Semantic t p m i i')
   | UniSem UniLevel
   deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
@@ -32,31 +32,31 @@ data Semantic t p m i =
 -- we have some neutral term and we apply Fst to it it's clearly still not a value but we don't 
 -- have any way of reducing it further so what's there to do. 
 -- Essentially, this contains the elimination forms (since they might get blocked on an argument). 
-data Ne t p m i =
+data Ne t p m i i' =
     VarSem Atom
-  | ApSem (Ne t p m i) (Nf t p m i)
-  | FstSem (Ne t p m i)
-  | SndSem (Ne t p m i)
+  | ApSem (Ne t p m i i') (Nf t p m i i')
+  | FstSem (Ne t p m i i')
+  | SndSem (Ne t p m i i')
   -- For addition, we might be blocked on the first, second, or both arguments 
   -- (this doesn't apply to function application because we can only get blocked if
   -- we don't know what the function is.
-  | AddSem1 (Nf t p m i) (Ne t p m i)
-  | AddSem2 (Ne t p m i) (Nf t p m i)
-  | AddSem3 (Ne t p m i) (Ne t p m i)
+  | AddSem1 (Nf t p m i i') (Ne t p m i i')
+  | AddSem2 (Ne t p m i i') (Nf t p m i i')
+  | AddSem3 (Ne t p m i i') (Ne t p m i i')
   deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
 -- |nf is a special class of values coming from the style of NbE we use. It associates a type 
 -- with a value so that later during quotation we can eta expand it appropriately
-data Nf t p m i =
-  Normal {tpNf :: Semantic t p m i, termNf :: Semantic t p m i}
+data Nf t p m i i' =
+  Normal {tpNf :: Semantic t p m i i', termNf :: Semantic t p m i i'}
   deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
 type UniLevel = Integer
 
 type SurfaceEnv t p m i = [(Atom, Expression t p m i)]
 
-type SemanticEnv t p m i = [(Atom, Semantic t p m i)]
-data Clos t p m i = Clos {termClos :: (Bind Atom (Expression t p m i)), envClos :: (SemanticEnv t p m i)}
+type SemanticEnv t p m i i' = [(Atom, Semantic t p m i i')]
+data Clos t p m i i' = Clos {termClos :: (Bind Atom (Expression t p m i)), envClos :: (SemanticEnv t p m i i')}
   deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal) 
 
 

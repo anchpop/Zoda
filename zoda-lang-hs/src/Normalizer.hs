@@ -16,23 +16,23 @@ import qualified Data.List.NonEmpty as NonEmpty
 
 type Constraints m = (Bindable m, Ord m, Show m, NominalShow m)
 
-do_fst :: JustifiedModule () () ph m () i -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
+do_fst :: JustifiedModule () () ph m () i' -> Semantic () () (Map.Key ph m) () i' -> Semantic () () (Map.Key ph m) () i'
 do_fst _ (PairSem p1 _)                   = p1
 do_fst _ (NeutralSem (SigTypeSem t _) ne) = NeutralSem t (FstSem ne)
 do_fst _ a                                = error $ "Couldn't fst argument in do_fst - " -- <> show a
 
-do_snd :: (Constraints m) => JustifiedModule () () ph m () i -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
+do_snd :: (Constraints m) => JustifiedModule () () ph m () i' -> Semantic () () (Map.Key ph m) () i' -> Semantic () () (Map.Key ph m) () i'
 do_snd _    (PairSem _ p2)                       = p2
 do_snd modu (NeutralSem p@(SigTypeSem _ clo) ne) = NeutralSem (do_clos modu clo (do_fst modu p)) (SndSem ne)
 do_snd _    _                                    = error "Couldn't snd argument in do_snd"
 
-do_ap :: (Constraints m) => JustifiedModule () () ph m () i -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
+do_ap :: (Constraints m) => JustifiedModule () () ph m () i' -> Semantic () () (Map.Key ph m) () i' -> Semantic () () (Map.Key ph m) () i' -> Semantic () () (Map.Key ph m) () i'
 do_ap modu (LamSem clos)                      a = do_clos modu clos a
 do_ap modu (NeutralSem (PiTypeSem src dst) e) a = NeutralSem (do_clos modu dst a) (ApSem e (Normal src a))
 do_ap _    (NeutralSem _ _)                   _ = error "Not a Pi in do_ap"
 do_ap _    _                                  _ = error "Not a function in do_ap"
 
-do_add :: JustifiedModule () () ph m () i -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
+do_add :: JustifiedModule () () ph m () i' -> Semantic () () (Map.Key ph m) () i' -> Semantic () () (Map.Key ph m) () i' -> Semantic () () (Map.Key ph m) () i'
 do_add _    (NatValueSem i1)     (NatValueSem i2)   = NatValueSem $ i1 + i2 
 do_add _ e1@(NatValueSem _)      (NeutralSem _ ne)  = NeutralSem NatTypeSem (AddSem1 (Normal NatTypeSem e1) ne)
 do_add _    (NeutralSem _ ne) e2@(NatValueSem _)    = NeutralSem NatTypeSem (AddSem2 ne (Normal NatTypeSem e2))
@@ -40,23 +40,23 @@ do_add _    (NeutralSem _ ne1)   (NeutralSem _ ne2) = NeutralSem NatTypeSem (Add
 do_add _    e1                     e2               = error $ "Arguments to do_add not both numbers - " -- <> show e1 <> " and " <> show e2
 
 
-do_clos :: forall m ph i. (Constraints m)
-        => JustifiedModule () () ph m () i 
-        -> Clos () () (Map.Key ph m) ()        -- ^ The closure to evaluate
-        -> Semantic () () (Map.Key ph m) ()    -- ^ What to pass to the closure
-        -> Semantic () () (Map.Key ph m) () -- ^ The evaluated closure
+do_clos :: forall m ph i i'. (Constraints m)
+        => JustifiedModule () () ph m () i'
+        -> Clos () () (Map.Key ph m) () i'        -- ^ The closure to evaluate
+        -> Semantic () () (Map.Key ph m) () i'    -- ^ What to pass to the closure
+        -> Semantic () () (Map.Key ph m) () i' -- ^ The evaluated closure
 do_clos modu (Clos (atom :. term) env) bound = eval modu term ((atom, bound) : env)
 
 
-mk_var :: Semantic t p ph i -> Atom -> Semantic t p ph i
+mk_var :: Semantic t p ph i i' -> Atom -> Semantic t p ph i i'
 mk_var tp atom = NeutralSem tp (VarSem atom)
  
  
 -- |This converts the surface syntax into a semantic term with no beta redexes.
-eval :: forall ph m i. (Constraints m) => JustifiedModule () () ph m () i -> Expression () () (Map.Key ph m) () -> SemanticEnv () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
+eval :: forall ph m i i'. (Constraints m) => JustifiedModule () () ph m () i' -> Expression () () (Map.Key ph m) () -> SemanticEnv () () (Map.Key ph m) () i' -> Semantic () () (Map.Key ph m) () i'
 eval modu = eval'
   where 
-    eval' :: Expression () () (Map.Key ph m) () -> SemanticEnv () () (Map.Key ph m) () -> Semantic () () (Map.Key ph m) ()
+    eval' :: Expression () () (Map.Key ph m) () -> SemanticEnv () () (Map.Key ph m) () i' -> Semantic () () (Map.Key ph m) () i'
     eval' (LambdaVariable (i, _) _ _) env =
       case i `lookup` env  of
         Just x -> x
@@ -95,7 +95,7 @@ eval modu = eval'
 --   - one for normal forms
 --   - one for neutral terms
 --   - one for types. 
-read_back_nf :: (Constraints m) => JustifiedModule () () ph m () i ->  Nf () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
+read_back_nf :: (Constraints m) => JustifiedModule () () ph m () i' ->  Nf () () (Map.Key ph m) () i' -> Expression () () (Map.Key ph m) ()
 read_back_nf modu (Normal (PiTypeSem src dest) f)                  = FunctionLiteralExpression (LastArg srcType ((atom, np, np) :. (read_back_nf modu nf))) () ()
                                                                       where Clos (atom :. _) _ = dest
                                                                             srcType = read_back_tp modu src 
@@ -126,7 +126,7 @@ read_back_nf _     v                                          = error $ "Ill-typ
 -- so there is no annotation tell us what type we're reading back at. 
 -- The function itself just assumes that d is some term of type Uni i for some i. 
 -- This, however, means that the cases are almost identical to the type cases in read_back_nf. 
-read_back_tp :: forall m ph i. (Constraints m) => JustifiedModule () () ph m () i -> Semantic () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
+read_back_tp :: forall m ph i i'. (Constraints m) => JustifiedModule () () ph m () i' -> Semantic () () (Map.Key ph m) () i' -> Expression () () (Map.Key ph m) ()
 read_back_tp modu (NeutralSem _ term)  = read_back_ne modu term
 read_back_tp _    NatTypeSem           = NatTypeExpression () ()
 read_back_tp modu (PiTypeSem src dest) = TArrowBinding (Pi (read_back_tp modu src) ((Just (atom, np, np)) :. (read_back_tp modu (do_clos modu dest var)))) () ()
@@ -138,7 +138,7 @@ read_back_tp modu (SigTypeSem f s)     = TSigmaBinding (read_back_tp modu f) (Ju
 read_back_tp _ (UniSem k)              = UniverseExpression k () ()
 read_back_tp _ _                       = error "Nbe_failed - Not a type in read_back_tp"
 
-read_back_ne :: forall m ph i.  (Constraints m) => JustifiedModule () () ph m () i -> Ne () () (Map.Key ph m) () -> Expression () () (Map.Key ph m) ()
+read_back_ne :: forall m ph i i'.  (Constraints m) => JustifiedModule () () ph m () i' -> Ne () () (Map.Key ph m) () i' -> Expression () () (Map.Key ph m) ()
 read_back_ne _    (VarSem x)        = LambdaVariable (x, ()) () ()
 read_back_ne modu (ApSem ne arg)    = FunctionApplicationExpression (read_back_ne modu ne) (read_back_nf modu arg NonEmpty.:| []) () ()
 read_back_ne modu (FstSem ne)       = FirstExpression (read_back_ne modu ne) () ()
@@ -163,15 +163,28 @@ make_initial_env modu ((atom, t):env) = (atom, d):env'
     d = NeutralSem (eval modu (normalizeExprMetadata t) env') (VarSem atom)
 -}
 
-make_initial_env :: forall ph m i. (Constraints m) => JustifiedModule () () ph m () i -> [(Atom, Expression () () (Map.Key ph m) ())] -> SemanticEnv () () (Map.Key ph m) ()
+make_initial_env :: forall ph m i i'. (Constraints m) => JustifiedModule () () ph m () i' -> [(Atom, Expression () () (Map.Key ph m) ())] -> SemanticEnv () () (Map.Key ph m) () i'
 make_initial_env _    [] = []
 make_initial_env modu ((atom, t):env) = (atom, d):env'
   where
-    env' :: SemanticEnv () () (Map.Key ph m) ()
+    env' :: SemanticEnv () () (Map.Key ph m) () i'
     env' = make_initial_env modu env 
-    d :: Semantic () () (Map.Key ph m) ()
+    d :: Semantic () () (Map.Key ph m) () i'
     d = eval modu (normalizeExprMetadata t) env'
 
+{-
+
+make_initial_env :: forall ph m i i'. (Constraints m) => JustifiedModule () () ph m () i i' -> [(Atom, Expression () () (Map.Key ph m) ())] -> SemanticEnv () () (Map.Key ph m) () i'
+make_initial_env _    [] = []
+make_initial_env modu ((atom, t):env) = (atom, d):env'
+  where
+    env' :: SemanticEnv () () (Map.Key ph m) () i'
+    env' = make_initial_env modu env 
+    d :: Semantic () () (Map.Key ph m) () i'
+    d = eval modu (normalizeExprMetadata t) env'
+
+
+-}
 
 (@@) :: Expression () () m i -> (NonEmpty.NonEmpty (Expression () () m i)) -> Expression () () m i
 m @@ n = FunctionApplicationExpression m n () ()
@@ -179,20 +192,20 @@ infixl 9 @@
 
 normalize :: forall t p i i' ph m. (Bindable t, Bindable p, Bindable i, Constraints m) => JustifiedModule t p ph m i i' -> SurfaceEnv t p (Map.Key ph m) i -> Expression t p (Map.Key ph m) i -> Expression t p (Map.Key ph m) i -> Expression () () (Map.Key ph m) ()
 normalize modu env term tp = read_back_nf modu' (Normal tp' term')
-  where env'  :: SemanticEnv () () (Map.Key ph m) ()
+  where env'  :: SemanticEnv () () (Map.Key ph m) () i'
         env'  = make_initial_env modu' (normalizeExprEnv env) 
-        tp' :: Semantic () () (Map.Key ph m) ()
+        tp' :: Semantic () () (Map.Key ph m) () i'
         tp' = eval modu' (normalizeExprMetadata tp) env' 
-        term' :: Semantic () () (Map.Key ph m) ()
+        term' :: Semantic () () (Map.Key ph m) () i'
         term' = eval modu' (normalizeExprMetadata term) env' 
         modu' = fmap normalizeDelcarationInfoMetadata modu
 
 
 normalizeType :: forall t p i i' ph m. (Bindable t, Bindable p, Bindable i, Constraints m) => JustifiedModule t p ph m i i' -> SurfaceEnv t p (Map.Key ph m) i -> Expression t p (Map.Key ph m) i -> Expression () () (Map.Key ph m) ()
 normalizeType modu env term = read_back_tp modu' term'
-  where env'  :: SemanticEnv () () (Map.Key ph m) ()
+  where env'  :: SemanticEnv () () (Map.Key ph m) () i'
         env'  = make_initial_env modu' (normalizeExprEnv env) 
-        term' :: Semantic () () (Map.Key ph m) ()
+        term' :: Semantic () () (Map.Key ph m) () i'
         term' = eval modu' (normalizeExprMetadata term) env' 
         modu' = fmap normalizeDelcarationInfoMetadata modu
 
