@@ -22,6 +22,8 @@ data Semantic t p m i i' =
   | PiTypeSem (Semantic t p m i i') (Clos t p m i i')
   | SigTypeSem (Semantic t p m i i') (Clos t p m i i') 
   | PairSem (Semantic t p m i i') (Semantic t p m i i')
+  | TypeConstructorSem i'
+  | DataConstructorSem Int
   | UniSem UniLevel
   deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
