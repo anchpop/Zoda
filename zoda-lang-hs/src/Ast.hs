@@ -14,9 +14,6 @@ import qualified Data.Bifunctor as Data.Bifunctor
 import Data.Void
 import Data.List.NonEmpty
 
-type Applier constraint phase = (constraint (XParenthesizedExpression phase), constraint (XFirstExpression phase), constraint (XSecondExpression phase), constraint (XPairExpression phase), constraint (XTSigmaBinding phase), constraint (XUniverseExpression phase), constraint (XNumberLiteral phase), constraint (XAddExpression phase), constraint (XReferenceVariable phase), constraint (XLambdaVariable phase), constraint (XFunctionLiteralExpression phase), constraint (XFunctionApplicationExpression phase), constraint (XTArrowBinding phase), constraint (XAnnotation phase), constraint (XNatTypeExpression phase), constraint (XOther phase))
-type ConstraintX constraint phase = (constraint (XParenthesizedExpression phase), constraint (XFirstExpression phase), constraint (XSecondExpression phase), constraint (XPairExpression phase), constraint (XTSigmaBinding phase), constraint (XUniverseExpression phase), constraint (XNumberLiteral phase), constraint (XAddExpression phase), constraint (XReferenceVariable phase), constraint (XLambdaVariable phase), constraint (XFunctionLiteralExpression phase), constraint (XFunctionApplicationExpression phase), constraint (XTArrowBinding phase), constraint (XAnnotation phase), constraint (XNatTypeExpression phase), constraint (XOther phase), Generic (XParenthesizedExpression phase), Generic (XFirstExpression phase), Generic (XSecondExpression phase), Generic (XPairExpression phase), Generic (XTSigmaBinding phase), Generic (XUniverseExpression phase), Generic (XNumberLiteral phase), Generic (XAddExpression phase), Generic (XReferenceVariable phase), Generic (XLambdaVariable phase), Generic (XFunctionLiteralExpression phase), Generic (XFunctionApplicationExpression phase), Generic (XTArrowBinding phase), Generic (XAnnotation phase), Generic (XNatTypeExpression phase), Generic (XOther phase))
-
 type Binder i p = (Atom, NoBind i, NoBind p)
 
 
@@ -144,7 +141,8 @@ type family XAnnotation phase
 type family XNatTypeExpression phase
 type family XOther phase
 
-data Parsed deriving (Show, Eq, Typeable, NominalSupport, NominalShow, Generic, Nominal)
+-- The parsed tag represents the AST directly after parsing
+data Parsed 
 type instance XParenthesizedExpression Parsed = ()
 type instance XFirstExpression Parsed = ()
 type instance XSecondExpression Parsed = ()
@@ -161,6 +159,44 @@ type instance XAnnotation Parsed = ()
 type instance XNatTypeExpression Parsed = ()
 type instance XOther Parsed = Void
 
+
+
+
+type ConstraintX constraint phase = (
+    constraint (XParenthesizedExpression phase), 
+    constraint (XFirstExpression phase), 
+    constraint (XSecondExpression phase), 
+    constraint (XPairExpression phase), 
+    constraint (XTSigmaBinding phase), 
+    constraint (XUniverseExpression phase), 
+    constraint (XNumberLiteral phase), 
+    constraint (XAddExpression phase), 
+    constraint (XReferenceVariable phase), 
+    constraint (XLambdaVariable phase), 
+    constraint (XFunctionLiteralExpression phase), 
+    constraint (XFunctionApplicationExpression phase), 
+    constraint (XTArrowBinding phase), 
+    constraint (XAnnotation phase), 
+    constraint (XNatTypeExpression phase), 
+    constraint (XOther phase), 
+    
+    Generic (XParenthesizedExpression phase), 
+    Generic (XFirstExpression phase), 
+    Generic (XSecondExpression phase), 
+    Generic (XPairExpression phase), 
+    Generic (XTSigmaBinding phase), 
+    Generic (XUniverseExpression phase), 
+    Generic (XNumberLiteral phase), 
+    Generic (XAddExpression phase), 
+    Generic (XReferenceVariable phase), 
+    Generic (XLambdaVariable phase), 
+    Generic (XFunctionLiteralExpression phase), 
+    Generic (XFunctionApplicationExpression phase), 
+    Generic (XTArrowBinding phase), 
+    Generic (XAnnotation phase), 
+    Generic (XNatTypeExpression phase), 
+    Generic (XOther phase)
+  )
 
 
 
