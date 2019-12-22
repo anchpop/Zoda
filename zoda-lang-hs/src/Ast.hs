@@ -14,221 +14,239 @@ import qualified Data.Bifunctor as Data.Bifunctor
 import Data.Void
 import Data.List.NonEmpty
 
-type Binder i p = (Atom, NoBind i, NoBind p)
+type Binder i = (Atom, NoBind i)
 
 
 
-data Module phase t p m i = Module (ModuleHeader t p m i) [(Declaration phase t p m i)] p 
+data Module phase i m = Module (ModuleHeader i) [(Declaration phase i m)] SourcePosition
 
-deriving instance (ConstraintX Generic phase) => Generic (Module phase t p m i)
-deriving instance (ConstraintX Nominal phase, ConstraintX Eq phase, Eq t, Eq p, Eq i, Eq m, Nominal i, Nominal p, Nominal t, Nominal m) => Eq (Module phase t p m i)
-deriving instance (ConstraintX NominalShow phase, ConstraintX Show phase, Show t, Show p, Show i, Show m, NominalShow i, NominalShow p, NominalShow t, NominalShow m) => Show (Module phase t p m i)
-
-
-
-
-data ModuleHeader t p m i = ModuleHeader i (Tinydoc t p m i) p deriving (Show, Eq)
+deriving instance (ConstraintX Generic phase m i) => Generic (Module phase m i)
+deriving instance (ConstraintX Nominal phase m i, ConstraintX Eq phase m i, Eq i, Nominal i, Eq m, Nominal m) => Eq (Module phase i m)
+deriving instance (ConstraintX NominalShow phase m i, ConstraintX Show phase m i, Show i, NominalShow i, Show m, NominalShow m) => Show (Module phase i m)
 
 
 
-data Declaration phase t p m i = ValueDefinition i (ExpressionX phase t p m i) p 
-                               | ValueDefinitionAnnotated i (ExpressionX phase t p m i) p (ExpressionX phase t p m i) p p
-                               | TypeDefinition i (ExpressionX phase t p m i) p [(i, (ExpressionX phase t p m i), p)] p 
+
+data ModuleHeader i = ModuleHeader i (Tinydoc i) SourcePosition deriving (Show, Eq)
+
+
+
+data Declaration phase i m = ValueDefinition i (ExpressionX phase i m) SourcePosition 
+                           | ValueDefinitionAnnotated i (ExpressionX phase i m) SourcePosition (ExpressionX phase i m) SourcePosition
+                           | TypeDefinition i (ExpressionX phase i m) SourcePosition [(i, (ExpressionX phase i m), SourcePosition)] SourcePosition
                          
-deriving instance (ConstraintX Generic phase) => Generic (Declaration phase t p m i)
-deriving instance (ConstraintX Nominal phase, ConstraintX Eq phase, Eq t, Eq p, Eq i, Eq m, Nominal i, Nominal p, Nominal t, Nominal m) => Eq (Declaration phase t p m i)
-deriving instance (ConstraintX NominalShow phase, ConstraintX Show phase, Show t, Show p, Show i, Show m, NominalShow i, NominalShow p, NominalShow t, NominalShow m) => Show (Declaration phase t p m i)
-deriving instance (ConstraintX Nominal phase, Nominal t, Nominal p, Nominal i, Nominal m) => Nominal (Declaration phase t p m i)
-deriving instance (ConstraintX NominalShow phase, NominalShow t, NominalShow p, NominalShow i, NominalShow m) => NominalShow (Declaration phase t p m i)
-deriving instance (ConstraintX NominalSupport phase, NominalSupport t, NominalSupport p, NominalSupport i, NominalSupport m) => NominalSupport (Declaration phase t p m i)
+deriving instance (ConstraintX Generic phase m i) => Generic (Declaration phase i m)
+deriving instance (ConstraintX Nominal phase m i, ConstraintX Eq phase m i, Eq i, Nominal i, Eq m, Nominal m) => Eq (Declaration phase i m)
+deriving instance (ConstraintX NominalShow phase m i, ConstraintX Show phase m i, Show i, NominalShow i, Show m, NominalShow m) => Show (Declaration phase i m)
+deriving instance (ConstraintX Nominal phase m i, Nominal i, Nominal m) => Nominal (Declaration phase i m)
+deriving instance (ConstraintX NominalShow phase m i, NominalShow i, NominalShow m) => NominalShow (Declaration phase i m)
+deriving instance (ConstraintX NominalSupport phase m i, NominalSupport i, NominalSupport m) => NominalSupport (Declaration phase i m)
 
 
 
 
-data ExpressionX phase t p m i = ParenthesizedExpressionX (XParenthesizedExpression phase)       (ExpressionX phase t p m i)                                              t p 
-                               | FirstExpressionX (XFirstExpression phase)               (ExpressionX phase t p m i)                                                     t p 
-                               | SecondExpressionX (XSecondExpression phase)              (ExpressionX phase t p m i)                                                     t p 
-                               | PairExpressionX (XPairExpression phase)                (ExpressionX phase t p m i)                         (ExpressionX phase t p m i)  t p 
-                               | TSigmaBindingX (XTSigmaBinding phase)                 (ExpressionX phase t p m i) (Bind (Maybe (Binder i p)) (ExpressionX phase t p m i)) t p 
-                               | UniverseExpressionX (XUniverseExpression phase) Integer                                                                                    t p 
-                               | NumberLiteralX (XNumberLiteral phase) Rational                                                                                        t p 
-                               | AddExpressionX (XAddExpression phase)                 (ExpressionX phase t p m i)                          (ExpressionX phase t p m i)  t p 
-                               | ReferenceVariableX (XReferenceVariable phase) i m                                                                                         t p 
-                               | LambdaVariableX (XLambdaVariable phase) (Atom, i)                                                                                      t p 
-                               | FunctionLiteralExpressionX (XFunctionLiteralExpression phase)     (FunctionLiteralX phase t p m i)                                        t p 
-                               | FunctionApplicationExpressionX (XFunctionApplicationExpression phase) (ExpressionX phase t p m i)      (NonEmpty (ExpressionX phase t p m i)) t p 
-                               | TArrowBindingX (XTArrowBinding phase)                (TelescopeX phase  t p m i)                                                     t p
-                               | AnnotationX (XAnnotation phase)                   (ExpressionX phase t p m i)                          (ExpressionX phase t p m i)  t p 
-                               | NatTypeExpressionX (XNatTypeExpression phase)                                                                  t p
-                               | OtherX (XOther phase) 
+data ExpressionX phase i m = ParenthesizedExpressionX       (XParenthesizedExpression phase i m)       (ExpressionX phase i m) 
+                           | FirstExpressionX               (XFirstExpression phase i m)               (ExpressionX phase i m) 
+                           | SecondExpressionX              (XSecondExpression phase i m)              (ExpressionX phase i m) 
+                           | PairExpressionX                (XPairExpression phase i m)                (ExpressionX phase i m)                          (ExpressionX phase i m) 
+                           | TSigmaBindingX                 (XTSigmaBinding phase i m)                 (ExpressionX phase i m) (Bind (Maybe (Binder i)) (ExpressionX phase i m)) 
+                           | UniverseExpressionX            (XUniverseExpression phase i m)            Integer 
+                           | NumberLiteralX                 (XNumberLiteral phase i m)                 Rational 
+                           | AddExpressionX                 (XAddExpression phase i m)                 (ExpressionX phase i m)                          (ExpressionX phase i m) 
+                           | ReferenceVariableX             (XReferenceVariable phase i m)             i m
+                           | LambdaVariableX                (XLambdaVariable phase i m)                (Atom, i) 
+                           | FunctionLiteralExpressionX     (XFunctionLiteralExpression phase i m)     (FunctionLiteralX phase i m) 
+                           | FunctionApplicationExpressionX (XFunctionApplicationExpression phase i m) (ExpressionX phase i m)                (NonEmpty (ExpressionX phase i m)) 
+                           | TArrowBindingX                 (XTArrowBinding phase i m)                 (TelescopeX phase i m)
+                           | AnnotationX                    (XAnnotation phase i m)                    (ExpressionX phase i m)                          (ExpressionX phase i m) 
+                           | NatTypeExpressionX             (XNatTypeExpression phase i m)
+                           | OtherX                         (XOther phase i m) 
 
-deriving instance (ConstraintX Generic phase) => Generic (ExpressionX phase t p m i)
-deriving instance (ConstraintX Nominal phase, ConstraintX Eq phase, Eq t, Eq p, Eq i, Eq m, Nominal i, Nominal p, Nominal t, Nominal m) => Eq (ExpressionX phase t p m i)
-deriving instance (ConstraintX NominalShow phase, ConstraintX Show phase, Show t, Show p, Show i, Show m, NominalShow i, NominalShow p, NominalShow t, NominalShow m) => Show (ExpressionX phase t p m i)
-deriving instance (ConstraintX Nominal phase, Nominal t, Nominal p, Nominal i, Nominal m) => Nominal (ExpressionX phase t p m i)
-deriving instance (ConstraintX NominalShow phase, NominalShow t, NominalShow p, NominalShow i, NominalShow m) => NominalShow (ExpressionX phase t p m i)
-deriving instance (ConstraintX NominalSupport phase, NominalSupport t, NominalSupport p, NominalSupport i, NominalSupport m) => NominalSupport (ExpressionX phase t p m i)
+deriving instance (ConstraintX Generic phase m i) => Generic (ExpressionX phase i m)
+deriving instance (ConstraintX Nominal phase m i, ConstraintX Eq phase m i, Eq i, Nominal i, Eq m, Nominal m) => Eq (ExpressionX phase i m)
+deriving instance (ConstraintX NominalShow phase m i, ConstraintX Show phase m i, Show i, NominalShow i, Show m, NominalShow m) => Show (ExpressionX phase i m)
+deriving instance (ConstraintX Nominal phase m i, Nominal i, Nominal m) => Nominal (ExpressionX phase i m)
+deriving instance (ConstraintX NominalShow phase m i, NominalShow i, NominalShow m) => NominalShow (ExpressionX phase i m)
+deriving instance (ConstraintX NominalSupport phase m i, NominalSupport i, NominalSupport m) => NominalSupport (ExpressionX phase i m)
 
 
-pattern ParenthesizedExpression e t p = ParenthesizedExpressionX () e t p
-pattern FirstExpression e t p = FirstExpressionX () e t p
-pattern SecondExpression e t p = SecondExpressionX () e t p
-pattern PairExpression e1 e2 t p = PairExpressionX () e1 e2 t p
-pattern TSigmaBinding e1 e2 t p = TSigmaBindingX () e1 e2 t p
-pattern UniverseExpression e t p = UniverseExpressionX () e t p
-pattern NumberLiteral e t p = NumberLiteralX () e t p
-pattern AddExpression e1 e2 t p = AddExpressionX () e1 e2 t p
-pattern ReferenceVariable i m t p = ReferenceVariableX () i m t p
-pattern LambdaVariable e t p = LambdaVariableX () e t p
-pattern FunctionLiteralExpression e t p = FunctionLiteralExpressionX () e t p
-pattern FunctionApplicationExpression e args t p = FunctionApplicationExpressionX () e args t p
-pattern TArrowBinding e t p = TArrowBindingX () e t p
-pattern Annotation e1 e2 t p = AnnotationX () e1 e2 t p
-pattern NatTypeExpression t p = NatTypeExpressionX () t p
+
+data TelescopeX phase i m = Scope (ExpressionX phase i m) (Bind (Maybe (Binder i)) (TelescopeX phase i m)) 
+                          | Pi    (ExpressionX phase i m) (Bind (Maybe (Binder i)) (ExpressionX phase i m)) 
+
+
+deriving instance (ConstraintX Generic phase m i) => Generic (TelescopeX phase i m)
+deriving instance (ConstraintX Nominal phase m i, ConstraintX Eq phase m i, Eq i, Nominal i, Eq m, Nominal m) => Eq (TelescopeX phase i m)
+deriving instance (ConstraintX NominalShow phase m i, ConstraintX Show phase m i, Show i, NominalShow i, Show m, NominalShow m) => Show (TelescopeX phase i m)
+deriving instance (ConstraintX Nominal phase m i, Nominal i, Nominal m) => Nominal (TelescopeX phase i m)
+deriving instance (ConstraintX NominalShow phase m i, NominalShow i, NominalShow m) => NominalShow (TelescopeX phase i m)
+deriving instance (ConstraintX NominalSupport phase m i, NominalSupport i, NominalSupport m) => NominalSupport (TelescopeX phase i m)
+
+
+
+
+
+data FunctionLiteralX phase i m = Arg     (ExpressionX phase i m) (Bind (Binder i) (FunctionLiteralX phase i m)) 
+                                | LastArg (ExpressionX phase i m) (Bind (Binder i) (ExpressionX phase i m)) 
+
+deriving instance (ConstraintX Generic phase m i) => Generic (FunctionLiteralX phase i m)
+deriving instance (ConstraintX Nominal phase m i, ConstraintX Eq phase m i, Eq i, Nominal i, Eq m, Nominal m) => Eq (FunctionLiteralX phase i m)
+deriving instance (ConstraintX NominalShow phase m i, ConstraintX Show phase m i, Show i, NominalShow i, Show m, NominalShow m) => Show (FunctionLiteralX phase i m)
+deriving instance (ConstraintX Nominal phase m i, Nominal i, Nominal m) => Nominal (FunctionLiteralX phase i m)
+deriving instance (ConstraintX NominalShow phase m i, NominalShow i, NominalShow m) => NominalShow (FunctionLiteralX phase i m)
+deriving instance (ConstraintX NominalSupport phase m i, NominalSupport i, NominalSupport m) => NominalSupport (FunctionLiteralX phase i m)
+
+
+
+
+
+data DelcarationInfo phase i m i' = Value (ExpressionX phase i m) 
+                                  | ValueAndAnnotation (ExpressionX phase i m) (ExpressionX phase i m) 
+                                  | TypeConstructor i' (ExpressionX phase i m) 
+                                  | DataConstructor Int (ExpressionX phase i m) 
+
+deriving instance (ConstraintX Generic phase m i) => Generic (DelcarationInfo phase i m i')
+deriving instance (ConstraintX Nominal phase m i, ConstraintX Eq phase m i, Eq i, Nominal i, Eq m, Nominal m, Eq i', Nominal i') => Eq (DelcarationInfo phase i m i')
+deriving instance (ConstraintX NominalShow phase m i, ConstraintX Show phase m i, Show i, NominalShow i, Show m, NominalShow m, Show i', NominalShow i') => Show (DelcarationInfo phase i m i')
+deriving instance (ConstraintX Nominal phase m i, Nominal i, Nominal m, Nominal i') => Nominal (DelcarationInfo phase i m i')
+deriving instance (ConstraintX NominalShow phase m i, NominalShow i, NominalShow m, NominalShow i') => NominalShow (DelcarationInfo phase i m i')
+deriving instance (ConstraintX NominalSupport phase m i, NominalSupport i, NominalSupport m, NominalSupport i') => NominalSupport (DelcarationInfo phase i m i')
+
+
+
+
+pattern ParenthesizedExpression e = ParenthesizedExpressionX () e
+pattern FirstExpression e = FirstExpressionX () e
+pattern SecondExpression e = SecondExpressionX () e
+pattern PairExpression e1 e2 = PairExpressionX () e1 e2
+pattern TSigmaBinding e1 e2 = TSigmaBindingX () e1 e2
+pattern UniverseExpression e = UniverseExpressionX () e
+pattern NumberLiteral e = NumberLiteralX () e
+pattern AddExpression e1 e2 = AddExpressionX () e1 e2
+pattern ReferenceVariable i m = ReferenceVariableX () i m
+pattern LambdaVariable e = LambdaVariableX () e
+pattern FunctionLiteralExpression e = FunctionLiteralExpressionX () e
+pattern FunctionApplicationExpression e args = FunctionApplicationExpressionX () e args
+pattern TArrowBinding e = TArrowBindingX () e
+pattern Annotation e1 e2 = AnnotationX () e1 e2
+pattern NatTypeExpression = NatTypeExpressionX ()
 pattern Other = OtherX ()
-
-
-data TelescopeX phase t p m i = Scope (ExpressionX phase t p m i) (Bind (Maybe (Binder i p)) (TelescopeX phase t p m i)) 
-                              | Pi    (ExpressionX phase t p m i) (Bind (Maybe (Binder i p)) (ExpressionX phase t p m i)) 
-
-deriving instance (ConstraintX Generic phase) => Generic (TelescopeX phase t p m i)
-deriving instance (ConstraintX Nominal phase, ConstraintX Eq phase, Eq t, Eq p, Eq i, Eq m, Nominal i, Nominal p, Nominal t, Nominal m) => Eq (TelescopeX phase t p m i)
-deriving instance (ConstraintX NominalShow phase, ConstraintX Show phase, Show t, Show p, Show i, Show m, NominalShow i, NominalShow p, NominalShow t, NominalShow m) => Show (TelescopeX phase t p m i)
-deriving instance (ConstraintX Nominal phase, Nominal t, Nominal p, Nominal i, Nominal m) => Nominal (TelescopeX phase t p m i)
-deriving instance (ConstraintX NominalShow phase, NominalShow t, NominalShow p, NominalShow i, NominalShow m) => NominalShow (TelescopeX phase t p m i)
-deriving instance (ConstraintX NominalSupport phase, NominalSupport t, NominalSupport p, NominalSupport i, NominalSupport m) => NominalSupport (TelescopeX phase t p m i)
-
-
-
-
-data FunctionLiteralX phase t p m i = Arg     (ExpressionX phase t p m i) (Bind (Binder i p) (FunctionLiteralX phase t p m i)) 
-                                    | LastArg (ExpressionX phase t p m i) (Bind (Binder i p) (ExpressionX phase t p m i)) 
-
-deriving instance (ConstraintX Generic phase) => Generic (FunctionLiteralX phase t p m i)
-deriving instance (ConstraintX Nominal phase, ConstraintX Eq phase, Eq t, Eq p, Eq i, Eq m, Nominal i, Nominal p, Nominal t, Nominal m) => Eq (FunctionLiteralX phase t p m i)
-deriving instance (ConstraintX NominalShow phase, ConstraintX Show phase, Show t, Show p, Show i, Show m, NominalShow i, NominalShow p, NominalShow t, NominalShow m) => Show (FunctionLiteralX phase t p m i)
-deriving instance (ConstraintX Nominal phase, Nominal t, Nominal p, Nominal i, Nominal m) => Nominal (FunctionLiteralX phase t p m i)
-deriving instance (ConstraintX NominalShow phase, NominalShow t, NominalShow p, NominalShow i, NominalShow m) => NominalShow (FunctionLiteralX phase t p m i)
-deriving instance (ConstraintX NominalSupport phase, NominalSupport t, NominalSupport p, NominalSupport i, NominalSupport m) => NominalSupport (FunctionLiteralX phase t p m i)
-
-data DelcarationInfo phase t p m i i' = Value (ExpressionX phase t p m i) | ValueAndAnnotation (ExpressionX phase t p m i) (ExpressionX phase t p m i) | TypeConstructor i' (ExpressionX phase t p m i) | DataConstructor Int (ExpressionX phase t p m i) 
-
-deriving instance (ConstraintX Generic phase) => Generic (DelcarationInfo phase t p m i i')
-deriving instance (ConstraintX Nominal phase, ConstraintX Eq phase, Eq t, Eq p, Eq i, Eq i', Eq m, Nominal i, Nominal i', Nominal p, Nominal t, Nominal m) => Eq (DelcarationInfo phase t p m i i')
-deriving instance (ConstraintX NominalShow phase, ConstraintX Show phase, Show t, Show p, Show i, Show i', Show m, NominalShow i, NominalShow i', NominalShow p, NominalShow t, NominalShow m) => Show (DelcarationInfo phase t p m i i')
-deriving instance (ConstraintX Nominal phase, Nominal t, Nominal p, Nominal i, Nominal i', Nominal m) => Nominal (DelcarationInfo phase t p m i i')
-deriving instance (ConstraintX NominalShow phase, NominalShow t, NominalShow p, NominalShow i, NominalShow i', NominalShow m) => NominalShow (DelcarationInfo phase t p m i i')
-deriving instance (ConstraintX NominalSupport phase, NominalSupport t, NominalSupport p, NominalSupport i, NominalSupport i', NominalSupport m) => NominalSupport (DelcarationInfo phase t p m i i')
-
 
 
 
 -- Tags for different phases 
-type family XParenthesizedExpression phase 
-type family XFirstExpression phase
-type family XSecondExpression phase
-type family XPairExpression phase
-type family XTSigmaBinding phase
-type family XUniverseExpression phase
-type family XNumberLiteral phase
-type family XAddExpression phase
-type family XReferenceVariable phase
-type family XLambdaVariable phase
-type family XFunctionLiteralExpression phase
-type family XFunctionApplicationExpression phase
-type family XTArrowBinding phase
-type family XAnnotation phase
-type family XNatTypeExpression phase
-type family XOther phase
+type family XParenthesizedExpression phase i m
+type family XFirstExpression phase i m
+type family XSecondExpression phase i m
+type family XPairExpression phase i m
+type family XTSigmaBinding phase i m
+type family XUniverseExpression phase i m
+type family XNumberLiteral phase i m
+type family XAddExpression phase i m
+type family XReferenceVariable phase i m
+type family XLambdaVariable phase i m
+type family XFunctionLiteralExpression phase i m
+type family XFunctionApplicationExpression phase i m
+type family XTArrowBinding phase i m
+type family XAnnotation phase i m
+type family XNatTypeExpression phase i m 
+type family XOther phase i m
 
 -- The parsed tag represents the AST directly after parsing
 data Parsed 
-type instance XParenthesizedExpression Parsed = ()
-type instance XFirstExpression Parsed = ()
-type instance XSecondExpression Parsed = ()
-type instance XPairExpression Parsed = ()
-type instance XUniverseExpression Parsed = ()
-type instance XNumberLiteral Parsed = ()
-type instance XAddExpression Parsed = ()
-type instance XReferenceVariable Parsed = ()
-type instance XLambdaVariable Parsed = ()
-type instance XFunctionLiteralExpression Parsed = ()
-type instance XFunctionApplicationExpression Parsed = ()
-type instance XTArrowBinding Parsed = ()
-type instance XAnnotation Parsed = ()
-type instance XNatTypeExpression Parsed = ()
-type instance XOther Parsed = Void
+type instance XParenthesizedExpression Parsed i m = ()
+type instance XFirstExpression Parsed m i = ()
+type instance XSecondExpression Parsed i m = ()
+type instance XPairExpression Parsed i m = ()
+type instance XUniverseExpression Parsed i m = ()
+type instance XNumberLiteral Parsed i m = ()
+type instance XAddExpression Parsed i m = ()
+type instance XReferenceVariable Parsed i m = ()
+type instance XLambdaVariable Parsed i m = ()
+type instance XFunctionLiteralExpression Parsed i m = ()
+type instance XFunctionApplicationExpression Parsed i m = ()
+type instance XTArrowBinding Parsed i m = ()
+type instance XAnnotation Parsed i m = ()
+type instance XNatTypeExpression Parsed i m = ()
+type instance XOther Parsed i m = Void
 
 
-
-
-type ConstraintX constraint phase = (
-    constraint (XParenthesizedExpression phase), 
-    constraint (XFirstExpression phase), 
-    constraint (XSecondExpression phase), 
-    constraint (XPairExpression phase), 
-    constraint (XTSigmaBinding phase), 
-    constraint (XUniverseExpression phase), 
-    constraint (XNumberLiteral phase), 
-    constraint (XAddExpression phase), 
-    constraint (XReferenceVariable phase), 
-    constraint (XLambdaVariable phase), 
-    constraint (XFunctionLiteralExpression phase), 
-    constraint (XFunctionApplicationExpression phase), 
-    constraint (XTArrowBinding phase), 
-    constraint (XAnnotation phase), 
-    constraint (XNatTypeExpression phase), 
-    constraint (XOther phase), 
+type ConstraintX constraint phase i m = (
+    constraint (XParenthesizedExpression phase i m), 
+    constraint (XFirstExpression phase i m), 
+    constraint (XSecondExpression phase i m), 
+    constraint (XPairExpression phase i m), 
+    constraint (XTSigmaBinding phase i m), 
+    constraint (XUniverseExpression phase i m), 
+    constraint (XNumberLiteral phase i m), 
+    constraint (XAddExpression phase i m), 
+    constraint (XReferenceVariable phase i m), 
+    constraint (XLambdaVariable phase i m), 
+    constraint (XFunctionLiteralExpression phase i m), 
+    constraint (XFunctionApplicationExpression phase i m), 
+    constraint (XTArrowBinding phase i m), 
+    constraint (XAnnotation phase i m), 
+    constraint (XNatTypeExpression phase i m), 
+    constraint (XOther phase i m), 
     
-    Generic (XParenthesizedExpression phase), 
-    Generic (XFirstExpression phase), 
-    Generic (XSecondExpression phase), 
-    Generic (XPairExpression phase), 
-    Generic (XTSigmaBinding phase), 
-    Generic (XUniverseExpression phase), 
-    Generic (XNumberLiteral phase), 
-    Generic (XAddExpression phase), 
-    Generic (XReferenceVariable phase), 
-    Generic (XLambdaVariable phase), 
-    Generic (XFunctionLiteralExpression phase), 
-    Generic (XFunctionApplicationExpression phase), 
-    Generic (XTArrowBinding phase), 
-    Generic (XAnnotation phase), 
-    Generic (XNatTypeExpression phase), 
-    Generic (XOther phase)
+    Generic (XParenthesizedExpression phase i m), 
+    Generic (XFirstExpression phase i m), 
+    Generic (XSecondExpression phase i m), 
+    Generic (XPairExpression phase i m), 
+    Generic (XTSigmaBinding phase i m), 
+    Generic (XUniverseExpression phase i m), 
+    Generic (XNumberLiteral phase i m), 
+    Generic (XAddExpression phase i m), 
+    Generic (XReferenceVariable phase i m), 
+    Generic (XLambdaVariable phase i m), 
+    Generic (XFunctionLiteralExpression phase i m), 
+    Generic (XFunctionApplicationExpression phase i m), 
+    Generic (XTArrowBinding phase i m), 
+    Generic (XAnnotation phase i m), 
+    Generic (XNatTypeExpression phase i m), 
+    Generic (XOther phase i m)
   )
 
 
 
 
-data Tinydoc t p m i = Tinydoc Text p deriving (Show, Read, Eq, Ord, Generic, Typeable)
+data Tinydoc i = Tinydoc i deriving (Show, Read, Eq, Ord, Generic, Typeable)
 
 data Untyped = Untyped deriving (Show, Read, Eq, Ord, NominalSupport, NominalShow, Generic, Nominal, Bindable)
 
-instance Representational (Tinydoc t p) where rep Coercion = Coercion
-instance Representational (ExpressionX phase t p) where rep Coercion = Coercion
-instance Representational (Declaration t p) where rep Coercion = Coercion
-instance Representational (ModuleHeader t p) where rep Coercion = Coercion
-instance Representational (Module t p) where rep Coercion = Coercion
 
-type JustifiedModule     phase t p ph m i i'    = Map.Map ph m (DelcarationInfo phase t p (Map.Key ph m) i i')
-type JustifiedExpression phase t p ph m i       = ExpressionX phase t p (Map.Key ph m) i
-type JustifiedTelescopeX phase t p ph m i       = TelescopeX phase t p (Map.Key ph m) i
-type JustifiedFunctionLiteralX phase t p ph m i = FunctionLiteralX phase t p (Map.Key ph m) i
+type JustifiedModule           ph phase m i i' = Map.Map ph m (DelcarationInfo phase i (Map.Key ph m) i')
+type JustifiedExpression       ph phase m i    = ExpressionX phase i (Map.Key ph m)
+type JustifiedTelescopeX       ph phase m i    = TelescopeX phase i (Map.Key ph m)
+type JustifiedFunctionLiteralX ph phase m i    = FunctionLiteralX phase i (Map.Key ph m)
 
 
-getOutputOfScope :: (ConstraintX Nominal phase, Nominal t, Nominal p, Nominal m, Nominal i) => TelescopeX phase t p m i -> ExpressionX phase t p m i 
+
+
+
+data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} 
+                    | Base 
+                    deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
+instance Show SourcePosition where
+  --show _ = ""
+  show (SourcePosition f l1 c1 l2 c2) = "(SourcePosition \"" <> f <> "\" " <> (show l1) <> " " <> (show c1) <> " " <> (show l2) <> " " <> (show c2) <> ")"
+  show (Base) = "Base" 
+
+
+
+
+getOutputOfScope :: (ConstraintX Nominal phase m i, Nominal t, Nominal p, Nominal m, Nominal i) => TelescopeX phase i -> ExpressionX phase i 
 getOutputOfScope (Scope _ (_ :. scope) ) = getOutputOfScope scope
 getOutputOfScope (Pi    _ (_ :. e) ) = e
 
-getBodyOfFlit :: (ConstraintX Nominal phase, Nominal t, Nominal p, Nominal m, Nominal i) => FunctionLiteralX phase t p m i -> ExpressionX phase t p m i 
+getBodyOfFlit :: (ConstraintX Nominal phase m i, Nominal t, Nominal p, Nominal m, Nominal i) => FunctionLiteralX phase i -> ExpressionX phase i 
 getBodyOfFlit (Arg     _ (_ :. scope)) = getBodyOfFlit scope
 getBodyOfFlit (LastArg _ (_ :. e)) = e
 
 
 
 
-substExpr :: (ConstraintX Nominal phase, Nominal t, Nominal p, Nominal i, Nominal m) => Atom -> ExpressionX phase t p m i -> ExpressionX phase t p m i -> ExpressionX phase t p m i
+substExpr :: (ConstraintX Nominal phase m i, Nominal t, Nominal p, Nominal i, Nominal m) => Atom -> ExpressionX phase i -> ExpressionX phase i -> ExpressionX phae ii
 substExpr lookingFor substWith = subst 
   where subst (ParenthesizedExpressionX inf e t p) = ParenthesizedExpressionX inf (subst e) t p
         subst (FirstExpressionX inf e t p) = FirstExpressionX inf (subst e) t p
@@ -246,12 +264,12 @@ substExpr lookingFor substWith = subst
         subst (NatTypeExpressionX inf t p) = NatTypeExpressionX inf t p
         subst (FunctionLiteralExpressionX inf flit t p) = FunctionLiteralExpressionX inf (substFlit lookingFor substWith flit) t p
 
-substTelescope :: (ConstraintX Nominal phase, Nominal t, Nominal p, Nominal i, Nominal m) => Atom -> ExpressionX phase t p m i -> TelescopeX phase t p m i -> TelescopeX phase t p m i
+substTelescope :: (ConstraintX Nominal phase m i, Nominal t, Nominal p, Nominal i, Nominal m) => Atom -> ExpressionX phase i -> TelescopeX phase i -> TelescopeX phase i
 substTelescope lookingFor substWith = subst 
   where substE = substExpr lookingFor substWith
         subst (Scope e1 (a :. scope)) = Scope (substE e1) (a :. subst scope)
         subst (Pi    e1 (a :. e2   )) = Pi (substE e1) (a :. substE e2)
-substFlit :: (ConstraintX Nominal phase, Nominal t, Nominal p, Nominal i, Nominal m) => Atom -> ExpressionX phase t p m i -> FunctionLiteralX phase t p m i -> FunctionLiteralX phase t p m i
+substFlit :: (ConstraintX Nominal phase m i, Nominal t, Nominal p, Nominal i, Nominal m) => Atom -> ExpressionX phase i -> FunctionLiteralX phase i -> FunctionLiteralX phase i
 substFlit lookingFor substWith = subst
   where substE = substExpr lookingFor substWith
         subst (Arg     e1 (a :. scope)) = Arg     (substE e1) (a :. subst scope)
@@ -260,7 +278,7 @@ substFlit lookingFor substWith = subst
 liftA4 :: Applicative f => (a1 -> b1 -> c -> a2 -> b2) -> f a1 -> f b1 -> f c -> f a2 -> f b2
 liftA4 f a b c d = liftA3 f a b c <*> d
 
-traverseExpr :: forall t1 p1 m1 i1 t2 p2 m2 i2 a phase. (ConstraintX Bindable phase, Bindable t1, Bindable t2, Bindable p1, Bindable p2, Bindable i1, Bindable i2, Bindable m1, Bindable m2, Applicative a) => (t1 -> a t2) -> (p1 -> a p2) -> (m1 -> a m2) ->  (i1 -> a i2) -> ExpressionX phase t1 p1 m1 i1 -> a (ExpressionX phase t2 p2 m2 i2)
+traverseExpr :: forall t1 p1 m1 i1 t2 p2 m2 i2 a phase. (ConstraintX Bindable phase t1 p1 m1 i1, ConstraintX Bindable phase t2 p2 m2 i2, Bindable t1, Bindable t2, Bindable p1, Bindable p2, Bindable i1, Bindable i2, Bindable m1, Bindable m2, Applicative a) => (t1 -> a t2) -> (p1 -> a p2) -> (m1 -> a m2) ->  (i1 -> a i2) -> ExpressionX phase t1 p1 m1 i1 -> a (ExpressionX phase t2 p2 m2 i2)
 traverseExpr ft fp fm fi = me
   where me :: ExpressionX phase t1 p1 m1 i1 -> a (ExpressionX phase t2 p2 m2 i2)
         me (ParenthesizedExpressionX inf e t p) = liftA3 (ParenthesizedExpressionX inf) (me e) (ft t) (fp p)
@@ -280,7 +298,7 @@ traverseExpr ft fp fm fi = me
         me (AnnotationX inf e1 e2 t p) = (liftA4 (AnnotationX inf)) (me e1) (me e2) (ft t) (fp p)
         me (NatTypeExpressionX inf t p) = (liftA2 (NatTypeExpressionX inf)) (ft t) (fp p)
 
-traverseTelescope :: forall t1 p1 m1 i1 t2 p2 m2 i2 a phase. (ConstraintX Bindable phase, Bindable t1, Bindable t2, Bindable p1, Bindable p2, Bindable i1, Bindable i2, Bindable m1, Bindable m2, Applicative a) => (t1 -> a t2) -> (p1 -> a p2) -> (m1 -> a m2) ->  (i1 -> a i2) -> TelescopeX phase t1 p1 m1 i1 -> a (TelescopeX phase t2 p2 m2 i2)
+traverseTelescope :: forall t1 p1 m1 i1 t2 p2 m2 i2 a phase. (ConstraintX Bindable phase t1 p1 m1 i1, ConstraintX Bindable phase t2 p2 m2 i2, Bindable t1, Bindable t2, Bindable p1, Bindable p2, Bindable i1, Bindable i2, Bindable m1, Bindable m2, Applicative a) => (t1 -> a t2) -> (p1 -> a p2) -> (m1 -> a m2) ->  (i1 -> a i2) -> TelescopeX phase t1 p1 m1 i1 -> a (TelescopeX phase t2 p2 m2 i2)
 traverseTelescope ft fp fm fi = te
   where te (Scope e ((Just (a, NoBind i, NoBind p)) :. scope))   = liftA2 Scope (me e) (liftA2 abst (liftA3 filler (pure a) (fi i) (fp p)) (te scope))
         te (Scope e ((Nothing                       :. scope)))  = liftA2 Scope (me e) (liftA2 abst (pure Nothing)                         (te scope))
@@ -290,21 +308,22 @@ traverseTelescope ft fp fm fi = te
         me = traverseExpr ft fp fm fi
 
 
-traverseFunctionLiteral :: forall t1 p1 m1 i1 t2 p2 m2 i2 a phase. (ConstraintX Bindable phase, Bindable t1, Bindable t2, Bindable p1, Bindable p2, Bindable i1, Bindable i2, Bindable m1, Bindable m2, Applicative a) => (t1 -> a t2) -> (p1 -> a p2) -> (m1 -> a m2) ->  (i1 -> a i2) -> FunctionLiteralX phase t1 p1 m1 i1 -> a (FunctionLiteralX phase t2 p2 m2 i2)
-traverseFunctionLiteral ft fp fm fi = fe
-  where fe (Arg     e (((a, NoBind i, NoBind p)) :. scope))   = liftA2 Arg     (me e) (liftA2 abst (liftA3 filler (pure a) (fi i) (fp p)) (fe scope))
-        fe (LastArg e (((a, NoBind i, NoBind p)) :. eBound))  = liftA2 LastArg (me e) (liftA2 abst (liftA3 filler (pure a) (fi i) (fp p)) (me eBound))
-        filler a i p = (a, NoBind i, NoBind p)
-        me = traverseExpr ft fp fm fi
+traverseFunctionLiteral :: forall i1 m1 i2 m2 a phase. (ConstraintX Bindable phase i1 m1, ConstraintX Bindable phase i2 m2, Bindable i1, Bindable i2, Bindable m1, Bindable m2, Applicative a) => (i1 -> a i2) -> (m1 -> a m2) -> FunctionLiteralX phase i1 m1 -> a (FunctionLiteralX phase i2 m2)
+traverseFunctionLiteral fi fm = fe
+  where fe (Arg     e (((a, NoBind i)) :. scope))   = liftA2 Arg     (me e) (liftA2 abst (liftA (binder a) (fi i)) (fe scope))
+        fe (LastArg e (((a, NoBind i)) :. eBound))  = liftA2 LastArg (me e) (liftA2 abst (liftA (binder a) (fi i)) (me eBound))
+        binder a i = (a, NoBind i)
+        me = traverseExpr fi fm
 
-traverseExpr2 :: (ConstraintX Bindable phase, Bindable t, Bindable p, Bindable i, Bindable m1, Bindable m2, Monad mo) => (m1 -> mo m2) -> ExpressionX phase t p m1 i -> mo (ExpressionX phase t p m2 i)
+{-
+traverseExpr2 :: (ConstraintX Bindable phase t p m1 i, ConstraintX Bindable phase t p m2 i, Bindable t, Bindable p, Bindable i, Bindable m1, Bindable m2, Monad mo) => (m1 -> mo m2) -> ExpressionX phase t p m1 i -> mo (ExpressionX phase t p m2 i)
 traverseExpr2 fm = traverseExpr (fmap pure id) (fmap pure id) (fm) (fmap pure id)
 
-forExpr2 :: (ConstraintX Bindable phase, Bindable t, Bindable p, Bindable i, Monad mo, Bindable m1, Bindable m2) => ExpressionX phase t p m1 i -> (m1 -> mo m2) -> mo (ExpressionX phase t p m2 i)
+forExpr2 :: (ConstraintX Bindable phase t p m1 i, ConstraintX Bindable phase t p m2 i, Bindable t, Bindable p, Bindable i, Monad mo, Bindable m1, Bindable m2) => ExpressionX phase t p m1 i -> (m1 -> mo m2) -> mo (ExpressionX phase t p m2 i)
 forExpr2 x y = traverseExpr2 y x
 
 
-mapExpr :: forall t1 p1 m1 i1 t2 p2 m2 i2 phase. (ConstraintX Bindable phase, Bindable t1, Bindable t2, Bindable p1, Bindable p2, Bindable i1, Bindable i2, Bindable m1, Bindable m2) => (t1 -> t2) -> (p1 -> p2) -> (m1 -> m2) ->  (i1 -> i2) -> ExpressionX phase t1 p1 m1 i1 -> ExpressionX phase t2 p2 m2 i2
+mapExpr :: forall t1 p1 m1 i1 t2 p2 m2 i2 phase. (ConstraintX Bindable phase t1 p1 m1 i1, ConstraintX Bindable phase t2 p2 m2 i2, Bindable t1, Bindable t2, Bindable p1, Bindable p2, Bindable i1, Bindable i2, Bindable m1, Bindable m2) => (t1 -> t2) -> (p1 -> p2) -> (m1 -> m2) ->  (i1 -> i2) -> ExpressionX phase t1 p1 m1 i1 -> ExpressionX phase t2 p2 m2 i2
 mapExpr ft fp fm fi e = runIdentity $ traverseExpr ftm fpm fmm fim e
   where ftm = fmap pure ft
         fpm = fmap pure fp
@@ -312,9 +331,9 @@ mapExpr ft fp fm fi e = runIdentity $ traverseExpr ftm fpm fmm fim e
         fim = fmap pure fi
 
 
-normalizeExprMetadata :: forall t p m i phase. (ConstraintX Bindable phase, Bindable t, Bindable p, Bindable i, Bindable m) => ExpressionX phase t p m i -> ExpressionX phase () () m () 
+normalizeExprMetadata :: forall t p m i phase. (ConstraintX Bindable phase m i, Bindable t, Bindable p, Bindable i, Bindable m) => ExpressionX phase i -> ExpressionX phase () () m () 
 normalizeExprMetadata = mapExpr (const ()) (const ()) id (const ())
-normalizeDelcarationInfoMetadata :: forall t p m i i' phase. (ConstraintX Bindable phase, Bindable t, Bindable p, Bindable i, Bindable m) => (DelcarationInfo phase t p m i i') -> (DelcarationInfo phase () () m () i')
+normalizeDelcarationInfoMetadata :: forall t p m i i' phase. (ConstraintX Bindable phase m i, Bindable t, Bindable p, Bindable i, Bindable m) => (DelcarationInfo phase i i') -> (DelcarationInfo phase () () m () i')
 normalizeDelcarationInfoMetadata (Value e) = Value $ normalizeExprMetadata e
 normalizeDelcarationInfoMetadata (ValueAndAnnotation e t) = ValueAndAnnotation (normalizeExprMetadata e) (normalizeExprMetadata t)
 normalizeDelcarationInfoMetadata (TypeConstructor i e) = TypeConstructor i $ normalizeExprMetadata e
@@ -324,3 +343,4 @@ getValueFromDelcarationInfo (Value v) = v
 getValueFromDelcarationInfo (ValueAndAnnotation v _) = v 
 getValueFromDelcarationInfo (TypeConstructor _ _) = error "Expected value, got constructor!" 
 getValueFromDelcarationInfo (DataConstructor _ _) = error "Expected value, got constructor!" 
+-}

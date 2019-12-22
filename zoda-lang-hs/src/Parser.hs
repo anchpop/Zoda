@@ -282,13 +282,6 @@ type ParserState = ([Int], [[(Text, (Atom, SourcePosition))]])
 initialState = ([], [])
 type Parser a = StateT ParserState (Parsec ZodaParseError String) a
 type ASTParser a = Parser (SourcePosition -> a Untyped SourcePosition (Text, SourcePosition) Text)
-data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} 
-                    | Base 
-                    deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
-instance Show SourcePosition where
-  --show _ = ""
-  show (SourcePosition f l1 c1 l2 c2) = "(SourcePosition \"" <> f <> "\" " <> (show l1) <> " " <> (show c1) <> " " <> (show l2) <> " " <> (show c2) <> ")"
-  show (Base) = "Base" 
 
 sourcePosWrapper :: Parser (SourcePosition -> a) -> Parser a
 sourcePosWrapper f = do
