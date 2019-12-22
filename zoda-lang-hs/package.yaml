@@ -92,6 +92,8 @@ default-extensions:
 - PolyKinds
 - NoImplicitPrelude
 - UnicodeSyntax 
+- EmptyDataDeriving
+- UndecidableInstances
 
 library:
   source-dirs: src
