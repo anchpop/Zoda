@@ -156,7 +156,7 @@ make_initial_env modu ((atom, t):env) = (atom, d):env'
     env' :: SemanticEnv () () (Map.Key ph m) () i'
     env' = make_initial_env modu env 
     d :: Semantic () () (Map.Key ph m) () i'
-    d = eval modu (normalizeExprMetadata t) env'
+    d = eval modu (parsedToNormalizedPlain t) env'
 
 {-
 make_initial_env :: forall ph m i i'. (Constraints m i') => JustifiedModule () () ph m () i i' -> [(Atom, Expression () () (Map.Key ph m) ())] -> SemanticEnv () () (Map.Key ph m) () i'
@@ -166,7 +166,7 @@ make_initial_env modu ((atom, t):env) = (atom, d):env'
     env' :: SemanticEnv () () (Map.Key ph m) () i'
     env' = make_initial_env modu env 
     d :: Semantic () () (Map.Key ph m) () i'
-    d = eval modu (normalizeExprMetadata t) env'
+    d = eval modu (parsedToNormalizedPlain t) env'
 
 
 -}
@@ -180,9 +180,9 @@ normalize modu env term tp = read_back_nf modu' (Normal tp' term')
   where env'  :: SemanticEnv () () (Map.Key ph m) () i'
         env'  = make_initial_env modu' (normalizeExprEnv env) 
         tp' :: Semantic () () (Map.Key ph m) () i'
-        tp' = eval modu' (normalizeExprMetadata tp) env' 
+        tp' = eval modu' (parsedToNormalizedPlain tp) env' 
         term' :: Semantic () () (Map.Key ph m) () i'
-        term' = eval modu' (normalizeExprMetadata term) env' 
+        term' = eval modu' (parsedToNormalizedPlain term) env' 
         modu' = fmap normalizeDelcarationInfoMetadata modu
 
 
@@ -191,7 +191,7 @@ normalizeType modu env term = read_back_tp modu' term'
   where env'  :: SemanticEnv () () (Map.Key ph m) () i'
         env'  = make_initial_env modu' (normalizeExprEnv env) 
         term' :: Semantic () () (Map.Key ph m) () i'
-        term' = eval modu' (normalizeExprMetadata term) env' 
+        term' = eval modu' (parsedToNormalizedPlain term) env' 
         modu' = fmap normalizeDelcarationInfoMetadata modu
 
 

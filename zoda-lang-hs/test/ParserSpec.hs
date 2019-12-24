@@ -18,7 +18,7 @@ import Nominal hiding ((.))
 
 --shouldParseTo :: (Show a, Eq a) => Either (ParseErrorBundle String Void) a -> a -> Expectation
 shouldParseTo a b = getRight a `shouldBe` b
-shouldParseToMD a b = ((normalizeExprMetadata $ getRight a) `shouldBe` b) 
+shouldParseToMD a b = ((parsedToNormalizedPlain $ getRight a) `shouldBe` b) 
 --shouldNotParse :: (Show a, Show b) => Either a b -> Expectation
 shouldNotParse a = a `shouldSatisfy` (isLeft)
 

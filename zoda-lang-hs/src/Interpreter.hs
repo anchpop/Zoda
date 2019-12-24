@@ -57,7 +57,7 @@ produceProgram input = join (parsedModule >>= (\x -> copyPropagated primatives x
             v modu = do
               typecheck modu
               case "main" `Map.member` modu of
-                Just mainValueKey -> fmap (\(NumberLiteral r _ _) -> r) (pure $ normalize modu' [] (normalizeExprMetadata . getValueFromDelcarationInfo $ mainValueKey `Map.lookup` modu) (NatTypeExpression () ())) 
+                Just mainValueKey -> fmap (\(NumberLiteral r _ _) -> r) (pure $ normalize modu' [] (parsedToNormalizedPlain . getValueFromDelcarationInfo $ mainValueKey `Map.lookup` modu) (NatTypeExpression () ())) 
                 _                 -> Left $ NoMain moduOriginal
               where modu' :: JustifiedModule () () ph Text () Text
                     modu' = fmap normalizeDelcarationInfoMetadata modu

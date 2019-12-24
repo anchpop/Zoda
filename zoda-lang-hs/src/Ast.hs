@@ -403,15 +403,17 @@ toPlainFlit (LastArg e1 (a :. e2   )) = LastArg (toPlain e1) (a :. toPlain e2)
 
 
 
+plainToNormalizedPlain :: forall i m. (ConstraintX Bindable Plain i m, ConstraintX Bindable Plain () m, Bindable i, Bindable m) => ExpressionX Plain i m -> ExpressionX Plain () m
+plainToNormalizedPlain = mapExpr (const ()) id
 
-normalizeExprMetadata :: forall i m. (ConstraintX Bindable Parsed i m, ConstraintX Bindable Parsed () m, ConstraintX Bindable Plain () m, Bindable i, Bindable m) => ExpressionX Parsed i m -> ExpressionX Plain () m
-normalizeExprMetadata = toPlain . mapExpr (const ()) id
+parsedToNormalizedPlain :: forall i m. (ConstraintX Bindable Parsed i m, ConstraintX Bindable Parsed () m, ConstraintX Bindable Plain () m, Bindable i, Bindable m) => ExpressionX Parsed i m -> ExpressionX Plain () m
+parsedToNormalizedPlain = toPlain . mapExpr (const ()) id
 
 normalizeDelcarationInfoMetadata :: forall i m n. (ConstraintX Bindable Parsed i m, ConstraintX Bindable Parsed () m, ConstraintX Bindable Plain () m, Bindable n, Bindable i, Bindable m) => (DelcarationInfo Parsed i m n) -> (DelcarationInfo Plain () m n)
-normalizeDelcarationInfoMetadata (Value e) = Value $ normalizeExprMetadata e
-normalizeDelcarationInfoMetadata (ValueAndAnnotation e t) = ValueAndAnnotation (normalizeExprMetadata e) (normalizeExprMetadata t)
-normalizeDelcarationInfoMetadata (TypeConstructor i e) = TypeConstructor i $ normalizeExprMetadata e
-normalizeDelcarationInfoMetadata (DataConstructor i e) = DataConstructor i $ normalizeExprMetadata e
+normalizeDelcarationInfoMetadata (Value e) = Value $ parsedToNormalizedPlain e
+normalizeDelcarationInfoMetadata (ValueAndAnnotation e t) = ValueAndAnnotation (parsedToNormalizedPlain e) (parsedToNormalizedPlain t)
+normalizeDelcarationInfoMetadata (TypeConstructor i e) = TypeConstructor i $ parsedToNormalizedPlain e
+normalizeDelcarationInfoMetadata (DataConstructor i e) = DataConstructor i $ parsedToNormalizedPlain e
 
 getValueFromDelcarationInfo (Value v) = v 
 getValueFromDelcarationInfo (ValueAndAnnotation v _) = v 
