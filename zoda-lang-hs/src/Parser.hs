@@ -28,14 +28,14 @@ parseModule text = handleResult result
   handleResult (Left  e) = Left e
   handleResult (Right r) = pure r
 
-moduleP :: Parser (Module Untyped SourcePosition (Text, SourcePosition) Text)
+moduleP :: Parser (Module Parsed Text (Text, SourcePosition))
 moduleP = sourcePosWrapperWithNewlines $ do
   header       <- moduleHeaderP
   declarations <- many (try typeDefinitionP <|> try valueDefinitionWithAnnotationP <|> try valueDefinitionP)
   pure (Module header declarations)
 
 
-moduleHeaderP :: Parser (ModuleHeader Untyped SourcePosition (Text, SourcePosition) Text)
+moduleHeaderP :: Parser (ModuleHeader Parsed Text (Text, SourcePosition))
 moduleHeaderP = sourcePosWrapperWithNewlines $ do
   string "module"
   some separatorChar
@@ -327,24 +327,24 @@ getRightZSE (Left  _)                     = error "Parse error!"
 parseSomething :: (Stream s, Ord e) => s -> StateT ParserState (ParsecT e s Identity) a2 -> Either (ParseErrorBundle s e) a2
 parseSomething text parser = (runParser (evalStateT (parser <* eof) initialState) "no_file" text)
 
-getSourcePosFromExpression :: Expression t p m i -> p
-getSourcePosFromExpression (ParenthesizedExpression _ _ p ) = p  
-getSourcePosFromExpression (NumberLiteral _ _ p ) = p 
-getSourcePosFromExpression (AddExpression _ _ _ p ) = p 
-getSourcePosFromExpression (ReferenceVariable _ _ _ p ) = p 
-getSourcePosFromExpression (LambdaVariable _ _ p ) = p 
-getSourcePosFromExpression (FunctionLiteralExpression _ _ p ) = p 
-getSourcePosFromExpression (FunctionApplicationExpression _ _ _ p ) = p 
-getSourcePosFromExpression (TArrowBinding _ _ p ) = p 
-getSourcePosFromExpression (Annotation _ _ _ p ) = p 
-getSourcePosFromExpression (FirstExpression _ _ p ) = p  
-getSourcePosFromExpression (SecondExpression _ _ p) = p
-getSourcePosFromExpression (PairExpression _ _ _ p) = p
-getSourcePosFromExpression (TSigmaBinding _ _ _ p) = p
-getSourcePosFromExpression (UniverseExpression _ _ p) = p
-getSourcePosFromExpression (NatTypeExpression _ p) = p
+getSourcePosFromExpression :: Expression Parsed i m -> SourcePosition
+getSourcePosFromExpression (ParenthesizedExpression p _ ) = p  
+getSourcePosFromExpression (NumberLiteral p _ ) = p 
+getSourcePosFromExpression (AddExpression p _ _ ) = p 
+getSourcePosFromExpression (ReferenceVariable p _ _ ) = p 
+getSourcePosFromExpression (LambdaVariable p _ ) = p 
+getSourcePosFromExpression (FunctionLiteralExpression p _ ) = p 
+getSourcePosFromExpression (FunctionApplicationExpression p _ _ ) = p 
+getSourcePosFromExpression (TArrowBinding p _ ) = p 
+getSourcePosFromExpression (Annotation p _ _ ) = p 
+getSourcePosFromExpression (FirstExpression p _ ) = p  
+getSourcePosFromExpression (SecondExpression p _) = p
+getSourcePosFromExpression (PairExpression p _ _) = p
+getSourcePosFromExpression (TSigmaBinding p _ _) = p
+getSourcePosFromExpression (UniverseExpression p _) = p
+getSourcePosFromExpression (NatTypeExpression p) = p
 
-combineSourcePos :: Expression t1 SourcePosition m1 i1 -> Expression t2 SourcePosition m2 i2 -> SourcePosition
+combineSourcePos :: Expression Parsed i m -> Expression Parsed i m -> SourcePosition
 combineSourcePos expr1 expr2 = SourcePosition filePath sourceLineStart sourceColumnStart sourceLineEnd sourceColumnEnd
   where 
     SourcePosition filePath sourceLineStart sourceColumnStart _ _ = getSourcePosFromExpression expr1

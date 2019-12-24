@@ -94,6 +94,7 @@ default-extensions:
 - UnicodeSyntax 
 - EmptyDataDeriving
 - UndecidableInstances
+- NoMonomorphismRestriction
 
 library:
   source-dirs: src
