@@ -18,7 +18,7 @@ type Binder i = (Atom, NoBind i)
 
 
 
-data Module phase i m = Module (ModuleHeader i) [(Declaration phase i m)] SourcePosition
+data Module phase i m = Module (ModuleHeader i) [(Declaration phase i m)]
 
 deriving instance (ConstraintX Generic phase i m) => Generic (Module phase m i)
 deriving instance (ConstraintX Nominal phase i m, ConstraintX Eq phase i m, Eq i, Nominal i, Eq m, Nominal m) => Eq (Module phase i m)
@@ -27,13 +27,14 @@ deriving instance (ConstraintX NominalShow phase i m, ConstraintX Show phase i m
 
 
 
-data ModuleHeader i = ModuleHeader i (Tinydoc i) SourcePosition deriving (Show, Eq)
+data ModuleHeader i = ModuleHeader i (Tinydoc i) deriving (Show, Eq)
 
 
-
-data Declaration phase i m = ValueDefinition i (ExpressionX phase i m) SourcePosition 
-                           | ValueDefinitionAnnotated i (ExpressionX phase i m) SourcePosition (ExpressionX phase i m) SourcePosition
-                           | TypeDefinition i (ExpressionX phase i m) SourcePosition [(i, (ExpressionX phase i m), SourcePosition)] SourcePosition
+-- I need to make this extensible
+-- Once I do that, I need to go to Parser.hs and fix typeDefinitionP
+data Declaration phase i m = ValueDefinitionX (XValueDefinition phase i m) i (ExpressionX phase i m) 
+                           | ValueDefinitionAnnotatedX (XValueDefinitionAnnotated phase i m) i (ExpressionX phase i m) (ExpressionX phase i m)
+                           | TypeDefinitionX (XTypeDefinition phase i m) i (ExpressionX phase i m) [(XConstructorDefinition phase i m, i, ExpressionX phase i m)]
                          
 deriving instance (ConstraintX Generic phase i m) => Generic (Declaration phase i m)
 deriving instance (ConstraintX Nominal phase i m, ConstraintX Eq phase i m, Eq i, Nominal i, Eq m, Nominal m) => Eq (Declaration phase i m)
@@ -134,11 +135,16 @@ pattern NatTypeExpression = NatTypeExpressionX NoInfo
 data NoInfo i p = NoInfo deriving (Show, Eq, Generic, Nominal, NominalShow, NominalSupport)
 data NotAllowed i p deriving (Show, Eq, Generic, Nominal, NominalShow, NominalSupport)
 class AstInfo phase where 
-  traverseInfo :: (Applicative a) => (i1 -> a i2) -> (m1 -> a m2) -> phase i1 m1 -> a (phase i2 m2)   
+  traverseInfo :: (Applicative a) => (i1 -> a i2) -> (m1 -> a m2) -> phase i1 m1 -> a (phase i2 m2)
 instance AstInfo NoInfo where 
   traverseInfo _ _ _ = pure NoInfo
 instance AstInfo NotAllowed where 
   traverseInfo _ _ a = case a of { }
+instance AstInfo SourcePositionW where 
+  traverseInfo _ _ (Sp s) = pure (Sp s)
+instance AstInfo SourcePositionPair where 
+  traverseInfo _ _ (SpPair s) = pure (SpPair s)
+
 
 -- different families for type functions
 type family XParenthesizedExpression phase :: * -> * -> *
@@ -156,46 +162,58 @@ type family XFunctionApplicationExpression phase :: * -> * -> *
 type family XTArrowBinding phase :: * -> * -> *
 type family XAnnotation phase :: * -> * -> *
 type family XNatTypeExpression phase :: * -> * -> * 
+type family XValueDefinition phase :: * -> * -> *
+type family XValueDefinitionAnnotated phase :: * -> * -> *
+type family XTypeDefinition phase :: * -> * -> *
+type family XConstructorDefinition phase :: * -> * -> *
 type family XOther phase :: * -> * -> *
 
 -- The parsed tag represents the AST with no additional info
 data Plain 
 type instance XParenthesizedExpression Plain = NoInfo
-type instance XFirstExpression Plain = NoInfo
-type instance XSecondExpression Plain = NoInfo
-type instance XPairExpression Plain = NoInfo
-type instance XTSigmaBinding Plain = NoInfo
-type instance XUniverseExpression Plain = NoInfo
-type instance XNumberLiteral Plain = NoInfo
-type instance XAddExpression Plain = NoInfo
-type instance XReferenceVariable Plain = NoInfo
-type instance XLambdaVariable Plain = NoInfo
+type instance XFirstExpression         Plain = NoInfo
+type instance XSecondExpression        Plain = NoInfo
+type instance XPairExpression          Plain = NoInfo
+type instance XTSigmaBinding           Plain = NoInfo
+type instance XUniverseExpression      Plain = NoInfo
+type instance XNumberLiteral           Plain = NoInfo
+type instance XAddExpression           Plain = NoInfo
+type instance XReferenceVariable       Plain = NoInfo
+type instance XLambdaVariable          Plain = NoInfo
 type instance XFunctionLiteralExpression Plain = NoInfo
 type instance XFunctionApplicationExpression Plain = NoInfo
-type instance XTArrowBinding Plain = NoInfo
-type instance XAnnotation Plain = NoInfo
-type instance XNatTypeExpression Plain = NoInfo
-type instance XOther Plain = NotAllowed
+type instance XTArrowBinding           Plain = NoInfo
+type instance XAnnotation              Plain = NoInfo
+type instance XNatTypeExpression       Plain = NoInfo
+type instance XValueDefinition         Plain = NoInfo
+type instance XValueDefinitionAnnotated Plain = NoInfo
+type instance XTypeDefinition          Plain = NoInfo
+type instance XConstructorDefinition   Plain = NoInfo
+type instance XOther                   Plain = NotAllowed
 
 
 -- The parsed tag represents the AST with no additional info
 data Parsed 
 type instance XParenthesizedExpression Parsed = SourcePositionW
-type instance XFirstExpression Parsed = SourcePositionW
-type instance XSecondExpression Parsed = SourcePositionW
-type instance XPairExpression Parsed = SourcePositionW
-type instance XTSigmaBinding Parsed = SourcePositionW
-type instance XUniverseExpression Parsed = SourcePositionW
-type instance XNumberLiteral Parsed = SourcePositionW
-type instance XAddExpression Parsed = SourcePositionW
-type instance XReferenceVariable Parsed = SourcePositionW
-type instance XLambdaVariable Parsed = SourcePositionW
+type instance XFirstExpression         Parsed = SourcePositionW
+type instance XSecondExpression        Parsed = SourcePositionW
+type instance XPairExpression          Parsed = SourcePositionW
+type instance XTSigmaBinding           Parsed = SourcePositionW
+type instance XUniverseExpression      Parsed = SourcePositionW
+type instance XNumberLiteral           Parsed = SourcePositionW
+type instance XAddExpression           Parsed = SourcePositionW
+type instance XReferenceVariable       Parsed = SourcePositionW
+type instance XLambdaVariable          Parsed = SourcePositionW
 type instance XFunctionLiteralExpression Parsed = SourcePositionW
 type instance XFunctionApplicationExpression Parsed = SourcePositionW
-type instance XTArrowBinding Parsed = SourcePositionW
-type instance XAnnotation Parsed = SourcePositionW
-type instance XNatTypeExpression Parsed = SourcePositionW
-type instance XOther Plain = NotAllowed
+type instance XTArrowBinding           Parsed = SourcePositionW
+type instance XAnnotation              Parsed = SourcePositionW
+type instance XNatTypeExpression       Parsed = SourcePositionW
+type instance XValueDefinition         Parsed = SourcePositionW
+type instance XValueDefinitionAnnotated Parsed = SourcePositionPair
+type instance XTypeDefinition          Parsed = SourcePositionW
+type instance XConstructorDefinition   Parsed = SourcePositionW
+type instance XOther                   Parsed = NotAllowed
 
 
 type ConstraintX constraint phase i m = (
@@ -214,6 +232,10 @@ type ConstraintX constraint phase i m = (
     constraint (XTArrowBinding phase i m), 
     constraint (XAnnotation phase i m), 
     constraint (XNatTypeExpression phase i m), 
+    constraint (XValueDefinition phase i m), 
+    constraint (XValueDefinitionAnnotated phase i m), 
+    constraint (XTypeDefinition phase i m), 
+    constraint (XConstructorDefinition phase i m), 
     constraint (XOther phase i m), 
     
     Generic (XParenthesizedExpression phase i m), 
@@ -231,6 +253,10 @@ type ConstraintX constraint phase i m = (
     Generic (XTArrowBinding phase i m), 
     Generic (XAnnotation phase i m), 
     Generic (XNatTypeExpression phase i m), 
+    Generic (XValueDefinition phase i m), 
+    Generic (XValueDefinitionAnnotated phase i m), 
+    Generic (XTypeDefinition phase i m), 
+    Generic (XConstructorDefinition phase i m), 
     Generic (XOther phase i m), 
     
     AstInfo (XParenthesizedExpression phase), 
@@ -248,6 +274,10 @@ type ConstraintX constraint phase i m = (
     AstInfo (XTArrowBinding phase), 
     AstInfo (XAnnotation phase), 
     AstInfo (XNatTypeExpression phase), 
+    AstInfo (XValueDefinition phase), 
+    AstInfo (XValueDefinitionAnnotated phase), 
+    AstInfo (XTypeDefinition phase), 
+    AstInfo (XConstructorDefinition phase), 
     AstInfo (XOther phase)
   )
 
@@ -258,14 +288,15 @@ data Untyped = Untyped deriving (Show, Read, Eq, Ord, NominalSupport, NominalSho
 
 
 type JustifiedModule           ph phase m i n = Map.Map ph m (DelcarationInfo phase i (Map.Key ph m) n)
-type JustifiedExpression       ph phase m i    = ExpressionX phase i (Map.Key ph m)
-type JustifiedTelescopeX       ph phase m i    = TelescopeX phase i (Map.Key ph m)
-type JustifiedFunctionLiteralX ph phase m i    = FunctionLiteralX phase i (Map.Key ph m)
+type JustifiedExpression       ph phase m i   = ExpressionX phase i (Map.Key ph m)
+type JustifiedTelescopeX       ph phase m i   = TelescopeX phase i (Map.Key ph m)
+type JustifiedFunctionLiteralX ph phase m i   = FunctionLiteralX phase i (Map.Key ph m)
 
 
 
 
-newtype SourcePositionW i m = Sp SourcePosition deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
+newtype SourcePositionPair i m = SpPair (SourcePosition, SourcePosition) deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
+newtype SourcePositionW i m = Sp { sp :: SourcePosition } deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
 data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} 
                     | Base 
                     deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
