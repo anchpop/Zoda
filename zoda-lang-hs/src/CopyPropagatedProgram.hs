@@ -62,5 +62,5 @@ data Clos i m t = Clos {termClos :: (Bind Atom (ExpressionX Plain i m)), envClos
   deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal) 
 
 normalizeExprEnv :: (ConstraintX Bindable Plain i m, ConstraintX Bindable Plain () m, Bindable i, Bindable m) => SurfaceEnv i m -> SurfaceEnv () m 
-normalizeExprEnv s = fmap (Data.Bifunctor.second plainToNormalizedPlain) s
+normalizeExprEnv s = fmap (Data.Bifunctor.second plainToNormalizedPlainExpr) s
 

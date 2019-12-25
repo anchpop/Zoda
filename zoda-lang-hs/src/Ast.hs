@@ -101,17 +101,17 @@ deriving instance (ConstraintX NominalSupport phase i m, NominalSupport i, Nomin
 
 
 
-data DelcarationInfo phase i m n = Value (ExpressionX phase i m) 
-                                  | ValueAndAnnotation (ExpressionX phase i m) (ExpressionX phase i m) 
-                                  | TypeConstructor n (ExpressionX phase i m) 
-                                  | DataConstructor Int (ExpressionX phase i m) 
+data DeclarationInfo phase i m n = Value (ExpressionX phase i m) 
+                                 | ValueAndAnnotation (ExpressionX phase i m) (ExpressionX phase i m) 
+                                 | TypeConstructor n (ExpressionX phase i m) 
+                                 | DataConstructor Int (ExpressionX phase i m) 
 
-deriving instance (ConstraintX Generic phase i m) => Generic (DelcarationInfo phase i m n)
-deriving instance (ConstraintX Nominal phase i m, ConstraintX Eq phase i m, Eq i, Nominal i, Eq m, Nominal m, Eq n, Nominal n) => Eq (DelcarationInfo phase i m n)
-deriving instance (ConstraintX NominalShow phase i m, ConstraintX Show phase i m, Show i, NominalShow i, Show m, NominalShow m, Show n, NominalShow n) => Show (DelcarationInfo phase i m n)
-deriving instance (ConstraintX Nominal phase i m, Nominal i, Nominal m, Nominal n) => Nominal (DelcarationInfo phase i m n)
-deriving instance (ConstraintX NominalShow phase i m, NominalShow i, NominalShow m, NominalShow n) => NominalShow (DelcarationInfo phase i m n)
-deriving instance (ConstraintX NominalSupport phase i m, NominalSupport i, NominalSupport m, NominalSupport n) => NominalSupport (DelcarationInfo phase i m n)
+deriving instance (ConstraintX Generic phase i m) => Generic (DeclarationInfo phase i m n)
+deriving instance (ConstraintX Nominal phase i m, ConstraintX Eq phase i m, Eq i, Nominal i, Eq m, Nominal m, Eq n, Nominal n) => Eq (DeclarationInfo phase i m n)
+deriving instance (ConstraintX NominalShow phase i m, ConstraintX Show phase i m, Show i, NominalShow i, Show m, NominalShow m, Show n, NominalShow n) => Show (DeclarationInfo phase i m n)
+deriving instance (ConstraintX Nominal phase i m, Nominal i, Nominal m, Nominal n) => Nominal (DeclarationInfo phase i m n)
+deriving instance (ConstraintX NominalShow phase i m, NominalShow i, NominalShow m, NominalShow n) => NominalShow (DeclarationInfo phase i m n)
+deriving instance (ConstraintX NominalSupport phase i m, NominalSupport i, NominalSupport m, NominalSupport n) => NominalSupport (DeclarationInfo phase i m n)
 
 
 
@@ -287,10 +287,10 @@ data Tinydoc i = Tinydoc i deriving (Show, Read, Eq, Ord, Generic, Typeable)
 data Untyped = Untyped deriving (Show, Read, Eq, Ord, NominalSupport, NominalShow, Generic, Nominal, Bindable)
 
 
-type JustifiedModule           ph phase m i n = Map.Map ph m (DelcarationInfo phase i (Map.Key ph m) n)
-type JustifiedExpression       ph phase m i   = ExpressionX phase i (Map.Key ph m)
-type JustifiedTelescopeX       ph phase m i   = TelescopeX phase i (Map.Key ph m)
-type JustifiedFunctionLiteralX ph phase m i   = FunctionLiteralX phase i (Map.Key ph m)
+type JustifiedModule           phase ph m i n = Map.Map ph m (DeclarationInfo phase i (Map.Key ph m) n)
+type JustifiedExpression       phase ph m i   = ExpressionX phase i (Map.Key ph m)
+type JustifiedTelescopeX       phase ph m i   = TelescopeX phase i (Map.Key ph m)
+type JustifiedFunctionLiteralX phase ph m i   = FunctionLiteralX phase i (Map.Key ph m)
 
 
 
@@ -432,21 +432,34 @@ toPlainFlit (Arg     e1 (a :. scope)) = Arg     (toPlain e1) (a :. toPlainFlit s
 toPlainFlit (LastArg e1 (a :. e2   )) = LastArg (toPlain e1) (a :. toPlain e2)
 
 
+{-
 
+Value (ExpressionX phase i m) 
+ValueAndAnnotation (ExpressionX phase i m) (ExpressionX phase i m) 
+TypeConstructor n (ExpressionX phase i m) 
+DataConstructor Int (ExpressionX phase i m) 
 
-plainToNormalizedPlain :: forall i m. (ConstraintX Bindable Plain i m, ConstraintX Bindable Plain () m, Bindable i, Bindable m) => ExpressionX Plain i m -> ExpressionX Plain () m
-plainToNormalizedPlain = mapExpr (const ()) id
+-}
+
+plainToNormalizedPlainDecl :: forall i m n. (ConstraintX Bindable Plain i m, ConstraintX Bindable Plain () m, Bindable i, Bindable m) => DeclarationInfo Plain i m n -> DeclarationInfo Plain () m n
+plainToNormalizedPlainDecl (Value i) = Value (plainToNormalizedPlainExpr i) 
+plainToNormalizedPlainDecl (ValueAndAnnotation exp1 exp2) = ValueAndAnnotation (plainToNormalizedPlainExpr exp1) (plainToNormalizedPlainExpr exp2)
+plainToNormalizedPlainDecl (TypeConstructor n exp) = TypeConstructor n (plainToNormalizedPlainExpr exp)
+plainToNormalizedPlainDecl (DataConstructor i exp) = DataConstructor i (plainToNormalizedPlainExpr exp)
+
+plainToNormalizedPlainExpr :: forall i m. (ConstraintX Bindable Plain i m, ConstraintX Bindable Plain () m, Bindable i, Bindable m) => ExpressionX Plain i m -> ExpressionX Plain () m
+plainToNormalizedPlainExpr = mapExpr (const ()) id
 
 parsedToNormalizedPlain :: forall i m. (ConstraintX Bindable Parsed i m, ConstraintX Bindable Parsed () m, ConstraintX Bindable Plain () m, Bindable i, Bindable m) => ExpressionX Parsed i m -> ExpressionX Plain () m
 parsedToNormalizedPlain = toPlain . mapExpr (const ()) id
 
-normalizeDelcarationInfoMetadata :: forall i m n. (ConstraintX Bindable Parsed i m, ConstraintX Bindable Parsed () m, ConstraintX Bindable Plain () m, Bindable n, Bindable i, Bindable m) => (DelcarationInfo Parsed i m n) -> (DelcarationInfo Plain () m n)
-normalizeDelcarationInfoMetadata (Value e) = Value $ parsedToNormalizedPlain e
-normalizeDelcarationInfoMetadata (ValueAndAnnotation e t) = ValueAndAnnotation (parsedToNormalizedPlain e) (parsedToNormalizedPlain t)
-normalizeDelcarationInfoMetadata (TypeConstructor i e) = TypeConstructor i $ parsedToNormalizedPlain e
-normalizeDelcarationInfoMetadata (DataConstructor i e) = DataConstructor i $ parsedToNormalizedPlain e
+normalizeDeclarationInfoMetadata :: forall i m n. (ConstraintX Bindable Parsed i m, ConstraintX Bindable Parsed () m, ConstraintX Bindable Plain () m, Bindable n, Bindable i, Bindable m) => (DeclarationInfo Parsed i m n) -> (DeclarationInfo Plain () m n)
+normalizeDeclarationInfoMetadata (Value e) = Value $ parsedToNormalizedPlain e
+normalizeDeclarationInfoMetadata (ValueAndAnnotation e t) = ValueAndAnnotation (parsedToNormalizedPlain e) (parsedToNormalizedPlain t)
+normalizeDeclarationInfoMetadata (TypeConstructor i e) = TypeConstructor i $ parsedToNormalizedPlain e
+normalizeDeclarationInfoMetadata (DataConstructor i e) = DataConstructor i $ parsedToNormalizedPlain e
 
-getValueFromDelcarationInfo (Value v) = v 
-getValueFromDelcarationInfo (ValueAndAnnotation v _) = v 
-getValueFromDelcarationInfo (TypeConstructor _ _) = error "Expected value, got constructor!" 
-getValueFromDelcarationInfo (DataConstructor _ _) = error "Expected value, got constructor!" 
+getValueFromDeclarationInfo (Value v) = v 
+getValueFromDeclarationInfo (ValueAndAnnotation v _) = v 
+getValueFromDeclarationInfo (TypeConstructor _ _) = error "Expected value, got constructor!" 
+getValueFromDeclarationInfo (DataConstructor _ _) = error "Expected value, got constructor!" 
