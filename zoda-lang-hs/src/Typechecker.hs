@@ -10,14 +10,14 @@ import qualified Data.Map.Justified as Map
 import qualified Data.Semigroup as Semigroup
 
 
-data Env t p ph m i = Env {types :: [(Atom, JustifiedExpression t p ph m i)], values :: [(Atom, JustifiedExpression t p ph m i)]} deriving (Eq, Show)
-addTypeToEnv :: Atom -> JustifiedExpression t p ph m i -> Env t p ph m i -> Env t p ph m i
+data Env t p ph m i = Env {types :: [(Atom, JustifiedExpressionX t p ph m i)], values :: [(Atom, JustifiedExpressionX t p ph m i)]} deriving (Eq, Show)
+addTypeToEnv :: Atom -> JustifiedExpressionX t p ph m i -> Env t p ph m i -> Env t p ph m i
 addTypeToEnv a t (Env ts vs) = (Env ((a, t):ts) vs)
-addValueToEnv :: Atom -> JustifiedExpression t p ph m i -> Env t p ph m i -> Env t p ph m i
+addValueToEnv :: Atom -> JustifiedExpressionX t p ph m i -> Env t p ph m i -> Env t p ph m i
 addValueToEnv a v (Env ts vs) = (Env ts ((a, v):vs))
 lookupTypeInEnv :: Atom -> Env t p ph m i -> Maybe (Expression t p (Map.Key ph m) i)
 lookupTypeInEnv a (Env ts _) = a `lookup` ts
-getValueMap :: Env t p ph m i -> [(Atom, JustifiedExpression t p ph m i)]
+getValueMap :: Env t p ph m i -> [(Atom, JustifiedExpressionX t p ph m i)]
 getValueMap (Env _ vs) = vs
 instance Semigroup (Env t p ph m i) where
   (Env t1 v1) <> (Env t2 v2) = Env (t1 <> t2) (v1 <> v2)
@@ -33,7 +33,7 @@ typecheck modu = case traverse typecheckDelcaration modu of
         typecheckDelcaration (DataConstructor _ _)    = pure () -- TODO: Check type is well formed
 
 
-isSubtype :: forall t p m i i' ph. Constraints' t p m i i' => JustifiedModule t p ph m i i' -> Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Bool
+isSubtype :: forall t p m i i' ph. Constraints' t p m i i' => JustifiedModule t p ph m i i' -> Env t p ph m i -> JustifiedExpressionX t p ph m i -> JustifiedExpressionX t p ph m i -> Bool
 isSubtype modu context e1 e2 = case (e1Normalized, e2Normalized) of 
     (UniverseExpression uni1 _ _, UniverseExpression uni2 _ _) -> uni1 <= uni2
     -- probably should do something with functions and pairs here
@@ -76,7 +76,7 @@ mergedFlitAndScope (Arg _ _) (Pi _ _) = Left ()
 -- It checks that the input arguments' types match the types specified in 
 -- the telescope. It then returns the output type with the appropriate substitutions done.
 -- if you pass `Int, 3` to `(a: Type, v: a) -> a` it should return `Int`
-checkScopeAndGetOutput :: forall t p m i i' ph. Constraints' t p m i i' => JustifiedModule t p ph m i i' -> Env t p ph m i -> NonEmpty (JustifiedExpression t p ph m i) -> Telescope t p (Map.Key ph m) i -> Either () (Expression t p (Map.Key ph m) i)
+checkScopeAndGetOutput :: forall t p m i i' ph. Constraints' t p m i i' => JustifiedModule t p ph m i i' -> Env t p ph m i -> NonEmpty (JustifiedExpressionX t p ph m i) -> Telescope t p (Map.Key ph m) i -> Either () (Expression t p (Map.Key ph m) i)
 checkScopeAndGetOutput modu = checkScopeAndGetOutput'
   where
     checkScopeAndGetOutput' context (arg NonEmpty.:| []) (Pi argType ((Just (a, _, _)) :. bodyType)) = do 
@@ -94,7 +94,7 @@ checkScopeAndGetOutput modu = checkScopeAndGetOutput'
     checkScopeAndGetOutput' _ (_ NonEmpty.:| []) (Scope _ _) = Left ()
     checkScopeAndGetOutput' _ (_ NonEmpty.:| _) (Pi _ _) = Left () 
 
-inferType :: Constraints' t p m i i' => JustifiedModule t p ph m i i' -> Env t p ph m i -> JustifiedExpression t p ph m i -> Either () (JustifiedExpression t p ph m i)
+inferType :: Constraints' t p m i i' => JustifiedModule t p ph m i i' -> Env t p ph m i -> JustifiedExpressionX t p ph m i -> Either () (JustifiedExpressionX t p ph m i)
 inferType modu = inferType' where
   -- Typing rule for universes
   --     ---------------------------------------
@@ -192,7 +192,7 @@ inferType modu = inferType' where
         combineUniverses argTT outTT
   inferType' _ other = error $ "couldn't infer a type for " <> show other 
 
-checkType :: Constraints' t p m i i' => JustifiedModule t p ph m i i' -> Env t p ph m i -> JustifiedExpression t p ph m i -> JustifiedExpression t p ph m i -> Either () ()
+checkType :: Constraints' t p m i i' => JustifiedModule t p ph m i i' -> Env t p ph m i -> JustifiedExpressionX t p ph m i -> JustifiedExpressionX t p ph m i -> Either () ()
 checkType modu = checkType' 
   where 
     -- Type checking rule for lambda abstraction

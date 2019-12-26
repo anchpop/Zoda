@@ -287,10 +287,10 @@ data Tinydoc i = Tinydoc i deriving (Show, Read, Eq, Ord, Generic, Typeable)
 data Untyped = Untyped deriving (Show, Read, Eq, Ord, NominalSupport, NominalShow, Generic, Nominal, Bindable)
 
 
-type JustifiedModule           phase ph m i n = Map.Map ph m (DeclarationInfo phase i (Map.Key ph m) n)
-type JustifiedExpression       phase ph m i   = ExpressionX phase i (Map.Key ph m)
-type JustifiedTelescopeX       phase ph m i   = TelescopeX phase i (Map.Key ph m)
-type JustifiedFunctionLiteralX phase ph m i   = FunctionLiteralX phase i (Map.Key ph m)
+type JustifiedModule           phase ph i m n = Map.Map ph m (DeclarationInfo phase i (Map.Key ph m) n)
+type JustifiedExpressionX       phase ph i m   = ExpressionX phase i (Map.Key ph m)
+type JustifiedTelescopeX       phase ph i m   = TelescopeX phase i (Map.Key ph m)
+type JustifiedFunctionLiteralX phase ph i m   = FunctionLiteralX phase i (Map.Key ph m)
 
 
 
