@@ -254,7 +254,7 @@ identifierP = do
                 pure $ (\x -> (fromString ident, x))
 
 identifierExpP :: ASTParser ExpressionX 
-identifierExpP = do (ident, _) <- sourcePosWrapper identifierP
+identifierExpP = do (ident, _) <- lexemeP identifierP
                     env  <- getEnv
                     case ident `lookup` env of
                       Just (atom, _) -> pure $ (\s -> LambdaVariableX s (atom, ident))
