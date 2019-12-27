@@ -105,6 +105,8 @@ data DeclarationInfo phase i m n = Value (ExpressionX phase i m)
                                  | ValueAndAnnotation (ExpressionX phase i m) (ExpressionX phase i m) 
                                  | TypeConstructor n (ExpressionX phase i m) 
                                  | DataConstructor Int (ExpressionX phase i m) 
+type JustifiedDeclarationInfo phase ph i m n = DeclarationInfo phase i (Map.Key ph m) n
+
 
 deriving instance (ConstraintX Generic phase i m) => Generic (DeclarationInfo phase i m n)
 deriving instance (ConstraintX Nominal phase i m, ConstraintX Eq phase i m, Eq i, Nominal i, Eq m, Nominal m, Eq n, Nominal n) => Eq (DeclarationInfo phase i m n)
@@ -132,8 +134,8 @@ pattern TArrowBinding e = TArrowBindingX NoInfo e
 pattern Annotation e1 e2 = AnnotationX NoInfo e1 e2
 pattern NatTypeExpression = NatTypeExpressionX NoInfo
 
-data NoInfo i p = NoInfo deriving (Show, Eq, Generic, Nominal, NominalShow, NominalSupport)
-data NotAllowed i p deriving (Show, Eq, Generic, Nominal, NominalShow, NominalSupport)
+data NoInfo i p = NoInfo deriving (Show, Eq, Generic, Bindable, Nominal, NominalShow, NominalSupport)
+data NotAllowed i p deriving (Show, Eq, Generic, Bindable, Nominal, NominalShow, NominalSupport)
 class AstInfo phase where 
   traverseInfo :: (Applicative a) => (i1 -> a i2) -> (m1 -> a m2) -> phase i1 m1 -> a (phase i2 m2)
 instance AstInfo NoInfo where 
@@ -288,15 +290,15 @@ data Untyped = Untyped deriving (Show, Read, Eq, Ord, NominalSupport, NominalSho
 
 
 type JustifiedModule           phase ph i m n = Map.Map ph m (DeclarationInfo phase i (Map.Key ph m) n)
-type JustifiedExpressionX       phase ph i m   = ExpressionX phase i (Map.Key ph m)
+type JustifiedExpressionX      phase ph i m   = ExpressionX phase i (Map.Key ph m)
 type JustifiedTelescopeX       phase ph i m   = TelescopeX phase i (Map.Key ph m)
 type JustifiedFunctionLiteralX phase ph i m   = FunctionLiteralX phase i (Map.Key ph m)
 
 
 
 
-newtype SourcePositionPair i m = SpPair (SourcePosition, SourcePosition) deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
-newtype SourcePositionW i m = Sp { sp :: SourcePosition } deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
+newtype SourcePositionPair i m = SpPair (SourcePosition, SourcePosition) deriving (Read, Eq, Show, NominalSupport, NominalShow, Generic, Nominal, Bindable)
+newtype SourcePositionW i m = Sp { sp :: SourcePosition } deriving (Read, Eq, Show, NominalSupport, NominalShow, Generic, Nominal, Bindable)
 data SourcePosition = SourcePosition {_filePath :: String, _sourceLineStart :: Int, _sourceColumnStart  :: Int, _sourceLineEnd :: Int, _sourceColumnEnd  :: Int} 
                     | Base 
                     deriving (Read, Eq, NominalSupport, NominalShow, Generic, Nominal, Bindable)
@@ -402,7 +404,10 @@ mapExpr fi fm e = runIdentity $ traverseExpr fim fmm e
   where fim = fmap pure fi
         fmm = fmap pure fm
 
-
+mapDeclarationInfo f (Value e) = Value (f e)
+mapDeclarationInfo f (ValueAndAnnotation e t) = ValueAndAnnotation (f e) (f t)
+mapDeclarationInfo f (TypeConstructor i e) = TypeConstructor i (f e) 
+mapDeclarationInfo f (DataConstructor i e) = DataConstructor i (f e)
 
 
 toPlain :: forall i m. (ConstraintX Bindable Parsed i m, ConstraintX Bindable Plain i m, Bindable i, Bindable m) => ExpressionX Parsed i m -> ExpressionX Plain i m
@@ -423,6 +428,7 @@ toPlain (NatTypeExpressionX _) = NatTypeExpressionX NoInfo
 toPlain (FunctionLiteralExpressionX _ flit) = FunctionLiteralExpressionX NoInfo (toPlainFlit flit)
 
 
+
 toPlainTelescope :: forall i m. (ConstraintX Bindable Parsed i m, ConstraintX Bindable Plain i m, Bindable i, Bindable m) => TelescopeX Parsed i m -> TelescopeX Plain i m
 toPlainTelescope (Scope e1 (a :. scope)) = Scope (toPlain e1) (a :. toPlainTelescope scope)
 toPlainTelescope (Pi    e1 (a :. e2   )) = Pi (toPlain e1) (a :. toPlain e2)
@@ -431,15 +437,7 @@ toPlainFlit :: forall i m. (ConstraintX Bindable Parsed i m, ConstraintX Bindabl
 toPlainFlit (Arg     e1 (a :. scope)) = Arg     (toPlain e1) (a :. toPlainFlit scope)
 toPlainFlit (LastArg e1 (a :. e2   )) = LastArg (toPlain e1) (a :. toPlain e2)
 
-
-{-
-
-Value (ExpressionX phase i m) 
-ValueAndAnnotation (ExpressionX phase i m) (ExpressionX phase i m) 
-TypeConstructor n (ExpressionX phase i m) 
-DataConstructor Int (ExpressionX phase i m) 
-
--}
+toPlainDecl = mapDeclarationInfo toPlain
 
 plainToNormalizedPlainDecl :: forall i m n. (ConstraintX Bindable Plain i m, ConstraintX Bindable Plain () m, Bindable i, Bindable m) => DeclarationInfo Plain i m n -> DeclarationInfo Plain () m n
 plainToNormalizedPlainDecl (Value i) = Value (plainToNormalizedPlainExpr i) 
@@ -453,11 +451,9 @@ plainToNormalizedPlainExpr = mapExpr (const ()) id
 parsedToNormalizedPlain :: forall i m. (ConstraintX Bindable Parsed i m, ConstraintX Bindable Parsed () m, ConstraintX Bindable Plain () m, Bindable i, Bindable m) => ExpressionX Parsed i m -> ExpressionX Plain () m
 parsedToNormalizedPlain = toPlain . mapExpr (const ()) id
 
+
 normalizeDeclarationInfoMetadata :: forall i m n. (ConstraintX Bindable Parsed i m, ConstraintX Bindable Parsed () m, ConstraintX Bindable Plain () m, Bindable n, Bindable i, Bindable m) => (DeclarationInfo Parsed i m n) -> (DeclarationInfo Plain () m n)
-normalizeDeclarationInfoMetadata (Value e) = Value $ parsedToNormalizedPlain e
-normalizeDeclarationInfoMetadata (ValueAndAnnotation e t) = ValueAndAnnotation (parsedToNormalizedPlain e) (parsedToNormalizedPlain t)
-normalizeDeclarationInfoMetadata (TypeConstructor i e) = TypeConstructor i $ parsedToNormalizedPlain e
-normalizeDeclarationInfoMetadata (DataConstructor i e) = DataConstructor i $ parsedToNormalizedPlain e
+normalizeDeclarationInfoMetadata = mapDeclarationInfo parsedToNormalizedPlain
 
 getValueFromDeclarationInfo (Value v) = v 
 getValueFromDeclarationInfo (ValueAndAnnotation v _) = v 
