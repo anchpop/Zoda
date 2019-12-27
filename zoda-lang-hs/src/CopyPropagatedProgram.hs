@@ -13,15 +13,17 @@ import Data.Functor.Identity
 -- reduced further. So for instance, Lam and Pair may contain computation further inside the term 
 -- but at least the outermost constructor is stable and fully evaluated. 
 -- Essentially, this contains the introduction forms.
-data Semantic t p m i =
-    LamSem (Clos t p m i)
-  | NeutralSem {tpNeutral   :: Semantic t p m i,  -- ^This should be the type of the neutral term
-                termNeutral :: Ne       t p m i}  -- ^This should be the neutral term iteslf
+data Semantic i m n =
+    LamSem (Clos i m n)
+  | NeutralSem {tpNeutral   :: Semantic i m n,  -- ^This should be the type of the neutral term
+                termNeutral :: Ne       i m n}  -- ^This should be the neutral term iteslf
   | NatTypeSem
   | NatValueSem Integer
-  | PiTypeSem (Semantic t p m i) (Clos t p m i)
-  | SigTypeSem (Semantic t p m i) (Clos t p m i) 
-  | PairSem (Semantic t p m i) (Semantic t p m i)
+  | PiTypeSem (Semantic i m n) (Clos i m n)
+  | SigTypeSem (Semantic i m n) (Clos i m n) 
+  | PairSem (Semantic i m n) (Semantic i m n)
+  | TypeConstructorSem n
+  | DataConstructorSem Int
   | UniSem UniLevel
   deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
@@ -32,58 +34,33 @@ data Semantic t p m i =
 -- we have some neutral term and we apply Fst to it it's clearly still not a value but we don't 
 -- have any way of reducing it further so what's there to do. 
 -- Essentially, this contains the elimination forms (since they might get blocked on an argument). 
-data Ne t p m i =
+data Ne i m n =
     VarSem Atom
-  | ApSem (Ne t p m i) (Nf t p m i)
-  | FstSem (Ne t p m i)
-  | SndSem (Ne t p m i)
+  | ApSem (Ne i m n) (Nf i m n)
+  | FstSem (Ne i m n)
+  | SndSem (Ne i m n)
   -- For addition, we might be blocked on the first, second, or both arguments 
   -- (this doesn't apply to function application because we can only get blocked if
   -- we don't know what the function is.
-  | AddSem1 (Nf t p m i) (Ne t p m i)
-  | AddSem2 (Ne t p m i) (Nf t p m i)
-  | AddSem3 (Ne t p m i) (Ne t p m i)
+  | AddSem1 (Nf i m n) (Ne i m n)
+  | AddSem2 (Ne i m n) (Nf i m n)
+  | AddSem3 (Ne i m n) (Ne i m n)
   deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
 -- |nf is a special class of values coming from the style of NbE we use. It associates a type 
 -- with a value so that later during quotation we can eta expand it appropriately
-data Nf t p m i =
-  Normal {tpNf :: Semantic t p m i, termNf :: Semantic t p m i}
+data Nf i m n =
+  Normal {tpNf :: Semantic i m n, termNf :: Semantic i m n}
   deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)
 
 type UniLevel = Integer
 
-type SurfaceEnv t p m i = [(Atom, Expression t p m i)]
+type SurfaceEnv i m = [(Atom, ExpressionX Plain i m)]
 
-type SemanticEnv t p m i = [(Atom, Semantic t p m i)]
-data Clos t p m i = Clos {termClos :: (Bind Atom (Expression t p m i)), envClos :: (SemanticEnv t p m i)}
+type SemanticEnv i m n = [(Atom, Semantic i m n)]
+data Clos i m t = Clos {termClos :: (Bind Atom (ExpressionX Plain i m)), envClos :: (SemanticEnv i m t)}
   deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal) 
 
-
-
-
-mapSemantic ft fp fm fi = ms 
-  where ms (LamSem clos)         = LamSem $ mapClos ft fp fm fi clos
-        ms (NeutralSem tp term)  = NeutralSem (ms tp) (mapNe ft fp fm fi term)
-        ms (NatTypeSem)          = NatTypeSem
-        ms (NatValueSem i)       = NatValueSem i
-        ms (PiTypeSem sem clos)  = PiTypeSem (ms sem) (mapClos ft fp fm fi clos)
-        ms (SigTypeSem sem clos) = SigTypeSem (ms sem) (mapClos ft fp fm fi clos)
-        ms (PairSem sem1 sem2)   = PairSem (ms sem1) (ms sem2)
-        ms (UniSem i)            = UniSem i
-
-mapClos ft fp fm fi (Clos (a :. term) env) = (Clos (a :. mapExpr ft fp fm fi term) (fmap (Data.Bifunctor.second (mapSemantic ft fp fm fi)) env))
-mapNe    ft fp fm fi = mn 
-  where mn (VarSem a)      = VarSem a
-        mn (ApSem ne nf)   = ApSem (mn ne) (mapNf ft fp fm fi nf)
-        mn (FstSem ne)     = FstSem (mn ne) 
-        mn (SndSem ne)     = SndSem (mn ne) 
-        mn (AddSem1 nf ne) = AddSem1 (mapNf ft fp fm fi nf) (mn ne)
-        mn (AddSem2 ne nf) = AddSem2 (mn ne) (mapNf ft fp fm fi nf)
-        mn (AddSem3 n1 n2) = AddSem3 (mn n1) (mn n2)
-
-mapNf ft fp fm fi (Normal tp tm) = (Normal (mapSemantic ft fp fm fi tp) (mapSemantic ft fp fm fi tm))  
-
-normalizeExprEnv :: (Functor f, Bifunctor p, Bindable b1, Bindable b2, Bindable b3, Bindable m) => f (p a (Expression b1 b2 m b3)) -> f (p a (Expression () () m ()))
-normalizeExprEnv s = fmap (Data.Bifunctor.second normalizeExprMetadata) s
+normalizeExprEnv :: (ConstraintX Bindable Plain i m, ConstraintX Bindable Plain () m, Bindable i, Bindable m) => SurfaceEnv i m -> SurfaceEnv () m 
+normalizeExprEnv s = fmap (Data.Bifunctor.second plainToNormalizedPlainExpr) s
 

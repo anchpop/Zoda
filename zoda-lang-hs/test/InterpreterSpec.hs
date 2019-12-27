@@ -10,7 +10,7 @@ import Test.Hspec
 import Test.Hspec.Runner
 
 import Data.Ratio
-
+import Data.Either
 import Data.Foldable (for_)
 
 import Parser
@@ -25,7 +25,7 @@ test = parallel $ do
                     \main = 3\n\
                     \"
                     
-      (produceProgram exampleModule) `shouldBe` pure 3
+      (getRightZSE $ produceProgram exampleModule) `shouldBe` 3
 
       
     it "evaluates simplest possible program where main is behind a layer of indirection" $ do
