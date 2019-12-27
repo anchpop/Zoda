@@ -109,11 +109,12 @@ test = parallel $ do
 
   describe "Parser.valueDefinitionWithAnnotationP" $ do
     it "allows annotation and assignment to number literals" $ do
+      parseSomething "i : 3 + 4\n\
+                     \i = 3" valueDefinitionWithAnnotationP `shouldParseTo` ValueDefinitionAnnotatedX (SpPair ((SourcePosition "no_file" 2 1 2 6),(SourcePosition "no_file" 1 1 1 10))) "i" (NumberLiteralX (Sp {sp = (SourcePosition "no_file" 2 5 2 6)}) (3 % 1)) (AddExpressionX (Sp {sp = (SourcePosition "no_file" 1 5 1 10)}) (NumberLiteralX (Sp {sp = (SourcePosition "no_file" 1 5 1 7)}) (3 % 1)) (NumberLiteralX (Sp {sp = (SourcePosition "no_file" 1 9 1 10)}) (4 % 1)))
+    it "allows annotation and assignment to number literals with indentation" $ do
       parseSomething "i : \n\
                      \  3 + 4\n\
-                     \i = 3" valueDefinitionWithAnnotationP `shouldParseTo` ValueDefinitionAnnotatedX (SpPair (SourcePosition "no_file" 1 9 1 10, SourcePosition "no_file" 1 9 1 10)) "i" (NumberLiteralX (Sp $ SourcePosition "no_file" 2 5 2 6) (3 % 1))  (AddExpressionX (Sp $ SourcePosition "no_file" 1 5 1 7) (NumberLiteralX (Sp $ SourcePosition "no_file" 1 9 1 10) (3 % 1)) (NumberLiteralX (Sp $ SourcePosition "no_file" 1 9 1 10) (4 % 1))) 
-      parseSomething "i : 3 + 4\n\
-                     \i = 3" valueDefinitionWithAnnotationP `shouldParseTo` ValueDefinitionAnnotatedX (SpPair (SourcePosition "no_file" 1 9 1 10, SourcePosition "no_file" 1 9 1 10)) "i" (NumberLiteralX (Sp $ SourcePosition "no_file" 2 5 2 6) (3 % 1))  (AddExpressionX (Sp $ SourcePosition "no_file" 1 5 1 7) (NumberLiteralX (Sp $ SourcePosition "no_file" 1 9 1 10) (3 % 1)) (NumberLiteralX (Sp $ SourcePosition "no_file" 1 9 1 10) (4 % 1))) 
+                     \i = 3" valueDefinitionWithAnnotationP `shouldParseTo` ValueDefinitionAnnotatedX (SpPair ((SourcePosition "no_file" 3 1 3 6),(SourcePosition "no_file" 1 1 2 8))) "i" (NumberLiteralX (Sp {sp = (SourcePosition "no_file" 3 5 3 6)}) (3 % 1)) (AddExpressionX (Sp {sp = (SourcePosition "no_file" 2 3 2 8)}) (NumberLiteralX (Sp {sp = (SourcePosition "no_file" 2 3 2 5)}) (3 % 1)) (NumberLiteralX (Sp {sp = (SourcePosition "no_file" 2 7 2 8)}) (4 % 1)))
       parseSomething "i : \n\
                      \  3 + 4" valueDefinitionWithAnnotationP `shouldSatisfy` isLeft
     
@@ -121,10 +122,16 @@ test = parallel $ do
     it "allows the creation of a type to represent booleans" $ do
       parseSomething "type Bool : Type = \n\
                      \    True : Bool\n\
-                     \  | False : Bool" typeDefinitionP `shouldParseTo` (TypeDefinitionX (Sp $ SourcePosition "no_file" 1 13 1 18) "Bool" (ReferenceVariableX (Sp $ SourcePosition "no_file" 1 13 1 18) "Type" ("Type",(SourcePosition "no_file" 1 13 1 18))) [])
+                     \  | False : Bool" typeDefinitionP `shouldParseTo` TypeDefinitionX (Sp {sp = (SourcePosition "no_file" 1 1 3 17)}) "Bool" (ReferenceVariableX (Sp {sp = (SourcePosition "no_file" 1 13 1 18)}) "Type" ("Type",(SourcePosition "no_file" 1 13 1 18))) [(Sp {sp = (SourcePosition "no_file" 2 5 2 16)},"True",ReferenceVariableX (Sp {sp = (SourcePosition "no_file" 2 12 2 16)}) "Bool" ("Bool",(SourcePosition "no_file" 2 12 2 16))),(Sp {sp = (SourcePosition "no_file" 3 5 3 17)},"False",ReferenceVariableX (Sp {sp = (SourcePosition "no_file" 3 13 3 17)}) "Bool" ("Bool",(SourcePosition "no_file" 3 13 3 17)))]
 
 
   describe "Parser.parseModule" $ do
+    it "parses modules with declaration" $ do 
+      let exampleModule = "module i `test module`\n\
+                    \main = 3\n\
+                    \" :: Text
+      parseModule exampleModule `shouldSatisfy` isRight
+
     it "parses modules with multiple declarations" $ do 
       let exampleModule = "module i `test module`\n\
                     \test = 3\n\
@@ -158,7 +165,8 @@ test = parallel $ do
                     \  | False : Dool\n\
                     \main = test\n" :: Text
       parseModule exampleModule `shouldBe` Right (
-          Module (ModuleHeader "i" (Tinydoc "test module")) [] 
+            Module (ModuleHeader "i" (Tinydoc "test module")) [ValueDefinitionX (Sp {sp = (SourcePosition "module" 2 1 2 9)}) "test" (NumberLiteralX (Sp {sp = (SourcePosition "module" 2 8 2 9)}) (3 % 1)),TypeDefinitionX (Sp {sp = (SourcePosition "module" 3 1 5 17)}) "Bool" (ReferenceVariableX (Sp {sp = (SourcePosition "module" 3 13 3 18)}) "Type" ("Type",(SourcePosition "module" 3 13 3 18))) [(Sp {sp = (SourcePosition "module" 4 5 4 16)},"True",ReferenceVariableX (Sp {sp = (SourcePosition "module" 4 12 4 16)}) "Bool" ("Bool",(SourcePosition "module" 4 12 4 16))),(Sp {sp = (SourcePosition "module" 5 5 5 17)},"False",ReferenceVariableX (Sp {sp = (SourcePosition "module" 5 13 5 17)}) "Bool" ("Bool",(SourcePosition "module" 5 13 5 17)))],TypeDefinitionX (Sp {sp = (SourcePosition "module" 6 1 8 17)}) "Dool" (ReferenceVariableX (Sp {sp = (SourcePosition "module" 6 13 6 18)}) "Type" ("Type",(SourcePosition "module" 6 13 6 18))) [(Sp {sp = (SourcePosition "module" 7 5 7 16)},"True",ReferenceVariableX (Sp {sp = (SourcePosition "module" 7 12 7 16)}) "Dool" ("Dool",(SourcePosition "module" 7 12 7 16))),(Sp {sp = (SourcePosition "module" 8 5 8 17)},"False",ReferenceVariableX (Sp {sp = (SourcePosition "module" 8 13 8 17)}) "Dool" ("Dool",(SourcePosition "module" 8 13 8 17)))],ValueDefinitionX (Sp {sp = (SourcePosition "module" 9 1 9 12)}) "main" (ReferenceVariableX (Sp {sp = (SourcePosition "module" 9 8 9 12)}) "test" ("test",(SourcePosition "module" 9 8 9 12)))
+          ]
         )
         
 

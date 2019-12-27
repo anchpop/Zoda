@@ -30,7 +30,7 @@ parseModule text = handleResult result
 
 moduleP :: Parser (Module Parsed Text (Text, SourcePosition))
 moduleP = do
-  header       <- moduleHeaderP
+  header       <- moduleHeaderP <* newlinesOrEof
   declarations <- many (try typeDefinitionP <|> try valueDefinitionWithAnnotationP <|> try valueDefinitionP)
   pure (Module header declarations)
 
@@ -320,11 +320,11 @@ getRight :: Either (ParseErrorBundle String ZodaParseError) b -> b
 getRight (Right b  ) = b
 getRight (Left  err) = error $ errorBundlePretty err
 
-getRightZSE :: Either (ProductionError i m) p2 -> p2
+getRightZSE :: (Show i, Show m, NominalShow i, NominalShow m) => Either (ProductionError i m) p2 -> p2
 getRightZSE (Right b  )                   = b
 getRightZSE (Left  (ZodaSyntaxError err)) = error $ errorBundlePretty err
 getRightZSE (Left TypeErr)                = error "type error!"
-getRightZSE (Left  _)                     = error "Parse error!"
+getRightZSE (Left  a)                     = error $ show a
 
 
 --parseSomething :: Stream s => s -> StateT ParserState (Parsec e s) a -> Either (ParseErrorBundle s e) a
