@@ -21,12 +21,12 @@ copyPropagated prims (Module _ declarations) f = dUMap >>= (\dUMap' -> Map.withM
   where
     dUMap :: Either (ProductionError i (i, SourcePosition)) (Map i (DeclarationInfo Parsed i (i, SourcePosition) i))
     -- TODO: We need to check we don't have duplicate names!
-    dUMap = pure $ UMap.fromList (prims <> (declarations >>= (\case 
-        ValueDefinitionX          _ identifier expression             -> [(identifier, Value expression)]
-        ValueDefinitionAnnotatedX _ identifier expression annotation  -> [(identifier, ValueAndAnnotation expression annotation)]
+    dUMap = fmap (UMap.fromList . (prims <>) . join) (traverse (\case 
+        ValueDefinitionX          _ identifier expression             -> Right [(identifier, Value expression)] :: Either (ProductionError i (i, SourcePosition)) [(i, DeclarationInfo Parsed i (i, SourcePosition) i)]
+        ValueDefinitionAnnotatedX _ identifier expression annotation  -> Right [(identifier, ValueAndAnnotation expression annotation)]
         TypeDefinitionX           _ typName typType constructors      -> 
-          (typName, TypeConstructor typName typType):(fmap (\(index, (_, constName, constType)) -> (constName, DataConstructor index constType)) (zip [0..] constructors))
-      )))
+          Right $ (typName, TypeConstructor typName typType):(fmap (\(index, (_, constName, constType)) -> (constName, DataConstructor index constType)) (zip [0..] constructors))
+      ) declarations)
     dJmapToJustifiedModule :: forall ph. (Map.Map ph i (DeclarationInfo Parsed i (i, SourcePosition) i)) -> Either (ProductionError i (i, SourcePosition)) (JustifiedModule Parsed ph i i i)
     dJmapToJustifiedModule m = 
       for m justifyDeclarationInfo

@@ -90,3 +90,14 @@ test = parallel $ do
                     \"
                     
       (getRightZSE $ produceProgram exampleModule) `shouldBe` 8
+
+
+      
+    it "doesn't allow duplicate names " $ do
+      let exampleModule = "module i `test module`\n\
+                    \ho = 3 \n\
+                    \ho = 4\n\
+                    \main = ho\n\
+                    \"
+                    
+      (produceProgram exampleModule) `shouldSatisfy` isLeft
