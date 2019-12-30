@@ -36,7 +36,7 @@ typecheck modu = case traverse typecheckDelcaration modu of
   Right _ -> Right ()
   where typecheckDelcaration (Value v)                = inferType modu mempty v *> pure ()
         typecheckDelcaration (ValueAndAnnotation v t) = checkType modu mempty v t
-        typecheckDelcaration (TypeConstructor _ _)      = pure () -- TODO: Check type is well formed
+        typecheckDelcaration (TypeConstructor _ _)    = pure () -- TODO: Check type is well formed
         typecheckDelcaration (DataConstructor _ _)    = pure () -- TODO: Check type is well formed
 
 
@@ -202,8 +202,8 @@ inferType modu = inferType' where
         argTT <- inferType' context argT
         restT <- combineArrow rest
         combineUniverses argTT restT
-      combineArrow (Pi argT (_ :. outT)) = do 
-        argTT <- inferType' context argT
+      combineArrow (Pi argT (_ :. outT)) = do -- TODO: We need to check that outT is greater than inT because
+        argTT <- inferType' context argT      --       apparently the codomain has to be higher than the domain
         outTT <- inferType' context outT
         combineUniverses argTT outTT
   inferType' _ other = error $ "couldn't infer a type for " <> show other 

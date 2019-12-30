@@ -17,12 +17,15 @@ import qualified Data.List.NonEmpty as NonEmpty
 
 
 copyPropagated :: forall i o. (Show i, NominalShow i, Ord i, Bindable i) => [(i, DeclarationInfo Parsed i (i, SourcePosition) i)] -> Module Parsed i (i, SourcePosition) -> (forall ph. JustifiedModule Parsed ph i i i -> o) -> Either (ProductionError i (i, SourcePosition)) o
-copyPropagated prims (Module _ declarations) f = Map.withMap dUMap (\m -> f <$> dJmapToJustifiedModule m)
+copyPropagated prims (Module _ declarations) f = dUMap >>= (\dUMap' -> Map.withMap dUMap' (\m -> f <$> dJmapToJustifiedModule m))
   where
-    dUMap = UMap.fromList (prims <> (declarations >>= (\case 
+    dUMap :: Either (ProductionError i (i, SourcePosition)) (Map i (DeclarationInfo Parsed i (i, SourcePosition) i))
+    -- TODO: We need to check we don't have duplicate names!
+    dUMap = pure $ UMap.fromList (prims <> (declarations >>= (\case 
         ValueDefinitionX          _ identifier expression             -> [(identifier, Value expression)]
         ValueDefinitionAnnotatedX _ identifier expression annotation  -> [(identifier, ValueAndAnnotation expression annotation)]
-        TypeDefinitionX           _ typName typType constructors      -> (typName, TypeConstructor typName typType):(fmap (\(index, (_, constName, constType)) -> (constName, DataConstructor index constType)) (zip [0..] constructors))
+        TypeDefinitionX           _ typName typType constructors      -> 
+          (typName, TypeConstructor typName typType):(fmap (\(index, (_, constName, constType)) -> (constName, DataConstructor index constType)) (zip [0..] constructors))
       )))
     dJmapToJustifiedModule :: forall ph. (Map.Map ph i (DeclarationInfo Parsed i (i, SourcePosition) i)) -> Either (ProductionError i (i, SourcePosition)) (JustifiedModule Parsed ph i i i)
     dJmapToJustifiedModule m = 
