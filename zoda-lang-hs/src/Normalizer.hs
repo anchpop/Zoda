@@ -80,7 +80,7 @@ eval modu = eval'
       where referent = m `Map.lookup` modu
             getValue (Value e) = eval' e env 
             getValue (ValueAndAnnotation e _) = eval' e env 
-            getValue (TypeConstructor n _) = TypeConstructorSem n
+            getValue (TypeConstructor n _) = TypeConstructorSem n m
             getValue (DataConstructor i _) = DataConstructorSem i 
 
     evalPi env (Scope src ((Just (a, _)) :. dest)) =  PiTypeSem (eval' src env) (Clos (a :. (TArrowBinding dest)) env)
@@ -121,23 +121,24 @@ read_back_nf _    (Normal (UniSem _) (UniSem j)) = UniverseExpression j
 read_back_nf _    (Normal (UniSem _) NatTypeSem) = NatTypeExpression 
 read_back_nf modu (Normal (NeutralSem _ _) (NeutralSem _ ne)) = read_back_ne modu ne
 read_back_nf modu (Normal (NeutralSem _ _) (NeutralSem _ ne)) = read_back_ne modu ne
-read_back_nf _     v                                          = error $ "Ill-typed read_back_nf - " <> show v
+read_back_nf _     other                                      = error $ "Ill-typed read_back_nf - " <> show other
 
 -- |This is almost like the read back for normal forms but works specifically for types
 -- so there is no annotation tell us what type we're reading back at. 
 -- The function itself just assumes that d is some term of type Uni i for some i. 
 -- This, however, means that the cases are almost identical to the type cases in read_back_nf. 
 read_back_tp :: forall ph i m n. (Constraintsi ph i m n) => JustifiedModule Plain ph i m n -> Semantic () (Map.Key ph m) n -> JustifiedExpressionX Plain ph () m
-read_back_tp modu (NeutralSem _ term)  = read_back_ne modu term
-read_back_tp _    NatTypeSem           = NatTypeExpression
-read_back_tp modu (PiTypeSem src dest) = TArrowBinding (Pi (read_back_tp modu src) ((Just (atom, np)) :. (read_back_tp modu (do_clos modu dest var))))
+read_back_tp modu (NeutralSem _ term)   = read_back_ne modu term
+read_back_tp _    NatTypeSem            = NatTypeExpression
+read_back_tp modu (PiTypeSem src dest)  = TArrowBinding (Pi (read_back_tp modu src) ((Just (atom, np)) :. (read_back_tp modu (do_clos modu dest var))))
     where Clos (atom :. _) _ = dest
           var = mk_var src atom
-read_back_tp modu (SigTypeSem f s)     = TSigmaBinding (read_back_tp modu f) (Just (atom, np) :. (read_back_tp modu (do_clos modu s var)))
+read_back_tp modu (SigTypeSem f s)      = TSigmaBinding (read_back_tp modu f) (Just (atom, np) :. (read_back_tp modu (do_clos modu s var)))
     where Clos (atom :. _) _ = s
           var = mk_var f atom 
-read_back_tp _ (UniSem k)              = UniverseExpression k
-read_back_tp _ _                       = error "Nbe_failed - Not a type in read_back_tp"
+read_back_tp _ (UniSem k)               = UniverseExpression k
+read_back_tp _ (TypeConstructorSem _ m) = ReferenceVariable () m
+read_back_tp _ other                    = error $ "Nbe_failed - Not a type in read_back_tp (" <> show other <> ")"
 
 read_back_ne :: forall ph i m n. (Constraintsi ph i m n) => JustifiedModule Plain ph i m n -> Ne () (Map.Key ph m) n -> JustifiedExpressionX Plain ph () m
 read_back_ne _    (VarSem x)        = LambdaVariable (x, ())

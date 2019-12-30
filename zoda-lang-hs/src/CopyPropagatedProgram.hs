@@ -22,7 +22,7 @@ data Semantic i m n =
   | PiTypeSem (Semantic i m n) (Clos i m n)
   | SigTypeSem (Semantic i m n) (Clos i m n) 
   | PairSem (Semantic i m n) (Semantic i m n)
-  | TypeConstructorSem n
+  | TypeConstructorSem n m
   | DataConstructorSem Int
   | UniSem UniLevel
   deriving (Show, Eq, NominalSupport, NominalShow, Generic, Nominal)

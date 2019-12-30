@@ -105,7 +105,7 @@ test = parallel $ do
       typcheckS exampleModule `shouldSatisfy` isLeft
 
 
-    it "works with ADTs" $ do
+    it "allows basic ADT usage" $ do
       let exampleModule = "module i `test module`\n\
                     \type Bool : Type = \n\
                     \    True : Bool\n\
@@ -115,3 +115,42 @@ test = parallel $ do
                     \main = test.func(True)\n\
                     \" :: Text
       typcheckS exampleModule `shouldSatisfy` isRight
+    it "allows basic ADT usage with multiple ADTs" $ do
+      let exampleModule = "module i `test module`\n\
+                    \type Bool : Type = \n\
+                    \    True : Bool\n\
+                    \  | False : Bool\n\
+                    \type Dool : Type = \n\
+                    \    Drue : Dool\n\
+                    \  | Dalse : Dool\n\
+                    \test = 3 + 5\n\
+                    \func = |a : Nat, b : Bool| a \n\
+                    \main = test.func(True)\n\
+                    \" :: Text
+      typcheckS exampleModule `shouldSatisfy` isRight
+    it "disallows basic incorrect ADT usage" $ do
+      let exampleModule = "module i `test module`\n\
+                    \type Bool : Type = \n\
+                    \    True : Bool\n\
+                    \  | False : Bool\n\
+                    \type Dool : Type = \n\
+                    \    Drue : Dool\n\
+                    \  | Dalse : Dool\n\
+                    \test = 3 + 5\n\
+                    \func = |a : Nat, b : Dool| a \n\
+                    \main = test.func(True)\n\
+                    \" :: Text
+      typcheckS exampleModule `shouldSatisfy` isLeft
+
+      let exampleModule2 = "module i `test module`\n\
+                    \type Bool : Type = \n\
+                    \    True : Bool\n\
+                    \  | False : Bool\n\
+                    \type Dool : Type = \n\
+                    \    Drue : Dool\n\
+                    \  | Dalse : Dool\n\
+                    \test = 3 + 5\n\
+                    \func = |a : Nat, b : Bool| a \n\
+                    \main = test.func(Drue)\n\
+                    \" :: Text
+      typcheckS exampleModule `shouldSatisfy` isLeft
