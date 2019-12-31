@@ -20,13 +20,16 @@ copyPropagated :: forall i o. (Show i, NominalShow i, Ord i, Bindable i) => [(i,
 copyPropagated prims (Module _ declarations) f = dUMap >>= (\dUMap' -> Map.withMap dUMap' (\m -> f <$> dJmapToJustifiedModule m))
   where
     dUMap :: Either (ProductionError i (i, SourcePosition)) (Map i (DeclarationInfo Parsed i (i, SourcePosition) i))
-    -- TODO: We need to check we don't have duplicate names!
-    dUMap = fmap (UMap.fromList . (prims <>) . join) (traverse (\case 
-        ValueDefinitionX          _ identifier expression             -> Right [(identifier, Value expression)] :: Either (ProductionError i (i, SourcePosition)) [(i, DeclarationInfo Parsed i (i, SourcePosition) i)]
-        ValueDefinitionAnnotatedX _ identifier expression annotation  -> Right [(identifier, ValueAndAnnotation expression annotation)]
-        TypeDefinitionX           _ typName typType constructors      -> 
-          Right $ (typName, TypeConstructor typName typType):(fmap (\(index, (_, constName, constType)) -> (constName, DataConstructor index constType)) (zip [0..] constructors))
-      ) declarations)
+    dUMap = case duplicateDeclarations of 
+        [] -> pure $ (UMap.fromList) allDelcarations
+        x  -> Left $ ValueRedeclaration x
+      where allDelcarations = (prims <>) $ declarations >>= \case 
+                                ValueDefinitionX          _ identifier expression             -> [(identifier, Value expression)] :: [(i, DeclarationInfo Parsed i (i, SourcePosition) i)]
+                                ValueDefinitionAnnotatedX _ identifier expression annotation  -> [(identifier, ValueAndAnnotation expression annotation)]
+                                TypeDefinitionX           _ typName typType constructors      -> 
+                                  (typName, TypeConstructor typName typType):(fmap (\(index, (_, constName, constType)) -> (constName, DataConstructor index constType)) (zip [0..] constructors))
+            duplicateDeclarations = filter (\x -> length x > 1) ((groupBy (\x y -> fst x == fst y)) (sortBy (\x y -> compare (fst x) (fst y)) allDelcarations))
+    
     dJmapToJustifiedModule :: forall ph. (Map.Map ph i (DeclarationInfo Parsed i (i, SourcePosition) i)) -> Either (ProductionError i (i, SourcePosition)) (JustifiedModule Parsed ph i i i)
     dJmapToJustifiedModule m = 
       for m justifyDeclarationInfo

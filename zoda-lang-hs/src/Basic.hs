@@ -11,7 +11,7 @@ import Nominal hiding ((.))
 
 data ZodaParseError = DuplicateFunctionArgumentNames deriving (Show, Read, Ord, Eq, NominalSupport, NominalShow, Generic, Nominal)
 data ProductionError i m = ZodaSyntaxError (ParseErrorBundle String ZodaParseError) 
-                             | ValueRedeclaration (Declaration Parsed i m) 
+                             | ValueRedeclaration [[(i, DeclarationInfo Parsed i  (i, SourcePosition) i)]] 
                              | UndeclaredValuesReferenced [(i, SourcePosition)] 
                              | NoMain (Module Parsed i m) 
                              | MultipleValueUse [(i, ExpressionX Parsed i m)] 
